@@ -56,7 +56,8 @@ def jukebox_view(
 
     logo_local = ft.Image(
         src=logo_url,
-        width=180
+        width=180,
+        fit=ft.ImageFit.CONTAIN
     )
     
     def cerrar_sesion(e):
@@ -233,6 +234,14 @@ def jukebox_view(
                     )
                 )
             )
+            
+            page.scroll = ft.ScrollMode.AUTO
+            page.update()
+
+            try:
+                page.scroll_to(offset=900, duration=500)
+            except:
+                pass
 
         page.update()
 
@@ -242,6 +251,7 @@ def jukebox_view(
             width=450,
 
             content=ft.Column(
+                scroll=ft.ScrollMode.AUTO,
 
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
 
@@ -350,7 +360,7 @@ def jukebox_view(
 
                     ft.Container(
                         resultados,
-                        height=450
+                        height=650
                     )
 
                 ]
