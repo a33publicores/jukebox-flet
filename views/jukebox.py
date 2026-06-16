@@ -55,8 +55,8 @@ def jukebox_view(
     )
 
     logo_local = ft.Image(
-        src=logo_url,
-        width=180,
+        src=f"logos/{logo_url}",
+        width=180
     )
     
     def cerrar_sesion(e):
