@@ -64,7 +64,15 @@ def jukebox_view(
         src=f"logos/{logo_url}",
         width=100
     )
-    
+    def activar_busqueda(e):
+
+        try:
+            page.scroll_to(
+                offset=500,
+                duration=300
+            )
+        except:
+            pass
     
     
     def cerrar_sesion(e):
@@ -86,15 +94,6 @@ def jukebox_view(
 
         codigo_view(page)
         
-    def activar_busqueda(e):
-
-        try:
-            page.scroll_to(
-                offset=500,
-                duration=300
-            )
-        except:
-            pass
 
     if not logo_url:
         logo_local = ft.Container()
