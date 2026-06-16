@@ -280,7 +280,7 @@ def jukebox_view(
 
                     logo_local,
 
-                    ft.Container(height=2),
+                    ft.Container(height=0),
 
                     ft.Text(
                         cliente,
@@ -301,7 +301,7 @@ def jukebox_view(
                         ]   
                     ),
 
-                    ft.Container(height=10),
+                    ft.Container(height=2),
 
                     ft.Container(
                         width=220,
@@ -327,7 +327,7 @@ def jukebox_view(
                     )
                 ),
 
-                    ft.Container(height=20),
+                    ft.Container(height=8),
                     
                     ft.Text(
                         "🎵 Última canción agregada",
@@ -336,11 +336,11 @@ def jukebox_view(
                             weight=ft.FontWeight.BOLD
                         ),
 
-                    ft.Container(height=5),
+                    ft.Container(height=2),
 
                     ultima_cancion_text,
 
-                    ft.Container(height=15),
+                    ft.Container(height=5),
 
                     buscador,
 
