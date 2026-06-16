@@ -1,7 +1,8 @@
 import json
 import os
 import flet as ft
-import views.codigo as codigo
+
+from views.splash import splash_view
 from views.jukebox import jukebox_view
 
 
@@ -37,7 +38,7 @@ def main(page: ft.Page):
         except:
             pass
 
-    codigo.codigo_view(page)
+    splash_view(page)
 
 
 ft.run(
