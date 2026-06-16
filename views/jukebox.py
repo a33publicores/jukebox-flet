@@ -234,7 +234,6 @@ def jukebox_view(
                 )
             )
             
-            page.scroll = ft.ScrollMode.AUTO
             page.update()
 
             try:
