@@ -46,7 +46,6 @@ def jukebox_view(
     )
 
     resultados = ft.Column(
-        scroll=ft.ScrollMode.AUTO
     )
     
     logo_playbar = ft.Image(
@@ -56,7 +55,7 @@ def jukebox_view(
 
     logo_local = ft.Image(
         src=f"logos/{logo_url}",
-        width=180
+        width=120
     )
     
     def cerrar_sesion(e):
@@ -234,14 +233,12 @@ def jukebox_view(
                 )
             )
             
-            page.update()
-
-            try:
-                page.scroll_to(offset=900, duration=500)
-            except:
-                pass
-
         page.update()
+
+        try:
+            page.scroll_to(offset=900, duration=500)
+        except:
+            pass
 
     page.add(
 
@@ -249,7 +246,6 @@ def jukebox_view(
             width=450,
 
             content=ft.Column(
-                scroll=ft.ScrollMode.AUTO,
 
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
 
@@ -357,8 +353,7 @@ def jukebox_view(
                     ),
 
                     ft.Container(
-                        resultados,
-                        height=650
+                        resultados
                     )
 
                 ]
