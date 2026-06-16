@@ -16,6 +16,9 @@ def jukebox_view(
     page.clean()
 
     page.bgcolor = "#020617"
+    
+    page.scroll = ft.ScrollMode.AUTO
+    page.update()
 
     page.horizontal_alignment = (
         ft.CrossAxisAlignment.CENTER
@@ -55,7 +58,7 @@ def jukebox_view(
 
     logo_local = ft.Image(
         src=f"logos/{logo_url}",
-        width=120
+        width=100
     )
     
     def cerrar_sesion(e):
@@ -235,15 +238,10 @@ def jukebox_view(
             
         page.update()
 
-        try:
-            page.scroll_to(offset=900, duration=500)
-        except:
-            pass
-
     page.add(
 
         ft.Container(
-            width=450,
+            expand=True,
 
             content=ft.Column(
 
@@ -253,11 +251,11 @@ def jukebox_view(
 
                     logo_playbar,
 
-                    ft.Container(height=10),
+                    ft.Container(height=2),
 
                     logo_local,
 
-                    ft.Container(height=10),
+                    ft.Container(height=2),
 
                     ft.Text(
                         cliente,
