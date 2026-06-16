@@ -163,23 +163,10 @@ def codigo_view(page: ft.Page):
         btn_entrar
     )
 
-    page.add(
-    logo,
-    ft.Container(height=20),
-    titulo,
-    ft.Container(height=8),
-    subtitulo,
-    ft.Container(height=25),
-    codigo,
-    ft.Container(height=25),
-    btn_entrar
-)
-
     page.update()
 
     logo.scale = 1
     logo.opacity = 1
-    logo.rotate = 0
 
     page.update()
     
