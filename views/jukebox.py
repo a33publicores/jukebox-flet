@@ -23,6 +23,16 @@ def jukebox_view(
     page.horizontal_alignment = (
         ft.CrossAxisAlignment.CENTER
     )
+    
+    def activar_busqueda(e):
+
+        try:
+            page.scroll_to(
+                offset=500,
+                duration=300
+            )
+        except:
+            pass
 
     buscador = ft.TextField(
         label="Nombre de canción o artista",
@@ -64,15 +74,7 @@ def jukebox_view(
         src=f"logos/{logo_url}",
         width=100
     )
-    def activar_busqueda(e):
-
-        try:
-            page.scroll_to(
-                offset=500,
-                duration=300
-            )
-        except:
-            pass
+    
     
     
     def cerrar_sesion(e):
