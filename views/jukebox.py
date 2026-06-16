@@ -385,8 +385,4 @@ def jukebox_view(
     )
 
     page.update()
-    
-    logo_playbar.scale = 1
-    logo_playbar.opacity = 1
-
-    page.update()   
+     
