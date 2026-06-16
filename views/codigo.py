@@ -2,6 +2,7 @@ import flet as ft
 import os
 from services.api_client import APIClient
 from views.bienvenida import bienvenida_view
+import time
 
 def codigo_view(page: ft.Page):
 
@@ -20,14 +21,7 @@ def codigo_view(page: ft.Page):
     logo = ft.Image(
         src="/logo.png",
         width=220,
-        height=220,
-        scale=0.3,
-        opacity=0,
-        animate_scale=ft.Animation(
-            1200,
-            ft.AnimationCurve.BOUNCE_OUT
-        ),
-        animate_opacity=500
+        height=220
     )
 
     titulo = ft.Text(
@@ -162,11 +156,6 @@ def codigo_view(page: ft.Page):
         ft.Container(height=25),
         btn_entrar
     )
-
-    page.update()
-
-    logo.scale = 1
-    logo.opacity = 1
 
     page.update()
     
