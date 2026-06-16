@@ -12,7 +12,7 @@ def main(page: ft.Page):
     codigo.codigo_view(page)
 
 
-ft.run(
-    main,
+ft.app(
+    target=main,
     assets_dir="assets"
 )
