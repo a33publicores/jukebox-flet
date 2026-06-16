@@ -8,7 +8,7 @@ def splash_view(page):
     page.bgcolor = "#020617"
 
     logo = ft.Image(
-        src="splash.png",
+        src="splash.gif",
         width=120
     )
 
