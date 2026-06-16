@@ -6,7 +6,7 @@ def main(page: ft.Page):
 
     page.title = "PlayBar GO"
 
-    page.window_width = 450
+    page.expand=True
     page.window_height = 850
 
     codigo.codigo_view(page)
