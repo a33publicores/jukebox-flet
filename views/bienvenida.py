@@ -17,9 +17,10 @@ def bienvenida_view(
     )
 
     logo_local = ft.Image(
-        src=logo,
-        width=250,
-        height=250
+    src=logo,
+    width=250,
+    height=250,
+    fit=ft.ImageFit.CONTAIN
     )
 
     titulo = ft.Text(
