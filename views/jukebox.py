@@ -355,13 +355,6 @@ def jukebox_view(
                             on_click=buscar
                         )
                     ),
-                    
-                    ft.Text(
-                        "Resultados encontrados",
-                        color="#22d3ee",
-                        size=18,
-                        weight=ft.FontWeight.BOLD
-                        ),
 
                     ft.Container(
                         resultados
