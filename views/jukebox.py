@@ -28,7 +28,7 @@ def jukebox_view(
 
         try:
             page.scroll_to(
-                offset=500,
+                offset=650,
                 duration=300
             )
         except:
