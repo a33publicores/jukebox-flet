@@ -2,6 +2,7 @@ import flet as ft
 import os
 from services.api_client import APIClient
 from views.bienvenida import bienvenida_view
+import time
 
 def codigo_view(page: ft.Page):
 
@@ -164,6 +165,8 @@ def codigo_view(page: ft.Page):
     )
 
     page.update()
+
+    time.sleep(0.2)
 
     logo.scale = 1
     logo.opacity = 1
