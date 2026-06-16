@@ -149,6 +149,11 @@ def jukebox_view(
     def buscar(e):
 
         resultados.controls.clear()
+        
+        try:
+            page.scroll_to(offset=750, duration=300)
+        except:
+            pass
 
         data = APIClient.buscar(
             buscador.value
@@ -256,10 +261,7 @@ def jukebox_view(
         page.update()
         
 
-        try:
-            page.scroll_to(offset=600, duration=300)
-        except:
-            pass
+        
 
     page.add(
 
