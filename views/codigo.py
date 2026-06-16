@@ -47,6 +47,8 @@ def codigo_view(page: ft.Page):
         color="white",
         border_color="#00D4FF",
         focused_border_color="#B44CFF",
+        keyboard_type=ft.KeyboardType.NUMBER,
+        input_filter=ft.NumbersOnlyInputFilter(),
         hint_text="Código del lugar",
         hint_style=ft.TextStyle(
             color="#94A3B8"
