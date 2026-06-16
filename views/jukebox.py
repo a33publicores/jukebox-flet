@@ -67,14 +67,7 @@ def jukebox_view(
     
     logo_playbar = ft.Image(
         src="/logo.png",
-        width=140,
-        scale=0.5,
-        opacity=0,
-        animate_scale=ft.Animation(
-            1200,
-            ft.AnimationCurve.BOUNCE_OUT
-        ),
-        animate_opacity=300
+        width=140
     )
 
     logo_local = ft.Image(
