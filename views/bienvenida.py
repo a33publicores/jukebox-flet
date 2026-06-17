@@ -17,7 +17,7 @@ def bienvenida_view(
     )
 
     logo_local = ft.Image(
-        src=f"logos/{logo}",
+        src=f"logos/{logomundial}",
         width=250,
         height=250
     )
