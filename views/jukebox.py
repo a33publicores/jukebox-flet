@@ -66,7 +66,7 @@ def jukebox_view(
     )
     
     logo_playbar = ft.Image(
-        src="/logo.png",
+        src="/logomundial.png",
         width=140
     )
 
