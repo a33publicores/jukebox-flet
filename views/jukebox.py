@@ -81,12 +81,12 @@ def jukebox_view(
 
         try:
 
-            if os.path.exists(
-                "data/session.json"
-            ):
-                os.remove(
-                    "data/session.json"
-                )
+            page.shared_preferences.remove("codigo")
+            page.shared_preferences.remove("cliente")
+            page.shared_preferences.remove("telefono")
+            page.shared_preferences.remove("logo")
+
+            page.shared_preferences.update()
 
         except Exception as ex:
 
