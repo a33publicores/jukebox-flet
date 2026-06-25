@@ -56,28 +56,10 @@ def login_view(
         if not numero:
             return
 
-        os.makedirs(
-            "data",
-            exist_ok=True
-        )
-
-        with open(
-            "data/session.json",
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            json.dump(
-                {
-                    "codigo": codigo,
-                    "cliente": cliente,
-                    "logo": logo_url,
-                    "telefono": numero
-                },
-                f,
-                ensure_ascii=False,
-                indent=4
-            )
+        page.session.set("codigo", codigo)
+        page.session.set("cliente", cliente)
+        page.session.set("telefono", numero)
+        page.session.set("logo", logo_url)
 
         jukebox_view(
             page,
