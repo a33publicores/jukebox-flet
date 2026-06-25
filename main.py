@@ -19,21 +19,19 @@ def main(page: ft.Page):
     # Verificar si existe una sesión guardada
     if page.session.store.contains_key("codigo"):
 
-        codigo = page.shared_preferences.get("codigo")
+        codigo = page.session.store.get("codigo")
 
-        if codigo:
+        jukebox_view(
+            page,
+            codigo,
+            page.session.store.get("cliente"),
+            page.session.store.get("telefono"),
+            page.session.store.get("logo")
+        )
 
-            jukebox_view(
-                page,
-                codigo,
-                page.shared_preferences.get("cliente"),
-                page.shared_preferences.get("telefono"),
-                page.shared_preferences.get("logo")
-            )
+        return
 
-            return
-
-        splash_view(page)
+    splash_view(page)
 
 
 ft.run(
