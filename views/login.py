@@ -56,10 +56,10 @@ def login_view(
         if not numero:
             return
 
-        page.session.set("codigo", codigo)
-        page.session.set("cliente", cliente)
-        page.session.set("telefono", numero)
-        page.session.set("logo", logo_url)
+        page.session.store.set("codigo", codigo)
+        page.session.store.set("cliente", cliente)
+        page.session.store.set("telefono", numero)
+        page.session.store.set("logo", logo_url)
 
         jukebox_view(
             page,
