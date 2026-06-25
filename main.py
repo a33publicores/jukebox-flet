@@ -13,30 +13,19 @@ def main(page: ft.Page):
     page.window_width = 450
     page.window_height = 850
 
-    if os.path.exists("data/session.json"):
+    codigo = page.session.get("codigo")
 
-        try:
+    if codigo:
 
-            with open(
-                "data/session.json",
-                "r",
-                encoding="utf-8"
-            ) as f:
+        jukebox_view(
+            page,
+            codigo,
+            page.session.get("cliente"),
+            page.session.get("telefono"),
+            page.session.get("logo")
+        )
 
-                session = json.load(f)
-
-            jukebox_view(
-                page,
-                session["codigo"],
-                session["cliente"],
-                session["telefono"],
-                session["logo"]
-            )
-
-            return
-
-        except:
-            pass
+        return
 
     splash_view(page)
 
