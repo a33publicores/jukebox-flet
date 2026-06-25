@@ -10,23 +10,30 @@ def main(page: ft.Page):
 
     page.window_width = 450
     page.window_height = 850
+    
+    print(dir(page))
+    
+    print(type(page.shared_preferences))
+    print(dir(page.shared_preferences))
 
     # Verificar si existe una sesión guardada
     if page.session.store.contains_key("codigo"):
 
-        codigo = page.session.store.get("codigo")
+        codigo = page.shared_preferences.get("codigo")
 
-        jukebox_view(
-            page,
-            codigo,
-            page.session.store.get("cliente"),
-            page.session.store.get("telefono"),
-            page.session.store.get("logo")
-        )
+        if codigo:
 
-        return
+            jukebox_view(
+                page,
+                codigo,
+                page.shared_preferences.get("cliente"),
+                page.shared_preferences.get("telefono"),
+                page.shared_preferences.get("logo")
+            )
 
-    splash_view(page)
+            return
+
+        splash_view(page)
 
 
 ft.run(
