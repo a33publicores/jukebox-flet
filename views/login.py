@@ -56,10 +56,10 @@ def login_view(
         if not numero:
             return
 
-        page.shared_preferences.set("codigo", codigo)
-        page.shared_preferences.set("cliente", cliente)
-        page.shared_preferences.set("telefono", numero)
-        page.shared_preferences.set("logo", logo_url)
+        page.session.store.set("codigo", codigo)
+        page.session.store.set("cliente", cliente)
+        page.session.store.set("telefono", numero)
+        page.session.store.set("logo", logo_url)
 
         jukebox_view(
             page,
