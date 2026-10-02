@@ -5,6 +5,7 @@ import flet as ft
 from services.playbar_service import iniciar_procesador
 from services.session_manager import cargar_sesion, estado
 from views.splash import splash_view
+from web_boot import preparar_index_web
 
 BUILD = "flet-musica-karaoke-v8-splash"
 
@@ -60,15 +61,14 @@ async def main(page: ft.Page):
         except Exception as ex:
             print(f"⚠️ Error restaurando sesión: {ex}")
 
-    page.title = (
-        "PlayBar GO"
-        if estado["error"]
-        else "PlayBar GO"
-    )
+    page.title = "PlayBar GO"
 
     from views.codigo import codigo_view
 
     await asyncio.to_thread(codigo_view, page)
 
+
+# Genera assets/index.html con el splash/favicon de PlayBar GO (solo web).
+preparar_index_web()
 
 ft.run(main, assets_dir="assets")

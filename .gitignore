@@ -8,3 +8,6 @@ backend/credenciales.json
 backend/client_secrets.json
 backend/token*.json
 data/session.json
+
+# generado al arrancar por web_boot.py
+assets/index.html

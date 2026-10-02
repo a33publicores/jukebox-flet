@@ -4,5 +4,9 @@
   "description": "PlayBar GO - Música y Karaoke",
   "theme_color": "#020617",
   "background_color": "#020617",
-  "display": "standalone"
+  "display": "standalone",
+  "icons": [
+    { "src": "pbgo_favicon_v8_192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "pbgo_favicon_v8_512.png", "sizes": "512x512", "type": "image/png" }
+  ]
 }
