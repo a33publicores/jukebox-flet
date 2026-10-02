@@ -1,0 +1,22 @@
+PROYECTO BASE: Flet
+
+.gitignore
+README_UNIFICADO.md
+assets/logo.png
+assets/logoa33.png
+assets/logomundial.png
+assets/logos/logoa33.png
+assets/splash.gif
+backend/Procfile
+backend/historial-de-reproducciones.json
+backend/main.py
+backend/requirements.txt
+main.py
+requirements.txt
+services/api_client.py
+services/session_manager.py
+views/bienvenida.py
+views/codigo.py
+views/jukebox.py
+views/login.py
+views/splash.py
