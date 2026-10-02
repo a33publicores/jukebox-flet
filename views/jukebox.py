@@ -1,5 +1,5 @@
 import flet as ft
-from services.api_client import APIClient
+from services.playbar_service import buscar, agregar_cancion
 from services.session_manager import cerrar_sesion as eliminar_sesion
 import threading
 
@@ -101,7 +101,7 @@ def jukebox_view(
         page.update()
 
         def enviar_cancion():
-            resultado = APIClient.agregar_cancion(
+            resultado = agregar_cancion(
                 cliente=codigo,
                 telefono=telefono,
                 titulo=item["snippet"]["title"],
@@ -143,9 +143,7 @@ def jukebox_view(
         except:
             pass
 
-        data = APIClient.buscar(
-            buscador.value
-        )
+        data = buscar(buscador.value)
 
         for item in data.get(
             "items",

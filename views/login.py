@@ -1,19 +1,17 @@
 import flet as ft
 
-from views.jukebox import jukebox_view
 from services.session_manager import guardar_sesion
 
 
-def login_view(
-    page,
-    codigo,
-    cliente,
-    logo_url
-):
-
+def login_view(page, codigo, cliente, logo_url, modo="musica"):
     page.clean()
-
     page.bgcolor = "#020617"
+
+    titulo = "Ingresa tu número"
+    subtitulo = (
+        "Para solicitar canciones" if modo == "musica"
+        else "Para ingresar a Karaoke"
+    )
 
     telefono = ft.TextField(
         label="Número telefónico",
@@ -23,109 +21,58 @@ def login_view(
         text_align=ft.TextAlign.CENTER,
         border_radius=15,
         bgcolor="#1A1A1A",
-
         color="white",
-
         border_color="#00D4FF",
         focused_border_color="#B44CFF",
-
         cursor_color="#00D4FF",
-
-        text_style=ft.TextStyle(
-            color="white",
-            size=18,
-            weight=ft.FontWeight.W_500
-        ),
-
-        label_style=ft.TextStyle(
-            color="#94A3B8",
-            size=14
-        ),
-
+        text_style=ft.TextStyle(color="white", size=18, weight=ft.FontWeight.W_500),
+        label_style=ft.TextStyle(color="#94A3B8", size=14),
         hint_text="Ingresa tu número",
-        hint_style=ft.TextStyle(
-            color="#64748B"
-        )
+        hint_style=ft.TextStyle(color="#64748B"),
     )
 
     def entrar(e):
-
         numero = telefono.value.strip()
-
         if not numero:
+            page.snack_bar = ft.SnackBar(content=ft.Text("Ingresa tu número"))
+            page.snack_bar.open = True
+            page.update()
             return
 
-        guardar_sesion(
-            page,
-            {
-                "codigo": codigo,
-                "cliente": cliente,
-                "logo": logo_url,
-                "telefono": numero,
-                "modo": "musica"
-            }
-        )
+        guardar_sesion(page, {
+            "codigo": codigo,
+            "cliente": cliente,
+            "logo": logo_url,
+            "telefono": numero,
+            "modo": modo,
+        })
 
-        jukebox_view(
-            page,
-            codigo,
-            cliente,
-            numero,
-            logo_url
-        )
+        if modo == "karaoke":
+            from views.karaoke import karaoke_view
+            karaoke_view(page, codigo, cliente, numero, logo_url)
+        else:
+            from views.jukebox import jukebox_view
+            jukebox_view(page, codigo, cliente, numero, logo_url)
 
     btn = ft.Container(
         width=220,
         height=60,
         border_radius=18,
-        gradient=ft.LinearGradient(
-            colors=[
-                "#00D4FF",
-                "#B44CFF"
-            ]
-        ),
-        shadow=ft.BoxShadow(
-            blur_radius=25,
-            color="#00D4FF66",
-            spread_radius=1
-        ),
+        gradient=ft.LinearGradient(colors=["#00D4FF", "#B44CFF"]),
+        shadow=ft.BoxShadow(blur_radius=25, color="#00D4FF66", spread_radius=1),
         content=ft.TextButton(
-            content=ft.Text(
-                "Entrar",
-                color="white",
-                weight=ft.FontWeight.BOLD,
-                size=16
-            ),
-            on_click=entrar
-        )
+            content=ft.Text("Entrar", color="white", weight=ft.FontWeight.BOLD, size=16),
+            on_click=entrar,
+        ),
     )
 
     page.add(
-        ft.Image(
-            src=logo_url,
-            width=250
-        ),
-
-        ft.Text(
-            "Ingresa tu número",
-            size=32,
-            weight=ft.FontWeight.BOLD,
-            color="#22d3ee"
-        ),
-
-        ft.Text(
-            "Para solicitar canciones",
-            size=18,
-            color="#94a3b8"
-        ),
-
+        ft.Image(src=logo_url, width=250),
+        ft.Text(titulo, size=32, weight=ft.FontWeight.BOLD, color="#22d3ee"),
+        ft.Text(subtitulo, size=18, color="#94a3b8"),
         ft.Container(height=30),
-
         telefono,
-
         ft.Container(height=40),
-
-        btn
+        btn,
     )
-
     page.update()

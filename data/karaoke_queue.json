@@ -1,0 +1,42 @@
+[
+    {
+        "id": 1,
+        "cliente": "A33",
+        "telefono": "3016130044",
+        "titulo": "mi razon - jr klan",
+        "artista": "KARAOKE 4",
+        "ruta": "E:\\Karaoke A33\\KARAOKE 4\\mi razon - jr klan.mp4",
+        "hora": "20:25:33",
+        "estado": "Reproduciendo"
+    },
+    {
+        "id": 2,
+        "cliente": "A33",
+        "telefono": "3016130044",
+        "titulo": "por ley - anuel aa",
+        "artista": "KARAOKE 4",
+        "ruta": "E:\\Karaoke A33\\KARAOKE 4\\por ley - anuel aa.mp4",
+        "hora": "20:25:44",
+        "estado": "Reproduciendo"
+    },
+    {
+        "id": 3,
+        "cliente": "A33",
+        "telefono": "3016130044",
+        "titulo": "por debajo de la mesa - luis miguel",
+        "artista": "KARAOKE 4",
+        "ruta": "E:\\Karaoke A33\\KARAOKE 4\\por debajo de la mesa - luis miguel.mp4",
+        "hora": "20:41:21",
+        "estado": "Reproduciendo"
+    },
+    {
+        "id": 4,
+        "cliente": "A33",
+        "telefono": "3016130044",
+        "titulo": "por el amor de una mujer - intocable",
+        "artista": "KARAOKE 4",
+        "ruta": "E:\\Karaoke A33\\KARAOKE 4\\por el amor de una mujer - intocable.mp4",
+        "hora": "20:41:28",
+        "estado": "Reproduciendo"
+    }
+]

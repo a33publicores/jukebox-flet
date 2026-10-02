@@ -1,6 +1,6 @@
 import flet as ft
 import os
-from services.api_client import APIClient
+from services.playbar_service import validar_cliente
 from views.bienvenida import bienvenida_view
 import time
 
@@ -72,9 +72,7 @@ def codigo_view(page: ft.Page):
 
         try:
 
-            respuesta = APIClient.validar_cliente(
-                codigo_local
-            )
+            respuesta = validar_cliente(codigo_local)
 
             if respuesta.get("ok"):
 
