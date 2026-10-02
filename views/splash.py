@@ -6,7 +6,7 @@ async def splash_view(page: ft.Page):
     """
     Splash visual de PlayBar GO.
 
-    Se ejecuta después del splash nativo de Flet y antes de cargar
+    Se ejecuta después de la capa de carga/boot de Flet y antes de cargar
     la vista de sesión/código. El efecto reproduce un zoom + fade
     usando el logo real de PlayBar GO.
     """
