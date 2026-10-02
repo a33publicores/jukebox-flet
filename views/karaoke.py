@@ -4,6 +4,7 @@ from services.karaoke_scanner import KaraokeScanner
 from services.karaoke_search import KaraokeSearch
 from services.karaoke_queue import KaraokeQueue
 from components.karaoke_card import karaoke_card
+from services.session_manager import cerrar_sesion as eliminar_sesion
 
 
 def karaoke_view(page, codigo, cliente, telefono, logo_url):
@@ -44,6 +45,11 @@ def karaoke_view(page, codigo, cliente, telefono, logo_url):
     def buscar_cancion(e):
         cargar_lista(KaraokeSearch.buscar(canciones, buscar.value))
 
+    def cerrar_sesion(e):
+        eliminar_sesion(page)
+        from views.codigo import codigo_view
+        codigo_view(page)
+
     buscar.on_change = buscar_cancion
     cargar_lista(canciones[:40])
 
@@ -69,13 +75,34 @@ def karaoke_view(page, codigo, cliente, telefono, logo_url):
         controles += [ft.Container(height=10), aviso]
     controles += [ft.Container(height=15), lista]
 
+    btn_cerrar = ft.Container(
+        width=220,
+        height=45,
+        border_radius=15,
+        gradient=ft.LinearGradient(
+            colors=["#00D4FF", "#B44CFF"]
+        ),
+        shadow=ft.BoxShadow(
+            blur_radius=20,
+            color="#00D4FF55",
+            spread_radius=1
+        ),
+        content=ft.TextButton(
+            "Cerrar sesión",
+            on_click=cerrar_sesion,
+            style=ft.ButtonStyle(color="white"),
+        ),
+    )
+
     page.add(
         ft.Container(height=20),
         ft.Image(src=logo_url, width=180),
         ft.Text("🎤 PLAYBAR GO KARAOKE", size=30, weight=ft.FontWeight.BOLD, color="white"),
         ft.Text(cliente, color="#22d3ee", size=18),
         ft.Text(f"📱 {telefono}", color="white70"),
-        ft.Container(height=20),
+        ft.Container(height=12),
+        btn_cerrar,
+        ft.Container(height=15),
         ft.Container(
             width=380,
             height=600,
