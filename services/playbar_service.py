@@ -247,19 +247,24 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
 
     sheet = obtener_hoja_cliente(config["sheet"])
     try:
-        if solicitud_activa_existe(sheet, video_id):
-            print(f"⚠️ Canción ya activa para {cliente}: {video_id}")
-            return {"ok": True, "duplicado": True}
+        # La comprobación y el append deben ser una única sección crítica.
+        # Así dos clics/solicitudes simultáneas no pueden pasar ambas la
+        # comprobación de duplicado antes de guardar en Google Sheets.
+        with _lock:
+            if solicitud_activa_existe(sheet, video_id):
+                print(f"⚠️ Canción ya activa para {cliente}: {video_id}")
+                return {"ok": True, "duplicado": True}
 
-        sheet.append_row([
-            time.strftime("%Y-%m-%d %H:%M:%S"),
-            str(cliente),
-            str(telefono),
-            str(titulo),
-            str(canal),
-            str(video_id),
-            "Pendiente",
-        ])
+            sheet.append_row([
+                time.strftime("%Y-%m-%d %H:%M:%S"),
+                str(cliente),
+                str(telefono),
+                str(titulo),
+                str(canal),
+                str(video_id),
+                "Pendiente",
+            ])
+
         print("✅ GUARDADO OK")
         return {"ok": True}
     except Exception as ex:

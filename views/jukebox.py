@@ -152,7 +152,66 @@ def jukebox_view(
 
             def agregar(e, item=item):
 
+                # Evita que varios clics rápidos sobre la misma tarjeta
+                # abran varios diálogos simultáneamente.
                 page.overlay.clear()
+
+                procesando = {"valor": False}
+
+                def cancelar_dialogo(ev):
+                    if procesando["valor"]:
+                        return
+                    confirmacion.open = False
+                    page.update()
+
+                def aceptar_dialogo(ev):
+                    # Bloqueo inmediato: el primer clic desactiva Aceptar.
+                    # Así un doble clic no puede disparar dos solicitudes.
+                    if procesando["valor"]:
+                        return
+                    procesando["valor"] = True
+                    boton_aceptar.disabled = True
+                    boton_cancelar.disabled = True
+                    page.update()
+                    confirmar(ev, item, confirmacion)
+
+                boton_aceptar = ft.Container(
+                    width=125,
+                    height=45,
+                    border_radius=15,
+                    gradient=ft.LinearGradient(
+                        colors=["#00D4FF", "#B44CFF"]
+                    ),
+                    shadow=ft.BoxShadow(
+                        blur_radius=20,
+                        color="#00D4FF55",
+                        spread_radius=1
+                    ),
+                    content=ft.TextButton(
+                        "Aceptar",
+                        on_click=aceptar_dialogo,
+                        style=ft.ButtonStyle(color="white"),
+                    ),
+                )
+
+                boton_cancelar = ft.Container(
+                    width=125,
+                    height=45,
+                    border_radius=15,
+                    gradient=ft.LinearGradient(
+                        colors=["#00D4FF", "#B44CFF"]
+                    ),
+                    shadow=ft.BoxShadow(
+                        blur_radius=20,
+                        color="#00D4FF55",
+                        spread_radius=1
+                    ),
+                    content=ft.TextButton(
+                        "Cancelar",
+                        on_click=cancelar_dialogo,
+                        style=ft.ButtonStyle(color="white"),
+                    ),
+                )
 
                 confirmacion = ft.AlertDialog(
                     modal=True,
@@ -166,22 +225,9 @@ def jukebox_view(
                         color="#22d3ee"
                     ),
                     actions=[
-                        ft.TextButton(
-                            "Aceptar",
-                            on_click=lambda ev: confirmar(
-                                ev,
-                                item,
-                                confirmacion
-                            )
-                        ),
-                        ft.TextButton(
-                        "Cancelar",
-                        on_click=lambda ev: (
-                            setattr(confirmacion, "open", False),
-                        page.update()
-                    )
-                )
-                    ]
+                        boton_cancelar,
+                        boton_aceptar,
+                    ],
                 )
 
                 page.overlay.append(confirmacion)
