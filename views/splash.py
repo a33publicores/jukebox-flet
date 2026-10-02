@@ -9,7 +9,7 @@ def splash_view(page):
     logo = ft.Image(
         src="/logo.png",
         width=260,
-        fit=ft.ImageFit.CONTAIN,
+        fit=ft.BoxFit.CONTAIN,
     )
 
     page.add(

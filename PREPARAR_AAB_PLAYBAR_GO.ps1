@@ -123,7 +123,7 @@ $buildArgs = @(
     "--splash-color", "#020617",
     "--splash-dark-color", "#020617",
     "--python-version", "3.13",
-    "--output", "buildab"
+    "--output", "build\aab"
 )
 
 if ($env:FLET_ANDROID_SIGNING_KEY_STORE) {
@@ -145,10 +145,10 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Step "7. LOCALIZANDO AAB"
 
-$aabFiles = Get-ChildItem -Path (Join-Path $projectRoot "buildab") -Recurse -Filter "*.aab" -File -ErrorAction SilentlyContinue
+$aabFiles = Get-ChildItem -Path (Join-Path $projectRoot "build\aab") -Recurse -Filter "*.aab" -File -ErrorAction SilentlyContinue
 
 if (-not $aabFiles -or $aabFiles.Count -eq 0) {
-    Fail "No se encontró ningún archivo .aab en buildab."
+    Fail "No se encontró ningún archivo .aab en build\aab."
 }
 
 $aab = $aabFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
