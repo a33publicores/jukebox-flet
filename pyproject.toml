@@ -1,0 +1,37 @@
+[project]
+name = "playbar_go"
+version = "1.0.10"
+description = "PlayBar GO - Música y Karaoke"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "flet",
+    "requests",
+    "gspread",
+    "google-api-python-client",
+    "google-auth",
+    "google-auth-oauthlib",
+]
+
+[tool.flet]
+product = "PlayBar GO"
+org = "com.a33"
+bundle_id = "com.a33.daleplay"
+build_number = 10
+
+[tool.flet.android]
+adaptive_icon_background = "#020617"
+
+[tool.flet.android.splash]
+color = "#020617"
+dark_color = "#020617"
+icon_background = "#020617"
+icon_fit = "contain"
+
+[tool.flet.boot_screen]
+name = "flet"
+
+[tool.flet.boot_screen.flet]
+theme_mode = "dark"
+bgcolor_dark = "#020617"
+spinner_color_dark = "#00D4FF"
+spinner_size = 0

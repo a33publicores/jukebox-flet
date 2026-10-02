@@ -225,8 +225,16 @@ def jukebox_view(
                         color="#22d3ee"
                     ),
                     actions=[
-                        boton_cancelar,
-                        boton_aceptar,
+                        ft.Row(
+                            controls=[
+                                boton_cancelar,
+                                boton_aceptar,
+                            ],
+                            width=280,
+                            spacing=15,
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        )
                     ],
                 )
 

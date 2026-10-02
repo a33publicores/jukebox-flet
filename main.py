@@ -6,7 +6,7 @@ from services.playbar_service import iniciar_procesador
 from services.session_manager import cargar_sesion, estado
 from views.splash import splash_view
 
-BUILD = "flet-musica-karaoke-v3"
+BUILD = "flet-musica-karaoke-v4"
 
 
 async def main(page: ft.Page):
