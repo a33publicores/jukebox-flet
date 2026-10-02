@@ -6,7 +6,7 @@ from services.playbar_service import iniciar_procesador
 from services.session_manager import cargar_sesion, estado
 from views.splash import splash_view
 
-BUILD = "flet-musica-karaoke-v4"
+BUILD = "flet-musica-karaoke-v6"
 
 
 async def main(page: ft.Page):
@@ -17,7 +17,18 @@ async def main(page: ft.Page):
     print(f"🚀 PlayBar GO build {BUILD} iniciado")
     iniciar_procesador()
 
-    session = await cargar_sesion(page)
+    # La sesión se consulta mientras se muestra el splash.
+    # Así el usuario siempre ve el arranque de PlayBar GO, incluso
+    # cuando existe una sesión restaurable.
+    session_task = asyncio.create_task(cargar_sesion(page))
+
+    try:
+        await splash_view(page)
+    except Exception as ex:
+        # El splash nunca debe impedir que arranque la aplicación.
+        print(f"⚠️ Error en splash visual: {ex}")
+
+    session = await session_task
 
     if session:
         page.title = f"PlayBar GO [{BUILD}] sesión restaurada"
@@ -25,8 +36,10 @@ async def main(page: ft.Page):
             modo = session.get("modo", "musica")
             if modo == "karaoke":
                 from views.karaoke import karaoke_view
+
                 await asyncio.to_thread(
-                    karaoke_view, page,
+                    karaoke_view,
+                    page,
                     session["codigo"],
                     session.get("cliente", ""),
                     session["telefono"],
@@ -34,8 +47,10 @@ async def main(page: ft.Page):
                 )
             else:
                 from views.jukebox import jukebox_view
+
                 await asyncio.to_thread(
-                    jukebox_view, page,
+                    jukebox_view,
+                    page,
                     session["codigo"],
                     session.get("cliente", ""),
                     session["telefono"],
@@ -50,7 +65,10 @@ async def main(page: ft.Page):
         if estado["error"]
         else f"PlayBar GO [{BUILD}] sin sesión"
     )
-    await asyncio.to_thread(splash_view, page)
+
+    from views.codigo import codigo_view
+
+    await asyncio.to_thread(codigo_view, page)
 
 
 ft.run(main, assets_dir="assets")
