@@ -10,7 +10,7 @@ BUILD = "flet-musica-karaoke-v6"
 
 
 async def main(page: ft.Page):
-    page.title = f"PlayBar GO [{BUILD}]"
+    page.title = "PlayBar GO"
     page.window_width = 450
     page.window_height = 850
 
@@ -31,7 +31,7 @@ async def main(page: ft.Page):
     session = await session_task
 
     if session:
-        page.title = f"PlayBar GO [{BUILD}] sesión restaurada"
+        page.title = "PlayBar GO"
         try:
             modo = session.get("modo", "musica")
             if modo == "karaoke":
@@ -61,9 +61,9 @@ async def main(page: ft.Page):
             print(f"⚠️ Error restaurando sesión: {ex}")
 
     page.title = (
-        f"PlayBar GO [{BUILD}] error almacenamiento"
+        "PlayBar GO"
         if estado["error"]
-        else f"PlayBar GO [{BUILD}] sin sesión"
+        else "PlayBar GO"
     )
 
     from views.codigo import codigo_view

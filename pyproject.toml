@@ -34,4 +34,6 @@ theme_mode = "dark"
 bgcolor_dark = "#020617"
 spinner_color_dark = "#00D4FF"
 spinner_size = 0
-fade_out_duration = 350
+startup_message = ""
+prepare_message = ""
+fade_out_duration = 0

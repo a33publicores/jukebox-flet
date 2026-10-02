@@ -1,0 +1,8 @@
+{
+  "name": "PlayBar GO",
+  "short_name": "PlayBar GO",
+  "description": "PlayBar GO - Música y Karaoke",
+  "theme_color": "#020617",
+  "background_color": "#020617",
+  "display": "standalone"
+}
