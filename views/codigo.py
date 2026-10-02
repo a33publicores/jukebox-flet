@@ -1,7 +1,7 @@
 import flet as ft
 import os
 from services.playbar_service import validar_cliente
-from views.bienvenida import bienvenida_view
+from views.seleccionar_modo import seleccionar_modo_view
 import time
 
 def codigo_view(page: ft.Page):
@@ -76,7 +76,9 @@ def codigo_view(page: ft.Page):
 
             if respuesta.get("ok"):
 
-                bienvenida_view(
+                # Al validar el código, pasar directamente a la selección
+                # de Música/Karaoke. No mostramos una pantalla intermedia.
+                seleccionar_modo_view(
                     page,
                     codigo_local,
                     respuesta["nombre"],

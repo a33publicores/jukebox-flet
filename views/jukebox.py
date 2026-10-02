@@ -1,5 +1,5 @@
 import flet as ft
-from services.playbar_service import buscar, agregar_cancion
+from services.playbar_service import buscar as buscar_canciones, agregar_cancion
 from services.session_manager import cerrar_sesion as eliminar_sesion
 import threading
 
@@ -24,14 +24,9 @@ def jukebox_view(
     )
     
     def activar_busqueda(e):
-
-        try:
-            page.scroll_to(
-                offset=650,
-                duration=300
-            )
-        except:
-            pass
+        # En Flet Web, scroll_to() es asíncrono.
+        # No forzamos el desplazamiento desde un handler síncrono.
+        pass
 
     buscador = ft.TextField(
         label="Nombre de canción o artista",
@@ -138,12 +133,7 @@ def jukebox_view(
 
         resultados.controls.clear()
         
-        try:
-            page.scroll_to(offset=750, duration=300)
-        except:
-            pass
-
-        data = buscar(buscador.value)
+        data = buscar_canciones(buscador.value)
 
         for item in data.get(
             "items",
