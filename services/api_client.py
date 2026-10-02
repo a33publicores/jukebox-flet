@@ -1,6 +1,10 @@
+import os
 import requests
 
-BASE_URL = "https://jukebox-bot-production.up.railway.app"
+# En el despliegue unificado, el backend Flask corre dentro del mismo contenedor
+# que Flet. Las llamadas de API se ejecutan en el proceso Python de Flet, por lo
+# que localhost evita necesitar un segundo Railway público.
+BASE_URL = os.environ.get("PLAYBAR_BACKEND_URL", "http://127.0.0.1:5000").rstrip("/")
 
 
 class APIClient:
