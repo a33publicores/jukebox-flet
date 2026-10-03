@@ -520,6 +520,29 @@ def _procesar_fila(sheet, fila, row, config):
             error = str(ex)
             print(f"❌ Error credencial YouTube: {error}")
 
+            # Errores definitivos: reintentar no sirve y gasta cuota.
+            if "videoAlreadyInPlaylist" in error:
+                _con_reintentos(sheet.update_cell, fila, 7, "Agregado")
+                return
+            if "videoNotFound" in error or "Video not found" in error:
+                print(
+                    f"🚫 Video no disponible en YouTube ({video_id}): privado, "
+                    "eliminado o restringido. Se marca como Error y no se reintenta."
+                )
+                _con_reintentos(sheet.update_cell, fila, 7, "Error")
+                return
+            if any(x in error for x in (
+                "playlistNotFound", "playlistForbidden",
+                "playlistContainsMaximumNumberOfVideos",
+            )):
+                print(
+                    f"🚫 Problema con la playlist del cliente ({config.get('playlist')}): "
+                    "no existe, no es de la cuenta del token, o está llena. "
+                    "Se marca como Error."
+                )
+                _con_reintentos(sheet.update_cell, fila, 7, "Error")
+                return
+
             if "quotaExceeded" in error or "dailyLimitExceeded" in error:
                 _siguiente_token()
                 continue
