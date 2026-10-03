@@ -129,7 +129,33 @@ def _get_cache_sheet(query):
     return None
 
 
+def _compactar_busqueda(data):
+    """Deja solo lo que usa la app. Los resultados completos de YouTube pasan
+    de 50.000 caracteres (límite de una celda de Sheets) y la caché fallaba."""
+    items = []
+    for it in data.get("items", []):
+        sn = it.get("snippet", {})
+        thumbs = {
+            k: {"url": v.get("url", "")}
+            for k, v in (sn.get("thumbnails") or {}).items()
+            if isinstance(v, dict)
+        }
+        items.append({
+            "id": {"videoId": (it.get("id") or {}).get("videoId", "")},
+            "snippet": {
+                "title": sn.get("title", ""),
+                "channelTitle": sn.get("channelTitle", ""),
+                "thumbnails": thumbs,
+            },
+        })
+    return {"items": items, "nextPageToken": data.get("nextPageToken")}
+
+
 def _set_cache_sheet(query, data):
+    data = _compactar_busqueda(data)
+    # Respaldo: si aún excede el límite de celda, recortar resultados.
+    while len(json.dumps(data, ensure_ascii=False)) > 45000 and data["items"]:
+        data["items"] = data["items"][:-5]
     _sheet_cache.append_row([
         _normalizar_query(query),
         json.dumps(data, ensure_ascii=False),
@@ -245,8 +271,8 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
     if not config:
         return {"ok": False, "error": "CLIENTE_INVALIDO"}
 
-    sheet = obtener_hoja_cliente(config["sheet"])
     try:
+        sheet = obtener_hoja_cliente(config["sheet"])
         # La comprobación y el append deben ser una única sección crítica.
         # Así dos clics/solicitudes simultáneas no pueden pasar ambas la
         # comprobación de duplicado antes de guardar en Google Sheets.
@@ -255,7 +281,7 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
                 print(f"⚠️ Canción ya activa para {cliente}: {video_id}")
                 return {"ok": True, "duplicado": True}
 
-            sheet.append_row([
+            _con_reintentos(sheet.append_row, [
                 time.strftime("%Y-%m-%d %H:%M:%S"),
                 str(cliente),
                 str(telefono),
@@ -270,6 +296,22 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
     except Exception as ex:
         print("❌ ERROR GUARDANDO EN SHEETS:", ex)
         return {"ok": False, "error": str(ex)}
+
+
+def _con_reintentos(fn, *args, intentos=4, **kwargs):
+    """Ejecuta una operación de Sheets reintentando ante límite de cuota (429) o 5xx."""
+    espera = 2
+    for n in range(intentos):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as ex:
+            texto = str(ex)
+            temporal = any(c in texto for c in ("429", "500", "502", "503", "504", "Quota exceeded"))
+            if not temporal or n == intentos - 1:
+                raise
+            print(f"⏳ Sheets ocupado ({texto[:80]}); reintento en {espera}s")
+            time.sleep(espera)
+            espera *= 2
 
 
 def estado_usuario(cliente, telefono):
@@ -347,15 +389,32 @@ def obtener_mis_canciones(cliente, telefono):
         return []
 
 
+def _tokens_disponibles():
+    """Índices de TOKEN_CONFIG con credencial (variable Railway o archivo local)."""
+    disponibles = []
+    for i, (variable, local_file) in enumerate(TOKEN_CONFIG):
+        if os.getenv(variable, "").strip() or (local_file and os.path.exists(local_file)):
+            disponibles.append(i)
+    return disponibles
+
+
 def _token_credentials():
     global _token_index
-    tokens = [x for x, _ in TOKEN_CONFIG if os.getenv(x, "").strip()]
-    if not tokens:
+    disponibles = _tokens_disponibles()
+    if not disponibles:
         raise RuntimeError("No hay tokens de YouTube configurados")
+    if _token_index not in disponibles:
+        _token_index = disponibles[0]
 
     variable, local_file = TOKEN_CONFIG[_token_index]
     data = _secret_json(variable, local_file)
     creds = Credentials.from_authorized_user_info(data, YOUTUBE_SCOPES)
+    if not creds.valid:
+        # Refrescar aquí permite ver el error real (p. ej. invalid_grant =
+        # token vencido/revocado) en vez de fallar en silencio más adelante.
+        from google.auth.transport.requests import Request
+
+        creds.refresh(Request())
     return creds
 
 
@@ -365,7 +424,9 @@ def _youtube():
 
 def _siguiente_token():
     global _token_index
-    _token_index = (_token_index + 1) % len(TOKEN_CONFIG)
+    disponibles = _tokens_disponibles() or list(range(len(TOKEN_CONFIG)))
+    pos = disponibles.index(_token_index) if _token_index in disponibles else -1
+    _token_index = disponibles[(pos + 1) % len(disponibles)]
     print(f"🔄 Cambiando a credencial YouTube #{_token_index + 1}")
 
 
@@ -393,7 +454,7 @@ def actualizar_estados(sheet):
         data = sheet.get_all_records()
         for i, row in enumerate(data, start=2):
             if row.get("Estado2") in {"En reproduccion", "Siguiente"}:
-                sheet.update_cell(i, 8, "")
+                _con_reintentos(sheet.update_cell, i, 8, "")
         data = sheet.get_all_records()
         pendientes = [
             (i, row) for i, row in enumerate(data, start=2)
@@ -401,9 +462,9 @@ def actualizar_estados(sheet):
             and str(row.get("Estado2", "")).strip() != "Reproducido"
         ]
         if pendientes:
-            sheet.update_cell(pendientes[0][0], 8, "En reproduccion")
+            _con_reintentos(sheet.update_cell, pendientes[0][0], 8, "En reproduccion")
         if len(pendientes) > 1:
-            sheet.update_cell(pendientes[1][0], 8, "Siguiente")
+            _con_reintentos(sheet.update_cell, pendientes[1][0], 8, "Siguiente")
     except Exception as ex:
         print("⚠️ No se pudieron actualizar estados:", ex)
 
@@ -411,10 +472,11 @@ def actualizar_estados(sheet):
 def _procesar_fila(sheet, fila, row, config):
     video_id = str(row.get("videoId", "")).strip()
     if not video_id:
-        sheet.update_cell(fila, 7, "Error")
+        _con_reintentos(sheet.update_cell, fila, 7, "Error")
         return
 
-    sheet.update_cell(fila, 7, "Procesando")
+    print(f"▶️ Procesando fila {fila}: {row.get('titulo', '')} ({video_id})")
+    _con_reintentos(sheet.update_cell, fila, 7, "Procesando")
 
     keys = _get_api_keys()
     # El worker usa los tokens OAuth de YouTube, no las API keys.
@@ -428,11 +490,13 @@ def _procesar_fila(sheet, fila, row, config):
             if solicitud_activa_existe(
                 sheet, video_id, excluir_fila=fila, registros=rows
             ):
-                sheet.update_cell(fila, 7, "Duplicado")
+                print(f"ℹ️ {video_id} duplicado (fila {fila}); marcado Duplicado")
+                _con_reintentos(sheet.update_cell, fila, 7, "Duplicado")
                 return
 
             if video_ya_existe(youtube, config["playlist"], video_id):
-                sheet.update_cell(fila, 7, "Agregado")
+                print(f"ℹ️ {video_id} ya estaba en la playlist; marcado Agregado")
+                _con_reintentos(sheet.update_cell, fila, 7, "Agregado")
                 return
 
             response = youtube.playlistItems().insert(
@@ -449,7 +513,7 @@ def _procesar_fila(sheet, fila, row, config):
             ).execute()
 
             print("✅ INSERT:", response.get("id"))
-            sheet.update_cell(fila, 7, "Agregado")
+            _con_reintentos(sheet.update_cell, fila, 7, "Agregado")
             return
 
         except Exception as ex:
@@ -460,17 +524,26 @@ def _procesar_fila(sheet, fila, row, config):
                 _siguiente_token()
                 continue
 
+            if "invalid_grant" in error or "RefreshError" in type(ex).__name__:
+                print(
+                    "🔑 TOKEN DE YOUTUBE VENCIDO O REVOCADO "
+                    f"(credencial #{_token_index + 1}). Hay que generar el token "
+                    "de nuevo y actualizar la variable YOUTUBE_TOKEN*_B64 en Railway."
+                )
+                _siguiente_token()
+                continue
+
             try:
                 youtube = _youtube()
                 if video_ya_existe(youtube, config["playlist"], video_id):
-                    sheet.update_cell(fila, 7, "Agregado")
+                    _con_reintentos(sheet.update_cell, fila, 7, "Agregado")
                     return
             except Exception as verify_ex:
                 print("⚠️ No se pudo verificar:", verify_ex)
 
             time.sleep(5 if intento < max_intentos - 1 else 2)
 
-    sheet.update_cell(fila, 7, "Pendiente")
+    _con_reintentos(sheet.update_cell, fila, 7, "Pendiente")
 
 
 def _worker():
@@ -502,6 +575,60 @@ def _worker():
         time.sleep(30)
 
 
+def diagnostico():
+    """Comprueba Sheets, tokens de YouTube y playlists. Se imprime en los logs."""
+    print("🩺 DIAGNÓSTICO PLAYBAR GO — inicio")
+    try:
+        ss = _spreadsheet_obj()
+        print(f"🩺 Sheets OK: {ss.title}")
+        clientes = ss.worksheet("CLIENTES").get_all_records()
+    except Exception as ex:
+        print(f"🩺 ❌ Google Sheets falló: {ex}")
+        print("🩺    Revisa GOOGLE_CREDENTIALS_B64 y que la hoja esté compartida "
+              "con el correo de la cuenta de servicio (client_email).")
+        return
+
+    disponibles = _tokens_disponibles()
+    if not disponibles:
+        print("🩺 ❌ No hay ningún token de YouTube (YOUTUBE_TOKEN1_B64 / YOUTUBE_TOKEN2_B64).")
+    from google.auth.transport.requests import Request
+
+    yt_ok = None
+    for i in disponibles:
+        variable, local_file = TOKEN_CONFIG[i]
+        try:
+            data = _secret_json(variable, local_file)
+            creds = Credentials.from_authorized_user_info(data, YOUTUBE_SCOPES)
+            creds.refresh(Request())
+            print(f"🩺 YouTube token #{i + 1} OK")
+            yt_ok = yt_ok or build("youtube", "v3", credentials=creds, cache_discovery=False)
+        except Exception as ex:
+            print(f"🩺 ❌ YouTube token #{i + 1} NO sirve: {ex}")
+            print("🩺    Si dice invalid_grant: el token venció/fue revocado; "
+                  "genera uno nuevo y actualiza la variable en Railway.")
+
+    for c in clientes:
+        activo = str(c.get("Activo", c.get("activo", ""))).upper().strip()
+        nombre = c.get("Nombre", c.get("nombre", ""))
+        playlist = str(c.get("Playlist", c.get("playlist", ""))).strip()
+        if activo != "TRUE":
+            continue
+        if not playlist:
+            print(f"🩺 ❌ Cliente '{nombre}' activo pero SIN playlist en la hoja CLIENTES")
+            continue
+        if yt_ok is None:
+            continue
+        try:
+            r = yt_ok.playlists().list(part="snippet", id=playlist).execute()
+            if r.get("items"):
+                print(f"🩺 Playlist OK para '{nombre}'")
+            else:
+                print(f"🩺 ❌ Playlist '{playlist}' de '{nombre}' no existe o la cuenta del token no es su dueña")
+        except Exception as ex:
+            print(f"🩺 ❌ Playlist de '{nombre}': {ex}")
+    print("🩺 DIAGNÓSTICO PLAYBAR GO — fin")
+
+
 def iniciar_procesador():
     global _worker_started
     with _lock:
@@ -513,4 +640,5 @@ def iniciar_procesador():
             daemon=True,
             name="PlayBarProcessor",
         ).start()
+        threading.Thread(target=diagnostico, daemon=True, name="PlayBarDiag").start()
         print("🚀 Procesador iniciado en background")

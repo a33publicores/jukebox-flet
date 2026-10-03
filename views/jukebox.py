@@ -95,39 +95,48 @@ def jukebox_view(
         ventana.open = False
         page.update()
 
-        def enviar_cancion():
-            resultado = agregar_cancion(
-                cliente=codigo,
-                telefono=telefono,
-                titulo=item["snippet"]["title"],
-                canal=item["snippet"]["channelTitle"],
-                video_id=item["id"]["videoId"]
+        titulo_cancion = item["snippet"]["title"]
+
+        def mostrar(titulo, mensaje, color):
+            aviso = ft.AlertDialog(
+                modal=False,
+                bgcolor="#111827",
+                title=ft.Text(titulo, color=color),
+                content=ft.Text(mensaje, color="white"),
             )
+            page.overlay.append(aviso)
+            aviso.open = True
+            page.update()
+
+        def enviar_cancion():
+            try:
+                resultado = agregar_cancion(
+                    cliente=codigo,
+                    telefono=telefono,
+                    titulo=titulo_cancion,
+                    canal=item["snippet"]["channelTitle"],
+                    video_id=item["id"]["videoId"]
+                )
+            except Exception as ex:
+                resultado = {"ok": False, "error": str(ex)}
+
+            if resultado.get("ok") and resultado.get("duplicado"):
+                mostrar("ℹ️ Ya está en la lista", titulo_cancion, "#facc15")
+            elif resultado.get("ok"):
+                ultima_cancion_text.value = titulo_cancion
+                mostrar("✅ Canción agregada", titulo_cancion, "#22d3ee")
+            else:
+                print("❌ No se pudo agregar:", resultado)
+                mostrar(
+                    "❌ No se pudo agregar",
+                    "Intenta de nuevo en unos segundos.",
+                    "#f87171",
+                )
 
         threading.Thread(
             target=enviar_cancion,
             daemon=True
         ).start()
-
-        ultima_cancion_text.value = item["snippet"]["title"]
-
-        exito = ft.AlertDialog(
-            modal=False,
-            bgcolor="#111827",
-            title=ft.Text(
-                "✅ Canción agregada",
-                color="#22d3ee"
-            ),
-            content=ft.Text(
-                item["snippet"]["title"],
-                color="white"
-            )
-        )
-
-        page.overlay.append(exito)
-        exito.open = True
-
-        page.update()
 
     def buscar(e):
 
