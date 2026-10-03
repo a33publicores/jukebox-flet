@@ -3,7 +3,7 @@ import asyncio
 import flet as ft
 
 from services.playbar_service import iniciar_procesador
-from services.session_manager import cargar_sesion, estado
+from services.session_manager import cargar_sesion, estado, preparar_prefs
 from views.splash import splash_view
 from web_boot import preparar_index_web
 
@@ -21,6 +21,7 @@ async def main(page: ft.Page):
     # La sesión se consulta mientras se muestra el splash.
     # Así el usuario siempre ve el arranque de PlayBar GO, incluso
     # cuando existe una sesión restaurable.
+    preparar_prefs(page)
     session_task = asyncio.create_task(cargar_sesion(page))
 
     try:

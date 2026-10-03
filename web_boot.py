@@ -23,6 +23,7 @@ funcionando igual que antes.
 
 import os
 import re
+import sys
 from pathlib import Path
 
 ASSETS = Path(__file__).parent / "assets"
@@ -90,15 +91,39 @@ _BODY_OVERLAY = (
 )
 
 
-def _flet_index_path() -> Path | None:
-    try:
-        from flet_web import get_package_web_dir
+def _flet_web_dir() -> Path | None:
+    """Carpeta web de flet-web. En Railway, flet-web se instala al arrancar
+    (dentro de ft.run), así que si todavía no está lo instalamos aquí con la
+    misma función que usa Flet; ft.run después lo encuentra y no reinstala."""
+    import importlib
 
-        p = Path(get_package_web_dir()) / "index.html"
-        if p.exists():
-            return p
+    def _try():
+        import flet_web
+
+        importlib.invalidate_caches()
+        return Path(flet_web.get_package_web_dir())
+
+    try:
+        return _try()
     except Exception:
         pass
+    try:
+        from flet.utils.pip import ensure_flet_web_package_installed
+
+        ensure_flet_web_package_installed()
+        importlib.invalidate_caches()
+        for name in [m for m in list(sys.modules) if m.startswith("flet_web")]:
+            del sys.modules[name]
+        return _try()
+    except Exception as ex:
+        print(f"⚠️ No se pudo preparar flet-web: {ex}")
+    return None
+
+
+def _flet_index_path() -> Path | None:
+    web = _flet_web_dir()
+    if web and (web / "index.html").exists():
+        return web / "index.html"
     env = os.environ.get("FLET_WEB_PATH")
     if env and (Path(env) / "index.html").exists():
         return Path(env) / "index.html"
