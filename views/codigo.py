@@ -19,7 +19,7 @@ def codigo_view(page: ft.Page):
     )
 
     logo = ft.Image(
-        src="/logomundial.png",
+        src="/logohallowen.png",
         width=220,
         height=220
     )

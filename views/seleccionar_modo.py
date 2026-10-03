@@ -51,7 +51,7 @@ def seleccionar_modo_view(page, codigo, nombre, logo):
         )
 
     page.add(
-        ft.Image(src="/logomundial.png", width=150),
+        ft.Image(src="/logohallowen.png", width=150),
         ft.Container(height=20),
         titulo,
         subtitulo,
