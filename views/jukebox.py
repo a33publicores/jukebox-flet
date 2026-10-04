@@ -121,7 +121,7 @@ def jukebox_view(
                 resultado = {"ok": False, "error": str(ex)}
 
             if resultado.get("ok") and resultado.get("duplicado"):
-                mostrar("ℹ️ Ya está en la lista", titulo_cancion, "#facc15")
+                mostrar("ℹ️ Ya está en la cola", titulo_cancion + "\n\nYa la pidieron y está esperando su turno.", "#facc15")
             elif resultado.get("ok"):
                 ultima_cancion_text.value = titulo_cancion
                 mostrar("✅ Canción agregada", titulo_cancion, "#22d3ee")

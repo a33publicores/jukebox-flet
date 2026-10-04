@@ -50,6 +50,10 @@ def seleccionar_modo_view(page, codigo, nombre, logo):
             ),
         )
 
+    def abrir_admin(e):
+        from views.admin import admin_view, pedir_pin
+        pedir_pin(page, lambda: admin_view(page, codigo, nombre, logo))
+
     page.add(
         ft.Image(src="/logohallowen.png", width=150),
         ft.Container(height=20),
@@ -59,5 +63,8 @@ def seleccionar_modo_view(page, codigo, nombre, logo):
         boton("Música", "musica", "🎵"),
         ft.Container(height=15),
         boton("Karaoke", "karaoke", "🎤"),
+        ft.Container(height=25),
+        ft.TextButton("🔧 Administrador", on_click=abrir_admin,
+                      style=ft.ButtonStyle(color="#64748b")),
     )
     page.update()

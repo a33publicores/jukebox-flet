@@ -30,6 +30,16 @@ TOKEN_CONFIG = [
     ("YOUTUBE_TOKEN2_B64", "token2.json"),
 ]
 
+# Con MODO_REPRODUCTOR=propio las canciones entran directo a la cola de la hoja y NO
+# se usa la playlist de YouTube (sin gastar cuota de tokens).
+# Por defecto sigue el modo anterior (playlist de YouTube). Poner MODO_REPRODUCTOR=propio
+# cuando el reproductor de escritorio esté instalado y probado.
+MODO_PROPIO = os.getenv("MODO_REPRODUCTOR", "youtube").strip().lower() == "propio"
+# Una solicitud solo cuenta como "ya está en la lista" si es reciente. Una canción
+# pedida hace días (aunque su fila quedara con un estado viejo) se puede volver a pedir.
+VENTANA_DUPLICADO_HORAS = float(os.getenv("DUPLICADO_HORAS", "12"))
+ESTADOS_ACTIVOS = {"En cola", "En reproduccion", "Siguiente"}
+
 _lock = threading.RLock()
 _google = None
 _spreadsheet = None
@@ -244,7 +254,24 @@ def buscar(query, page_token=None):
     return data
 
 
+def _edad_horas(texto):
+    """Horas desde el Timestamp de la fila (se escribe en UTC). None si no se entiende."""
+    try:
+        import calendar
+
+        t = calendar.timegm(time.strptime(str(texto).strip()[:19], "%Y-%m-%d %H:%M:%S"))
+        return (time.time() - t) / 3600.0
+    except Exception:
+        return None
+
+
 def solicitud_activa_existe(sheet, video_id, excluir_fila=None, registros=None):
+    """True si ESA canción ya está esperando o sonando (pedida hace poco).
+
+    Evita que la misma canción quede dos veces seguidas en la lista. Las solicitudes
+    viejas (más de VENTANA_DUPLICADO_HORAS) no cuentan: si hace días la pidieron y su
+    fila quedó con un estado atascado, la canción se puede volver a pedir.
+    """
     video_id = str(video_id or "").strip()
     if not video_id:
         return False
@@ -255,11 +282,14 @@ def solicitud_activa_existe(sheet, video_id, excluir_fila=None, registros=None):
                 continue
             if str(row.get("videoId", "")).strip() != video_id:
                 continue
+            edad = _edad_horas(row.get("Timestamp", row.get("timestamp", "")))
+            if edad is None or edad > VENTANA_DUPLICADO_HORAS:
+                continue
             estado = str(row.get("Estado", "")).strip()
             estado2 = str(row.get("Estado2", "")).strip()
             if estado in {"Pendiente", "Procesando"}:
                 return True
-            if estado == "Agregado" and estado2 in {"En reproduccion", "Siguiente"}:
+            if estado == "Agregado" and estado2 in ESTADOS_ACTIVOS:
                 return True
     except Exception as ex:
         print("⚠️ No se pudo verificar solicitud activa:", ex)
@@ -282,13 +312,14 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
                 return {"ok": True, "duplicado": True}
 
             _con_reintentos(sheet.append_row, [
-                time.strftime("%Y-%m-%d %H:%M:%S"),
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
                 str(cliente),
                 str(telefono),
                 str(titulo),
                 str(canal),
                 str(video_id),
-                "Pendiente",
+                "Agregado" if MODO_PROPIO else "Pendiente",
+                "En cola" if MODO_PROPIO else "",
             ])
 
         print("✅ GUARDADO OK")
@@ -327,11 +358,17 @@ def estado_usuario(cliente, telefono):
         ]
         if not mine:
             return {"pendientes": 0, "ultima_cancion": "", "estado": ""}
-        pendientes = sum(
-            1 for r in mine
-            if str(r.get("Estado", "")).strip()
-            in {"Pendiente", "Procesando", "Agregado"}
-        )
+        if MODO_PROPIO:
+            pendientes = sum(
+                1 for r in mine
+                if str(r.get("Estado2", "")).strip() in {"En cola", "En reproduccion"}
+            )
+        else:
+            pendientes = sum(
+                1 for r in mine
+                if str(r.get("Estado", "")).strip()
+                in {"Pendiente", "Procesando", "Agregado"}
+            )
         last = mine[-1]
         return {
             "pendientes": pendientes,
@@ -357,11 +394,16 @@ def estado_cola(cliente):
                 actual = row.get("titulo", "")
                 idx = i
                 break
-        if idx >= 0:
-            for row in rows[idx + 1:]:
-                if row.get("Estado") == "Agregado":
-                    siguiente = row.get("titulo", "")
-                    break
+
+        def en_espera(row):
+            if str(row.get("Estado2", "")).strip() in {"En cola", "Siguiente"}:
+                return True
+            return (not MODO_PROPIO) and row.get("Estado") == "Agregado"
+
+        for row in rows[idx + 1:]:
+            if en_espera(row):
+                siguiente = row.get("titulo", "")
+                break
         return {"ok": True, "actual": actual, "siguiente": siguiente}
     except Exception as ex:
         print("❌ ERROR estado_cola:", ex)
@@ -494,11 +536,6 @@ def _procesar_fila(sheet, fila, row, config):
                 _con_reintentos(sheet.update_cell, fila, 7, "Duplicado")
                 return
 
-            if video_ya_existe(youtube, config["playlist"], video_id):
-                print(f"ℹ️ {video_id} ya estaba en la playlist; marcado Agregado")
-                _con_reintentos(sheet.update_cell, fila, 7, "Agregado")
-                return
-
             response = youtube.playlistItems().insert(
                 part="snippet",
                 body={
@@ -556,14 +593,6 @@ def _procesar_fila(sheet, fila, row, config):
                 _siguiente_token()
                 continue
 
-            try:
-                youtube = _youtube()
-                if video_ya_existe(youtube, config["playlist"], video_id):
-                    _con_reintentos(sheet.update_cell, fila, 7, "Agregado")
-                    return
-            except Exception as verify_ex:
-                print("⚠️ No se pudo verificar:", verify_ex)
-
             time.sleep(5 if intento < max_intentos - 1 else 2)
 
     _con_reintentos(sheet.update_cell, fila, 7, "Pendiente")
@@ -609,6 +638,12 @@ def diagnostico():
         print(f"🩺 ❌ Google Sheets falló: {ex}")
         print("🩺    Revisa GOOGLE_CREDENTIALS_B64 y que la hoja esté compartida "
               "con el correo de la cuenta de servicio (client_email).")
+        return
+
+    if MODO_PROPIO:
+        print("🩺 Modo reproductor propio: no se usan tokens ni playlists de YouTube "
+              "(solo la clave de búsqueda).")
+        print("🩺 DIAGNÓSTICO PLAYBAR GO — fin")
         return
 
     disponibles = _tokens_disponibles()
@@ -658,10 +693,13 @@ def iniciar_procesador():
         if _worker_started:
             return
         _worker_started = True
-        threading.Thread(
-            target=_worker,
-            daemon=True,
-            name="PlayBarProcessor",
-        ).start()
+        if not MODO_PROPIO:
+            threading.Thread(
+                target=_worker,
+                daemon=True,
+                name="PlayBarProcessor",
+            ).start()
+        else:
+            print("🎬 Modo reproductor propio: las canciones entran directo a la cola")
         threading.Thread(target=diagnostico, daemon=True, name="PlayBarDiag").start()
         print("🚀 Procesador iniciado en background")
