@@ -317,10 +317,11 @@ def jukebox_view(
     # ------------------------------------------------------------------
     def mostrar_aviso(titulo, mensaje, color):
         def cerrar(ev):
+            # Cierra el letrero con el mecanismo propio de Flet para diálogos.
             aviso.open = False
             try:
-                page.overlay.remove(aviso)
-            except ValueError:
+                aviso.update()
+            except Exception:
                 pass
             page.update()
 
@@ -333,9 +334,12 @@ def jukebox_view(
             actions=[boton_ok],
             actions_alignment=ft.MainAxisAlignment.CENTER,
         )
-        page.overlay.append(aviso)
-        aviso.open = True
-        page.update()
+        try:
+            page.show_dialog(aviso)
+        except Exception:
+            page.overlay.append(aviso)
+            aviso.open = True
+            page.update()
 
     def confirmar(item, ventana, aviso_progreso):
         """Envía la canción; el diálogo queda abierto mostrando 'Agregando…'."""
