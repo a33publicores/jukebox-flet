@@ -7,7 +7,6 @@ from services.session_manager import cerrar_sesion as eliminar_sesion
 
 CYAN = "#00D4FF"
 VIOLETA = "#B44CFF"
-CLAVE_RESULTADOS = "resultados"
 
 
 def _boton(texto, on_click, ancho=125, alto=45):
@@ -40,7 +39,8 @@ def jukebox_view(
 
     page.bgcolor = "#020617"
 
-    page.scroll = ft.ScrollMode.AUTO
+    page.scroll = None  # solo los resultados se desplazan; el encabezado queda fijo
+    page.padding = 0
     page.update()
 
     page.horizontal_alignment = (
@@ -166,7 +166,8 @@ def jukebox_view(
 
     resultados = ft.Column(
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        key=ft.ScrollKey(CLAVE_RESULTADOS),
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
     )
 
     buscando = {"activo": False}
@@ -181,7 +182,7 @@ def jukebox_view(
         """En el celular, lleva la pantalla a los resultados."""
         async def _ir():
             try:
-                await page.scroll_to(scroll_key=CLAVE_RESULTADOS, duration=350)
+                await resultados.scroll_to(offset=0, duration=300)
             except Exception as ex:
                 print("ℹ️ No se pudo desplazar a los resultados:", ex)
 
@@ -224,18 +225,23 @@ def jukebox_view(
     def buscar(e):
         if buscando["activo"]:
             return
-        texto = (buscador.value or "").strip()
-        if len(texto) < 3:
+        texto_ = (buscador.value or "").strip()
+        if len(texto_) >= 3:
+            # Marca "buscando" ya (evita toques repetidos) y avisa al instante;
+            # la búsqueda en sí corre en segundo plano para que la pantalla
+            # alcance a pintar "Buscando…" antes de esperar a YouTube.
+            buscando["activo"] = True
+            boton_buscar.visible = False
+            ring_boton.visible = True
+            buscador.disabled = True
             resultados.controls.clear()
-            mostrar_estado("Escribe al menos 3 letras para buscar", visible=True)
+            mostrar_estado(f"🔎 Buscando “{texto_}”…", cargando=True)
+            threading.Thread(target=_buscar_en_segundo_plano, args=(texto_,), daemon=True).start()
             return
-
-        buscando["activo"] = True
-        boton_buscar.disabled = True
-        buscador.disabled = True
         resultados.controls.clear()
-        mostrar_estado(f"Buscando “{texto}”…", cargando=True)
+        mostrar_estado("Escribe al menos 3 letras para buscar", visible=True)
 
+    def _buscar_en_segundo_plano(texto):
         try:
             data = buscar_canciones(texto)
             items = data.get("items", [])
@@ -260,7 +266,8 @@ def jukebox_view(
                 bajar_a_resultados()
         finally:
             buscando["activo"] = False
-            boton_buscar.disabled = False
+            boton_buscar.visible = True
+            ring_boton.visible = False
             buscador.disabled = False
             page.update()
 
@@ -290,9 +297,19 @@ def jukebox_view(
         on_click=buscar,
     )
 
+    ring_boton = ft.Container(
+        visible=False,
+        width=56,
+        height=56,
+        border_radius=28,
+        bgcolor=VIOLETA,
+        alignment=ft.Alignment.CENTER,
+        content=ft.ProgressRing(width=24, height=24, stroke_width=3, color="white"),
+    )
+
     barra_busqueda = ft.Container(
         width=ancho_tarjeta() + 20,
-        content=ft.Row(spacing=8, controls=[buscador, boton_buscar]),
+        content=ft.Row(spacing=8, controls=[buscador, boton_buscar, ring_boton]),
     )
 
     # ------------------------------------------------------------------
@@ -439,6 +456,7 @@ def jukebox_view(
                     estado_busqueda,
                     resultados,
                 ],
+                expand=True,
             ),
         )
     )
