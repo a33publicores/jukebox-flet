@@ -16,13 +16,16 @@ Reglas:
   * Comandos del admin (hoja CONTROL): pausar, reanudar, siguiente, anterior.
 """
 import asyncio
+import json
 import os
 import random
 import time
+from pathlib import Path
 from collections import deque
 
 from services import cola as C
 
+CARPETA_DATOS = Path(os.environ.get("PLAYBAR_HOME", Path.home() / "PlayBarGo"))
 INTERVALO = 3.0        # segundos entre lecturas de la hoja
 LATIDO = 15.0          # segundos entre latidos al panel admin
 PRECARGA = 2           # canciones por delante que se descargan
@@ -41,6 +44,8 @@ class BackendHoja:
         self.nombre_hoja = None
         self.ultimo = None
         self._limpio = False
+        self._playlist = None      # canciones de la playlist del negocio (CLIENTES)
+        self._t_playlist = 0.0
 
     def instantanea(self):
         if self.nombre_hoja is None:
@@ -64,11 +69,50 @@ class BackendHoja:
     def registrar(self, item):
         pass  # el historial ya está en la hoja (Estado2 = Reproducido)
 
+    def canciones_playlist(self):
+        """Playlist de YouTube del negocio (columna Playlist de CLIENTES), leída con
+        yt-dlp (sin cuota de API). Se guarda en disco y se refresca cada 12 h."""
+        if self._playlist is not None and time.time() - self._t_playlist < 12 * 3600:
+            return self._playlist
+        cache = CARPETA_DATOS / f"playlist_{self.cliente}.json"
+        try:
+            from services import playbar_service as ps
+            pl = str((ps.obtener_config_cliente(self.cliente) or {}).get("playlist", "")).strip()
+            if not pl:
+                self._playlist, self._t_playlist = [], time.time()
+                return []
+            url = pl if pl.startswith("http") else f"https://www.youtube.com/playlist?list={pl}"
+            import yt_dlp
+            with yt_dlp.YoutubeDL({"extract_flat": "in_playlist", "quiet": True,
+                                   "skip_download": True, "ignoreerrors": True}) as ydl:
+                info = ydl.extract_info(url, download=False) or {}
+            lista = [
+                {"id": e["id"], "t": e.get("title") or "", "c": e.get("channel") or e.get("uploader") or ""}
+                for e in (info.get("entries") or []) if e and e.get("id")
+                and (e.get("title") or "") not in ("[Private video]", "[Deleted video]")
+            ]
+            if lista:
+                CARPETA_DATOS.mkdir(parents=True, exist_ok=True)
+                cache.write_text(json.dumps(lista, ensure_ascii=False), encoding="utf-8")
+            print(f"📃 Playlist del negocio: {len(lista)} canciones")
+        except Exception as ex:
+            print("⚠️ No se pudo leer la playlist del negocio:", ex)
+            try:
+                lista = json.loads(cache.read_text(encoding="utf-8"))
+            except Exception:
+                lista = []
+        self._playlist, self._t_playlist = lista, time.time()
+        return lista
+
     def elegir_relleno(self, excluir):
-        """Canción al azar de fechas anteriores, evitando las que sonaron hace poco."""
+        """Canción al azar: playlist del negocio + lo pedido en fechas anteriores,
+        evitando las que sonaron hace poco."""
         snap = self.ultimo or self.instantanea()
         excluir = set(excluir)
-        pool = snap.aleatorio
+        pool = list(snap.aleatorio)
+        ya = {i.video_id for i in pool}
+        pool += [C.Item(None, p["t"], p["c"], p["id"]) for p in self.canciones_playlist()
+                 if p["id"] not in ya]
         candidatas = [i for i in pool if i.video_id not in excluir] or pool
         if not candidatas:
             return None

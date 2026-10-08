@@ -127,7 +127,10 @@ def obtener_hoja_cliente(nombre):
         return spreadsheet.worksheet(nombre)
     except Exception:
         print("🆕 Creando hoja:", nombre)
-        return spreadsheet.add_worksheet(title=nombre, rows="1000", cols="10")
+        ws = spreadsheet.add_worksheet(title=nombre, rows="1000", cols="10")
+        ws.append_row(["Timestamp", "Cliente", "Usuario", "titulo", "canal",
+                       "videoId", "Estado", "Estado2"])
+        return ws
 
 
 def obtener_config_cliente(codigo):

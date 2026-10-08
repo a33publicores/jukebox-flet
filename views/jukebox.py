@@ -106,11 +106,8 @@ def jukebox_view(
                             color="#94a3b8",
                             text_align=ft.TextAlign.CENTER,
                         ),
-                        ft.TextButton(
-                            "Cerrar sesión",
-                            on_click=cerrar_sesion,
-                            style=ft.ButtonStyle(color="#64748b", padding=0),
-                        ),
+                        ft.Container(height=6),
+                        _boton("Cerrar sesión", cerrar_sesion, ancho=150, alto=36)[0],
                     ],
                 ),
                 logo_local,

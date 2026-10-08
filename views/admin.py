@@ -44,25 +44,36 @@ def credenciales_correctas(usuario, clave, codigo=None):
     if time.time() < _intentos["hasta"]:
         return False, "Demasiados intentos. Espera un minuto."
 
+    def limpio(x):
+        x = str(x or "").strip()
+        return x[:-2] if x.endswith(".0") and x[:-2].isdigit() else x  # 1234.0 -> 1234
+
     def igual(a, b):
-        return hmac.compare_digest(str(a or "").strip().encode(), str(b or "").strip().encode())
+        return hmac.compare_digest(limpio(a).encode(), limpio(b).encode())
+
+    def igual_usuario(a, b):  # el celular suele poner la primera letra en mayúscula
+        return igual(limpio(a).lower(), limpio(b).lower())
 
     ok = False
+    codigo = limpio(codigo)
     hay_alguno = False
     try:
         for fila in _admins_hoja():
             fila = list(fila) + [""] * 5
-            cod, usr, pwd, activo = (str(x).strip() for x in fila[:4])
+            cod, usr, pwd, activo = (limpio(x) for x in fila[:4])
             if not usr or not pwd or activo.upper() in ("FALSE", "NO", "0"):
                 continue
-            if cod not in ("*", str(codigo or "").strip()):
+            if cod not in ("*", codigo):
                 continue
             hay_alguno = True
-            if igual(usuario, usr) and igual(clave, pwd):
+            if igual_usuario(usuario, usr) and igual(clave, pwd):
                 ok = True
                 break
     except Exception as ex:
         print("⚠️ No se pudo leer la pestaña ADMINS:", ex)
+        error_hoja = True
+    else:
+        error_hoja = False
 
     if not ok:
         esp_user = os.environ.get("ADMIN_USER", "").strip()
@@ -70,13 +81,17 @@ def credenciales_correctas(usuario, clave, codigo=None):
         esp_pin = os.environ.get("ADMIN_PIN", "").strip()
         if esp_user and esp_pass:
             hay_alguno = True
-            ok = igual(usuario, esp_user) and igual(clave, esp_pass)
+            ok = igual_usuario(usuario, esp_user) and igual(clave, esp_pass)
         elif esp_pin:
             hay_alguno = True
             ok = igual(clave, esp_pin)
 
+    print(f"🔐 Admin lugar={codigo!r} usuario={limpio(usuario)!r} ok={ok} "
+          f"admins_del_lugar={hay_alguno} error_hoja={error_hoja}")
+    if not ok and error_hoja:
+        return False, "No se pudo leer la pestaña ADMINS. Intenta de nuevo."
     if not hay_alguno:
-        return False, "No hay administradores para este lugar (pestaña ADMINS de la hoja)"
+        return False, f"No hay administradores para el lugar {codigo} (pestaña ADMINS)"
     if ok:
         _intentos["n"] = 0
         return True, ""
@@ -90,7 +105,9 @@ def credenciales_correctas(usuario, clave, codigo=None):
 def pedir_pin(page, al_entrar, codigo=None):
     """Diálogo de usuario y contraseña; si son correctos llama a al_entrar()."""
     usuario = ft.TextField(label="Usuario", autofocus=True, color="white",
-                           border_color="#00D4FF")
+                           border_color="#00D4FF", autocorrect=False,
+                           enable_suggestions=False,
+                           capitalization=ft.TextCapitalization.NONE)
     clave = ft.TextField(label="Contraseña", password=True, can_reveal_password=True,
                          color="white", border_color="#00D4FF")
     error = ft.Text("", color="#f87171", size=13)

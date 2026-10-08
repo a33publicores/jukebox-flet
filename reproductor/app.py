@@ -348,6 +348,8 @@ async def main(page: ft.Page):
                                     for m, sol in problemas],
                                   ft.Row([
                                       ft.OutlinedButton("Abrir carpeta", on_click=_abrir_carpeta),
+                                      ft.OutlinedButton("Cambiar código del lugar",
+                                                        on_click=lambda e: _cambiar_codigo(page)),
                                       ft.FilledButton("Reintentar", on_click=lambda e: _reiniciar(page)),
                                   ], alignment=ft.MainAxisAlignment.CENTER),
                                   ft.Text(f"Versión {VERSION}", color="#64748b", size=11),
@@ -376,6 +378,8 @@ async def main(page: ft.Page):
             await motor.ejecutar("siguiente")
         elif k == "arrow left":
             await motor.ejecutar("anterior")
+        elif k == "c" and e.ctrl and e.shift:  # Ctrl+Shift+C: cambiar código del lugar
+            _cambiar_codigo(page)
         elif k == "f":
             page.window.full_screen = not page.window.full_screen
             page.update()
@@ -390,6 +394,15 @@ async def main(page: ft.Page):
     page.run_task(revisar_actualizacion)
     print(f"🎬 Reproductor PlayBar GO para el cliente {cfg['cliente']}")
     await motor.correr()
+
+
+def _cambiar_codigo(page):
+    """Borra el código guardado y reinicia: vuelve a pedir el código del lugar."""
+    try:
+        CONFIG.unlink()
+    except Exception:
+        pass
+    _reiniciar(page)
 
 
 def _reiniciar(page):

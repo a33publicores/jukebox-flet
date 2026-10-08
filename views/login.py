@@ -17,7 +17,10 @@ def login_view(page, codigo, cliente, logo_url, modo="musica"):
         label="Número telefónico",
         width=350,
         height=60,
-        keyboard_type=ft.KeyboardType.PHONE,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        input_filter=ft.NumbersOnlyInputFilter(),
+        max_length=10,
+        counter_text="",
         text_align=ft.TextAlign.CENTER,
         border_radius=15,
         bgcolor="#1A1A1A",
@@ -27,17 +30,19 @@ def login_view(page, codigo, cliente, logo_url, modo="musica"):
         cursor_color="#00D4FF",
         text_style=ft.TextStyle(color="white", size=18, weight=ft.FontWeight.W_500),
         label_style=ft.TextStyle(color="#94A3B8", size=14),
-        hint_text="Ingresa tu número",
+        hint_text="3001234567",
         hint_style=ft.TextStyle(color="#64748B"),
     )
 
     def entrar(e):
-        numero = telefono.value.strip()
-        if not numero:
-            page.snack_bar = ft.SnackBar(content=ft.Text("Ingresa tu número"))
-            page.snack_bar.open = True
+        numero = "".join(c for c in (telefono.value or "") if c.isdigit())
+        if len(numero) == 12 and numero.startswith("57"):
+            numero = numero[2:]  # pegaron el número con +57
+        if not (len(numero) == 10 and numero.startswith("3")):
+            telefono.error_text = "Celular de 10 dígitos que empiece por 3 (sin +57)"
             page.update()
             return
+        telefono.error_text = None
 
         guardar_sesion(page, {
             "codigo": codigo,

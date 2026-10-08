@@ -54,3 +54,12 @@ Si YouTube pide verificación al descargar, exporta las cookies a `~/PlayBarGo/c
 - **Aleatorio = canciones de fechas anteriores**. Cuando alguien agrega, esa suena; cuando la cola se vacía, vuelve el aleatorio.
 - Al abrir, el reproductor pasa a `Reproducido` las filas viejas que quedaron "En reproduccion" o "Siguiente".
 - `INTERRUMPIR_RELLENO=0` (variable de Windows) hace que la canción pedida espere a que termine la aleatoria en vez de entrar apenas se descarga.
+
+## v18.3 — Varios negocios
+1. En **CLIENTES** agrega una fila: `Codigo` (ej. 7410), `Nombre` (nombre de su pestaña, ej. BAR02), `Playlist` (ID o enlace de su playlist de YouTube, pública o no listada), `Logo`, `Activo = TRUE`.
+2. La pestaña del negocio (BAR02) se crea sola con encabezados con el primer pedido.
+3. En **ADMINS** agrega su encargado: `7410 | usuario | clave | TRUE`.
+4. En el PC del negocio instala el reproductor (el mismo instalador para todos) y la primera vez escribe su código. Para cambiarlo: botón "Cambiar código del lugar" o `Ctrl+Shift+C`.
+5. Aleatorio de cada negocio = su playlist de YouTube + lo que pidieron en fechas anteriores en su pestaña. Cola = lo que piden hoy en su pestaña.
+- La pestaña **REPRODUCIDAS** ya no se usa (era el aleatorio de la versión anterior); se puede borrar.
+- Teléfono: solo números, 10 dígitos, empieza por 3 (sin +57).
