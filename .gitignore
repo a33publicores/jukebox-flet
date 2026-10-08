@@ -11,3 +11,13 @@ data/session.json
 
 # generado al arrancar por web_boot.py
 assets/index.html
+
+# reproductor de escritorio (no subir secretos ni compilados)
+credenciales.json
+cookies.txt
+.venv_player/
+.venv_build/
+build/
+dist/
+*.spec
+instalador/Output/

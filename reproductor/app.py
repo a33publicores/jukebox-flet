@@ -11,16 +11,23 @@ con los botones o el teclado:  Espacio = pausa  ·  → = siguiente  ·  ← = a
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
 
 import flet as ft
 import flet_video as ftv
 
+from reproductor import actualizador, diagnostico
+from reproductor.version import VERSION
 from reproductor.descargas import Descargador
 from reproductor.motor import BackendHoja, Motor
 
-RAIZ = Path(__file__).resolve().parent.parent
-ASSETS = RAIZ / "assets"
+if getattr(sys, "frozen", False):  # instalado como .exe
+    RAIZ = Path(sys.executable).resolve().parent          # aquí va credenciales.json
+    ASSETS = Path(getattr(sys, "_MEIPASS", RAIZ)) / "assets"
+else:
+    RAIZ = Path(__file__).resolve().parent.parent
+    ASSETS = RAIZ / "assets"
 CARPETA = Path(os.environ.get("PLAYBAR_HOME", Path.home() / "PlayBarGo"))
 CONFIG = CARPETA / "reproductor_config.json"
 
@@ -64,7 +71,8 @@ class Pantalla:
             on_complete=self._on_complete,
             on_error=self._on_error,
         )
-        self.chip = ft.Text("Iniciando…", size=18, weight=ft.FontWeight.BOLD, color="white")
+        self.chip = ft.Text("Iniciando…", size=20, weight=ft.FontWeight.BOLD, color="white",
+                            max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self.lista = ft.ListView(expand=True, spacing=8, padding=12)
         self.btn_pausa = ft.IconButton(
             icon=ft.Icons.PAUSE_CIRCLE, icon_size=44, icon_color=CYAN,
@@ -204,12 +212,13 @@ class Pantalla:
             controls=[
                 ft.Container(content=self.video, expand=True, bgcolor="#000000"),
                 ft.Container(
-                    left=16, top=16, padding=ft.Padding.symmetric(horizontal=16, vertical=8),
-                    border_radius=12, bgcolor="#000000B3", content=self.chip,
-                ),
-                ft.Container(
-                    right=16, top=16, opacity=0.35,
-                    content=ft.Image(src="/logomundial.png", width=90),
+                    left=0, right=0, top=0, padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+                    bgcolor="#000000B3",
+                    content=ft.Row(
+                        [ft.Image(src="/logo.png", height=40, fit=ft.BoxFit.CONTAIN),
+                         ft.Container(content=self.chip, expand=True)],
+                        spacing=16, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
                 ),
             ],
         )
@@ -259,7 +268,7 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
 
 
 async def main(page: ft.Page):
-    page.title = "PlayBar GO — Reproductor"
+    page.title = f"PlayBar GO — Reproductor v{VERSION}"
     page.bgcolor = FONDO
     page.padding = 0
     page.spacing = 0
@@ -275,24 +284,20 @@ async def main(page: ft.Page):
                           content=ft.Image(src="/logo.png", width=300)))
     page.update()
 
-    # Credenciales de Google y cliente válido, con mensaje claro si algo falla.
-    from services import playbar_service as ps
-
-    try:
-        await asyncio.to_thread(ps._spreadsheet_obj)
-        if not await asyncio.to_thread(ps.obtener_config_cliente, cfg["cliente"]):
-            raise ValueError(f"El código {cfg['cliente']} no existe en la hoja CLIENTES")
-    except Exception as ex:
+    # Verificaciones previas (internet, ffmpeg, credenciales, código del lugar).
+    problemas = await asyncio.to_thread(diagnostico.revisar, cfg["cliente"])
+    if problemas:
         page.controls.clear()
         page.add(ft.Container(expand=True, alignment=ft.Alignment.CENTER, padding=30,
                               content=ft.Column([
                                   ft.Text("No se pudo iniciar el reproductor", size=24,
                                           color="white", weight=ft.FontWeight.BOLD),
-                                  ft.Text(str(ex), color="#fca5a5", selectable=True),
-                                  ft.Text("Revisa GOOGLE_CREDENTIALS_B64 o el archivo "
-                                          "credenciales.json junto al programa, y el código "
-                                          f"en {CONFIG}", color="#94A3B8"),
-                              ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)))
+                                  *[ft.Column([ft.Text("• " + m, color="#fca5a5", selectable=True),
+                                               ft.Text("  " + sol, color="#94A3B8")], spacing=2)
+                                    for m, sol in problemas],
+                                  ft.FilledButton("Reintentar", on_click=lambda e: _reiniciar(page)),
+                                  ft.Text(f"Versión {VERSION}", color="#64748b", size=11),
+                              ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12)))
         page.update()
         return
 
@@ -322,8 +327,51 @@ async def main(page: ft.Page):
             page.update()
 
     page.on_keyboard_event = teclas
+
+    async def revisar_actualizacion():
+        info = await asyncio.to_thread(actualizador.hay_actualizacion)
+        if info:
+            _ventana_actualizacion(page, info)
+
+    page.run_task(revisar_actualizacion)
     print(f"🎬 Reproductor PlayBar GO para el cliente {cfg['cliente']}")
     await motor.correr()
+
+
+def _reiniciar(page):
+    """Vuelve a abrir el programa (sirve después de corregir el problema)."""
+    try:
+        os.execv(sys.executable, [sys.executable] + ([] if getattr(sys, "frozen", False) else sys.argv))
+    except Exception:
+        page.window.close()
+
+
+def _ventana_actualizacion(page, info):
+    obligatoria = bool(info.get("obligatoria"))
+
+    def descargar(e):
+        page.launch_url(info["url"])
+
+    def luego(e):
+        dlg.open = False
+        page.update()
+
+    acciones = [ft.FilledButton("Descargar", on_click=descargar)]
+    if not obligatoria:
+        acciones.insert(0, ft.TextButton("Más tarde", on_click=luego))
+    dlg = ft.AlertDialog(
+        modal=True, bgcolor="#111827",
+        title=ft.Text("🔄 Hay una actualización", color="#22d3ee"),
+        content=ft.Column([
+            ft.Text(f"Nueva versión {info.get('version', '')} (tienes la {VERSION}).", color="white"),
+            ft.Text(str(info.get("notas", "")), color="#94A3B8"),
+            ft.Text("Descárgala, ciérrame e instala la nueva versión.", color="#94A3B8", size=12),
+        ], tight=True, width=380),
+        actions=acciones,
+    )
+    page.overlay.append(dlg)
+    dlg.open = True
+    page.update()
 
 
 def ejecutar():

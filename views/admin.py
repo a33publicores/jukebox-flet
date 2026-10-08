@@ -1,7 +1,7 @@
 """
 Panel de administrador de PlayBar GO.
 
-Entra con el PIN de la variable ADMIN_PIN (Railway). Desde aquí se controla el
+Entra con usuario y contraseña (variables ADMIN_USER y ADMIN_PASS en Railway). Desde aquí se controla el
 reproductor del lugar: pausar/reanudar, siguiente, anterior, y se ve qué suena,
 qué sigue y la playlist (con opción de quitar canciones de la cola).
 
@@ -21,51 +21,67 @@ REFRESCO_SEG = 4
 _intentos = {"n": 0, "hasta": 0.0}
 
 
-def pin_correcto(pin):
-    """Compara contra ADMIN_PIN. Devuelve (ok, mensaje_de_error)."""
-    esperado = os.environ.get("ADMIN_PIN", "").strip()
-    if not esperado:
-        return False, "ADMIN_PIN no está configurado en Railway"
+def credenciales_correctas(usuario, clave):
+    """Compara contra ADMIN_USER / ADMIN_PASS (Railway). Si solo existe el antiguo
+    ADMIN_PIN, se acepta como contraseña con cualquier usuario.
+    Devuelve (ok, mensaje_de_error)."""
+    esp_user = os.environ.get("ADMIN_USER", "").strip()
+    esp_pass = os.environ.get("ADMIN_PASS", "").strip()
+    esp_pin = os.environ.get("ADMIN_PIN", "").strip()
+    if not ((esp_user and esp_pass) or esp_pin):
+        return False, "ADMIN_USER y ADMIN_PASS no están configurados en Railway"
     if time.time() < _intentos["hasta"]:
         return False, "Demasiados intentos. Espera un minuto."
-    if hmac.compare_digest(str(pin or "").strip().encode(), esperado.encode()):
+
+    def igual(a, b):
+        return hmac.compare_digest(str(a or "").strip().encode(), str(b).encode())
+
+    if esp_user and esp_pass:
+        ok = igual(usuario, esp_user) and igual(clave, esp_pass)
+    else:
+        ok = igual(clave, esp_pin)
+    if ok:
         _intentos["n"] = 0
         return True, ""
     _intentos["n"] += 1
     if _intentos["n"] >= 5:
         _intentos["n"] = 0
         _intentos["hasta"] = time.time() + 60
-    return False, "PIN incorrecto"
+    return False, "Usuario o contraseña incorrectos"
 
 
 def pedir_pin(page, al_entrar):
-    """Muestra el diálogo del PIN; si es correcto llama a al_entrar()."""
-    campo = ft.TextField(
-        label="PIN de administrador", password=True, can_reveal_password=True,
-        autofocus=True, keyboard_type=ft.KeyboardType.NUMBER, color="white",
-        border_color="#00D4FF",
-    )
+    """Diálogo de usuario y contraseña; si son correctos llama a al_entrar()."""
+    usuario = ft.TextField(label="Usuario", autofocus=True, color="white",
+                           border_color="#00D4FF")
+    clave = ft.TextField(label="Contraseña", password=True, can_reveal_password=True,
+                         color="white", border_color="#00D4FF")
     error = ft.Text("", color="#f87171", size=13)
 
     def cerrar(e=None):
         dlg.open = False
+        try:
+            dlg.update()
+        except Exception:
+            pass
         page.update()
 
     def entrar(e):
-        ok, msg = pin_correcto(campo.value)
+        ok, msg = credenciales_correctas(usuario.value, clave.value)
         if ok:
             cerrar()
             al_entrar()
         else:
             error.value = msg
-            campo.value = ""
+            clave.value = ""
             page.update()
 
-    campo.on_submit = entrar
+    usuario.on_submit = lambda e: clave.focus()
+    clave.on_submit = entrar
     dlg = ft.AlertDialog(
         modal=True, bgcolor="#111827",
         title=ft.Text("🔧 Administrador", color="#22d3ee"),
-        content=ft.Column([campo, error], tight=True, width=280),
+        content=ft.Column([usuario, clave, error], tight=True, width=280),
         actions=[ft.TextButton("Cancelar", on_click=cerrar),
                  ft.FilledButton("Entrar", on_click=entrar)],
     )
