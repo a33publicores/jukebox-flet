@@ -31,6 +31,27 @@ else:
 CARPETA = Path(os.environ.get("PLAYBAR_HOME", Path.home() / "PlayBarGo"))
 CONFIG = CARPETA / "reproductor_config.json"
 
+
+def _buscar_credenciales():
+    """Busca credenciales.json: carpeta PlayBarGo del usuario, junto al .exe, carpeta
+    actual y carpeta padre del proyecto. Deja la ruta en PLAYBAR_CREDENCIALES."""
+    if os.environ.get("GOOGLE_CREDENTIALS_B64"):
+        return None
+    for d in (CARPETA, RAIZ, Path.cwd(), RAIZ.parent):
+        f = Path(d) / "credenciales.json"
+        if f.is_file():
+            os.environ["PLAYBAR_CREDENCIALES"] = str(f)
+            return f
+    return None
+
+
+def _abrir_carpeta(e=None):
+    try:
+        CARPETA.mkdir(parents=True, exist_ok=True)
+        os.startfile(str(CARPETA))  # solo Windows
+    except Exception as ex:
+        print("No se pudo abrir la carpeta:", ex)
+
 FONDO = "#020617"
 PANEL = "#0b1220"
 CYAN = "#00D4FF"
@@ -285,6 +306,7 @@ async def main(page: ft.Page):
     page.update()
 
     # Verificaciones previas (internet, ffmpeg, credenciales, código del lugar).
+    _buscar_credenciales()
     problemas = await asyncio.to_thread(diagnostico.revisar, cfg["cliente"])
     if problemas:
         page.controls.clear()
@@ -295,7 +317,10 @@ async def main(page: ft.Page):
                                   *[ft.Column([ft.Text("• " + m, color="#fca5a5", selectable=True),
                                                ft.Text("  " + sol, color="#94A3B8")], spacing=2)
                                     for m, sol in problemas],
-                                  ft.FilledButton("Reintentar", on_click=lambda e: _reiniciar(page)),
+                                  ft.Row([
+                                      ft.OutlinedButton("Abrir carpeta", on_click=_abrir_carpeta),
+                                      ft.FilledButton("Reintentar", on_click=lambda e: _reiniciar(page)),
+                                  ], alignment=ft.MainAxisAlignment.CENTER),
                                   ft.Text(f"Versión {VERSION}", color="#64748b", size=11),
                               ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12)))
         page.update()
@@ -376,4 +401,5 @@ def _ventana_actualizacion(page, info):
 
 def ejecutar():
     os.chdir(RAIZ)  # para encontrar credenciales.json junto al programa
+    CARPETA.mkdir(parents=True, exist_ok=True)
     ft.run(main, assets_dir=str(ASSETS))

@@ -1,7 +1,7 @@
 """
 Panel de administrador de PlayBar GO.
 
-Entra con usuario y contraseña (variables ADMIN_USER y ADMIN_PASS en Railway). Desde aquí se controla el
+Entra con usuario y contraseña de la pestaña ADMINS de la hoja (respaldo: ADMIN_USER/ADMIN_PASS en Railway). Desde aquí se controla el
 reproductor del lugar: pausar/reanudar, siguiente, anterior, y se ve qué suena,
 qué sigue y la playlist (con opción de quitar canciones de la cola).
 
@@ -21,25 +21,62 @@ REFRESCO_SEG = 4
 _intentos = {"n": 0, "hasta": 0.0}
 
 
-def credenciales_correctas(usuario, clave):
-    """Compara contra ADMIN_USER / ADMIN_PASS (Railway). Si solo existe el antiguo
-    ADMIN_PIN, se acepta como contraseña con cualquier usuario.
+HOJA_ADMINS = "ADMINS"
+ADMINS_COLS = ["Codigo", "Usuario", "Clave", "Activo", "Nota"]
+_cache_admins = {"filas": None, "t": 0.0}
+
+
+def _admins_hoja():
+    """Filas de la pestaña ADMINS (se crea sola). Caché de 30 s."""
+    if _cache_admins["filas"] is not None and time.time() - _cache_admins["t"] < 30:
+        return _cache_admins["filas"]
+    ws = cola._hoja_aux(HOJA_ADMINS, ADMINS_COLS)
+    filas = ws.get_all_values()[1:]
+    _cache_admins.update(filas=filas, t=time.time())
+    return filas
+
+
+def credenciales_correctas(usuario, clave, codigo=None):
+    """Valida contra la pestaña ADMINS de la hoja (Codigo | Usuario | Clave | Activo).
+    Codigo = el código del lugar, o * para un admin de todos los lugares.
+    Respaldo: variables ADMIN_USER / ADMIN_PASS (o ADMIN_PIN) de Railway.
     Devuelve (ok, mensaje_de_error)."""
-    esp_user = os.environ.get("ADMIN_USER", "").strip()
-    esp_pass = os.environ.get("ADMIN_PASS", "").strip()
-    esp_pin = os.environ.get("ADMIN_PIN", "").strip()
-    if not ((esp_user and esp_pass) or esp_pin):
-        return False, "ADMIN_USER y ADMIN_PASS no están configurados en Railway"
     if time.time() < _intentos["hasta"]:
         return False, "Demasiados intentos. Espera un minuto."
 
     def igual(a, b):
-        return hmac.compare_digest(str(a or "").strip().encode(), str(b).encode())
+        return hmac.compare_digest(str(a or "").strip().encode(), str(b or "").strip().encode())
 
-    if esp_user and esp_pass:
-        ok = igual(usuario, esp_user) and igual(clave, esp_pass)
-    else:
-        ok = igual(clave, esp_pin)
+    ok = False
+    hay_alguno = False
+    try:
+        for fila in _admins_hoja():
+            fila = list(fila) + [""] * 5
+            cod, usr, pwd, activo = (str(x).strip() for x in fila[:4])
+            if not usr or not pwd or activo.upper() in ("FALSE", "NO", "0"):
+                continue
+            if cod not in ("*", str(codigo or "").strip()):
+                continue
+            hay_alguno = True
+            if igual(usuario, usr) and igual(clave, pwd):
+                ok = True
+                break
+    except Exception as ex:
+        print("⚠️ No se pudo leer la pestaña ADMINS:", ex)
+
+    if not ok:
+        esp_user = os.environ.get("ADMIN_USER", "").strip()
+        esp_pass = os.environ.get("ADMIN_PASS", "").strip()
+        esp_pin = os.environ.get("ADMIN_PIN", "").strip()
+        if esp_user and esp_pass:
+            hay_alguno = True
+            ok = igual(usuario, esp_user) and igual(clave, esp_pass)
+        elif esp_pin:
+            hay_alguno = True
+            ok = igual(clave, esp_pin)
+
+    if not hay_alguno:
+        return False, "No hay administradores para este lugar (pestaña ADMINS de la hoja)"
     if ok:
         _intentos["n"] = 0
         return True, ""
@@ -50,7 +87,7 @@ def credenciales_correctas(usuario, clave):
     return False, "Usuario o contraseña incorrectos"
 
 
-def pedir_pin(page, al_entrar):
+def pedir_pin(page, al_entrar, codigo=None):
     """Diálogo de usuario y contraseña; si son correctos llama a al_entrar()."""
     usuario = ft.TextField(label="Usuario", autofocus=True, color="white",
                            border_color="#00D4FF")
@@ -67,7 +104,7 @@ def pedir_pin(page, al_entrar):
         page.update()
 
     def entrar(e):
-        ok, msg = credenciales_correctas(usuario.value, clave.value)
+        ok, msg = credenciales_correctas(usuario.value, clave.value, codigo)
         if ok:
             cerrar()
             al_entrar()

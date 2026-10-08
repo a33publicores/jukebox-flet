@@ -19,9 +19,9 @@ Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; Flags
 Name: "autoinicio"; Description: "Abrir automáticamente al iniciar sesión en Windows"; Flags: unchecked
 
 [Files]
-Source: "..\dist\PlayBarGO_Reproductor.exe"; DestDir: "{app}"; Flags: ignoreversion
-; credenciales.json se copia solo si existe junto a este script (no se sobrescribe al actualizar)
-Source: "..\credenciales.json"; DestDir: "{app}"; Flags: onlyifdoesntexist skipifsourcedoesntexist
+; Programa completo (modo carpeta). credenciales.json va aparte para no sobrescribirlo al actualizar.
+Source: "..\dist\PlayBarGO_Reproductor\*"; DestDir: "{app}"; Excludes: "credenciales.json"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\PlayBarGO_Reproductor\credenciales.json"; DestDir: "{app}"; Flags: onlyifdoesntexist skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\PlayBar GO Reproductor"; Filename: "{app}\PlayBarGO_Reproductor.exe"

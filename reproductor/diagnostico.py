@@ -29,8 +29,10 @@ def _hoja(cliente):
     try:
         ps._spreadsheet_obj()
     except FileNotFoundError:
+        from pathlib import Path
+        carpeta = os.environ.get("PLAYBAR_HOME", str(Path.home() / "PlayBarGo"))
         return (False, "No se encontró credenciales.json.",
-                "Copia credenciales.json en la carpeta donde está instalado el reproductor.")
+                f"Copia credenciales.json en {carpeta} (botón Abrir carpeta) y pulsa Reintentar.")
     except Exception as ex:
         return False, f"No se pudo abrir la hoja de Google: {ex}", \
             "Revisa internet y que la hoja esté compartida con la cuenta de servicio."

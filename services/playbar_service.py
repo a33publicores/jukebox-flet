@@ -68,7 +68,8 @@ def _init_google():
     with _lock:
         if _spreadsheet is not None:
             return
-        data = _secret_json("GOOGLE_CREDENTIALS_B64", "credenciales.json")
+        data = _secret_json("GOOGLE_CREDENTIALS_B64",
+                            os.getenv("PLAYBAR_CREDENCIALES", "credenciales.json"))
         creds = service_account.Credentials.from_service_account_info(
             data, scopes=GOOGLE_SCOPES
         )

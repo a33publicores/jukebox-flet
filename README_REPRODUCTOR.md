@@ -13,7 +13,7 @@
    Las filas viejas (Agregado sin Estado2) se consideran historial y no se reproducen.
 
 ## Administrador
-En la app: pantalla "¿Qué deseas hacer?" → **🔧 Administrador** → usuario y contraseña (`ADMIN_USER` y `ADMIN_PASS` en Railway).
+En la app: pantalla "¿Qué deseas hacer?" → **🔧 Administrador** → usuario y contraseña de la pestaña **ADMINS** de la hoja.
 Muestra qué suena y qué sigue, la playlist (con 🗑 para quitar) y los botones
 ⏮ ⏯ ⏭. Los comandos viajan por la pestaña **CONTROL**; el reproductor los ejecuta en ~3 s.
 
@@ -39,3 +39,11 @@ Si YouTube pide verificación al descargar, exporta las cookies a `~/PlayBarGo/c
 - **credenciales.json:** ponlo junto al .exe (o en la carpeta del proyecto antes de crear el instalador).
 - **Actualizaciones:** al abrir, el reproductor lee `reproductor_version.json` del repo (rama main). Para avisar una versión nueva: sube el nuevo Setup.exe (p. ej. a GitHub Releases), cambia `version` y `url` en ese JSON, súbelo al repo. Al abrir, sale la ventana con **Descargar**. Con `"obligatoria": true` no se puede cerrar. Sube también `VERSION` en `reproductor/version.py` y `--product-version`/`#define Version` antes de compilar.
 - **Verificaciones:** al abrir revisa internet, ffmpeg, credenciales y el código del lugar, y muestra qué falla y cómo arreglarlo.
+
+
+## v18.1 — Admins en la hoja y .exe arreglado
+- **Administradores:** pestaña **ADMINS** de la hoja Jukebox (se crea sola la primera vez que alguien abre el admin).
+  Columnas: `Codigo | Usuario | Clave | Activo | Nota`. `Codigo` = código del lugar (ej. 8523) o `*` para un admin de todos los lugares.
+  `Activo` en FALSE desactiva sin borrar. Los cambios valen en ~30 s, sin redeploy. `ADMIN_USER`/`ADMIN_PASS` de Railway quedan como respaldo.
+- **.exe:** `CONSTRUIR_EXE.bat` usa Python 3.12 (python.org) y compila en modo carpeta: `dist\PlayBarGO_Reproductor\PlayBarGO_Reproductor.exe`. Copia la carpeta completa, no solo el .exe.
+- **credenciales.json:** se busca en `%USERPROFILE%\PlayBarGo`, junto al .exe y en la carpeta padre del proyecto. El build lo copia solo si está en el proyecto o en `D:\Python\Musica`.

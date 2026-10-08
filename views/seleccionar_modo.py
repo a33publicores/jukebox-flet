@@ -52,7 +52,7 @@ def seleccionar_modo_view(page, codigo, nombre, logo):
 
     def abrir_admin(e):
         from views.admin import admin_view, pedir_pin
-        pedir_pin(page, lambda: admin_view(page, codigo, nombre, logo))
+        pedir_pin(page, lambda: admin_view(page, codigo, nombre, logo), codigo)
 
     page.add(
         ft.Image(src="/logohallowen.png", width=150),
