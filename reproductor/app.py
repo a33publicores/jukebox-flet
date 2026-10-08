@@ -32,17 +32,47 @@ CARPETA = Path(os.environ.get("PLAYBAR_HOME", Path.home() / "PlayBarGo"))
 CONFIG = CARPETA / "reproductor_config.json"
 
 
-def _buscar_credenciales():
-    """Busca credenciales.json: carpeta PlayBarGo del usuario, junto al .exe, carpeta
-    actual y carpeta padre del proyecto. Deja la ruta en PLAYBAR_CREDENCIALES."""
-    if os.environ.get("GOOGLE_CREDENTIALS_B64"):
-        return None
+def _candidatos_credenciales():
+    """Todos los credenciales.json disponibles, en orden: carpeta PlayBarGo del usuario,
+    junto al .exe, carpeta actual y carpeta padre del proyecto (sin repetir)."""
+    vistos, lista = set(), []
     for d in (CARPETA, RAIZ, Path.cwd(), RAIZ.parent):
-        f = Path(d) / "credenciales.json"
-        if f.is_file():
-            os.environ["PLAYBAR_CREDENCIALES"] = str(f)
-            return f
-    return None
+        f = (Path(d) / "credenciales.json").resolve()
+        if f.is_file() and f not in vistos:
+            vistos.add(f)
+            lista.append(f)
+    return lista
+
+
+def _usar_credencial(ruta):
+    """Apunta playbar_service a ese archivo y olvida la conexión anterior."""
+    from services import playbar_service as ps
+    os.environ["PLAYBAR_CREDENCIALES"] = str(ruta)
+    ps._spreadsheet = None
+    ps._google = None
+
+
+def _es_problema_credencial(problemas):
+    return any("credenciales" in m or "hoja de Google" in m for m, _ in problemas)
+
+
+def _revisar_con_credenciales(cliente):
+    """Prueba cada credenciales.json hasta que uno funcione (p. ej. si hay una llave vieja)."""
+    candidatos = [] if os.environ.get("GOOGLE_CREDENTIALS_B64") else _candidatos_credenciales()
+    problemas = []
+    for ruta in candidatos or [None]:
+        if ruta:
+            _usar_credencial(ruta)
+        problemas = diagnostico.revisar(cliente)
+        if not _es_problema_credencial(problemas):
+            if ruta:
+                print("🔑 Usando credenciales:", ruta)
+            return problemas
+        print("⚠️ No sirvió", ruta, "→", problemas[0][0] if problemas else "")
+    if len(candidatos) > 1:
+        problemas.append(("Ninguna de las credenciales encontradas funcionó:",
+                          " · ".join(str(c) for c in candidatos)))
+    return problemas
 
 
 def _abrir_carpeta(e=None):
@@ -306,8 +336,7 @@ async def main(page: ft.Page):
     page.update()
 
     # Verificaciones previas (internet, ffmpeg, credenciales, código del lugar).
-    _buscar_credenciales()
-    problemas = await asyncio.to_thread(diagnostico.revisar, cfg["cliente"])
+    problemas = await asyncio.to_thread(_revisar_con_credenciales, cfg["cliente"])
     if problemas:
         page.controls.clear()
         page.add(ft.Container(expand=True, alignment=ft.Alignment.CENTER, padding=30,

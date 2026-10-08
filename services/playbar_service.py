@@ -34,7 +34,44 @@ TOKEN_CONFIG = [
 # se usa la playlist de YouTube (sin gastar cuota de tokens).
 # Por defecto sigue el modo anterior (playlist de YouTube). Poner MODO_REPRODUCTOR=propio
 # cuando el reproductor de escritorio esté instalado y probado.
-MODO_PROPIO = os.getenv("MODO_REPRODUCTOR", "youtube").strip().lower() == "propio"
+MODO_PROPIO = os.getenv("MODO_REPRODUCTOR", "propio").strip().lower() != "youtube"
+
+# Hora de Colombia (UTC-5, sin horario de verano) para la columna Timestamp.
+ZONA_HORAS = float(os.getenv("ZONA_HORARIA_HORAS", "-5"))
+# La "noche" del bar empieza a esta hora: lo pedido desde entonces es de HOY; lo de antes
+# es historial para el aleatorio. Con 0 se corta a medianoche.
+JORNADA_HORA = int(os.getenv("JORNADA_HORA", "6"))
+
+
+def ahora_local_txt():
+    """Fecha y hora de Colombia, formato de la hoja."""
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + ZONA_HORAS * 3600))
+
+
+def epoch_local(texto):
+    """Timestamp de la hoja (hora de Colombia) -> epoch. None si no se entiende."""
+    import calendar
+    try:
+        t = calendar.timegm(time.strptime(str(texto).strip()[:19], "%Y-%m-%d %H:%M:%S"))
+        return t - ZONA_HORAS * 3600
+    except Exception:
+        return None
+
+
+def inicio_jornada(ahora=None):
+    """Epoch del inicio de la jornada actual (hoy a las JORNADA_HORA, hora de Colombia)."""
+    ahora = time.time() if ahora is None else ahora
+    local = ahora + ZONA_HORAS * 3600
+    dia = local - (local % 86400)
+    inicio = dia + JORNADA_HORA * 3600
+    if local < inicio:
+        inicio -= 86400
+    return inicio - ZONA_HORAS * 3600
+
+
+def es_de_hoy(texto):
+    t = epoch_local(texto)
+    return t is not None and t >= inicio_jornada()
 # Una solicitud solo cuenta como "ya está en la lista" si es reciente. Una canción
 # pedida hace días (aunque su fila quedara con un estado viejo) se puede volver a pedir.
 VENTANA_DUPLICADO_HORAS = float(os.getenv("DUPLICADO_HORAS", "12"))
@@ -256,14 +293,9 @@ def buscar(query, page_token=None):
 
 
 def _edad_horas(texto):
-    """Horas desde el Timestamp de la fila (se escribe en UTC). None si no se entiende."""
-    try:
-        import calendar
-
-        t = calendar.timegm(time.strptime(str(texto).strip()[:19], "%Y-%m-%d %H:%M:%S"))
-        return (time.time() - t) / 3600.0
-    except Exception:
-        return None
+    """Horas desde el Timestamp de la fila (hora de Colombia). None si no se entiende."""
+    t = epoch_local(texto)
+    return None if t is None else (time.time() - t) / 3600.0
 
 
 def solicitud_activa_existe(sheet, video_id, excluir_fila=None, registros=None):
@@ -313,14 +345,14 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
                 return {"ok": True, "duplicado": True}
 
             _con_reintentos(sheet.append_row, [
-                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+                ahora_local_txt(),
                 str(cliente),
                 str(telefono),
                 str(titulo),
                 str(canal),
                 str(video_id),
                 "Agregado" if MODO_PROPIO else "Pendiente",
-                "En cola" if MODO_PROPIO else "",
+                "Siguiente" if MODO_PROPIO else "",
             ])
 
         print("✅ GUARDADO OK")
@@ -362,7 +394,8 @@ def estado_usuario(cliente, telefono):
         if MODO_PROPIO:
             pendientes = sum(
                 1 for r in mine
-                if str(r.get("Estado2", "")).strip() in {"En cola", "En reproduccion"}
+                if str(r.get("Estado2", "")).strip() in ESTADOS_ACTIVOS
+                and es_de_hoy(r.get("Timestamp", ""))
             )
         else:
             pendientes = sum(
@@ -391,14 +424,15 @@ def estado_cola(cliente):
         siguiente = ""
         idx = -1
         for i, row in enumerate(rows):
-            if row.get("Estado2") == "En reproduccion":
+            if row.get("Estado2") == "En reproduccion" and (
+                    not MODO_PROPIO or es_de_hoy(row.get("Timestamp", ""))):
                 actual = row.get("titulo", "")
                 idx = i
                 break
 
         def en_espera(row):
             if str(row.get("Estado2", "")).strip() in {"En cola", "Siguiente"}:
-                return True
+                return (not MODO_PROPIO) or es_de_hoy(row.get("Timestamp", ""))
             return (not MODO_PROPIO) and row.get("Estado") == "Agregado"
 
         for row in rows[idx + 1:]:

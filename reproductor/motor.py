@@ -7,14 +7,17 @@ asyncio, así que no hay condiciones de carrera; lo bloqueante (Sheets, yt-dlp)
 se manda a hilos con asyncio.to_thread.
 
 Reglas:
-  * Suena la fila con Estado2 = "En reproduccion". Si no hay, la primera "En cola".
-  * Si no hay cola, suena una canción de REPRODUCIDAS (relleno).
+  * Solo cuentan las filas de HOY. Suena la de Estado2 = "En reproduccion"; si no hay,
+    la primera "Siguiente"/"En cola".
+  * Si no hay cola, suena al azar una canción de fechas anteriores (relleno).
   * Si llega una canción nueva mientras suena RELLENO, se interrumpe y suena la nueva
     (cuando ya está descargada, sin cortar el relleno antes de tiempo).
   * Si suena una canción pedida, la nueva espera su turno.
   * Comandos del admin (hoja CONTROL): pausar, reanudar, siguiente, anterior.
 """
 import asyncio
+import os
+import random
 import time
 from collections import deque
 
@@ -25,7 +28,9 @@ LATIDO = 15.0          # segundos entre latidos al panel admin
 PRECARGA = 2           # canciones por delante que se descargan
 RECIENTES = 15         # relleno: no repetir las últimas N
 COMANDO_MAX_EDAD = 120  # ignorar comandos más viejos (p. ej. de antes de reiniciar)
-INTERRUMPIR_RELLENO = True
+# True: la canción pedida entra apenas se descarga (corta el aleatorio).
+# False: espera a que termine la canción aleatoria que está sonando.
+INTERRUMPIR_RELLENO = os.getenv("INTERRUMPIR_RELLENO", "1").strip() not in ("0", "false", "no")
 
 
 class BackendHoja:
@@ -33,15 +38,21 @@ class BackendHoja:
 
     def __init__(self, cliente):
         self.cliente = str(cliente)
-        self.hist = C.Historial(self.cliente)
         self.nombre_hoja = None
+        self.ultimo = None
+        self._limpio = False
 
     def instantanea(self):
         if self.nombre_hoja is None:
             self.nombre_hoja = C._nombre_hoja(self.cliente)
         snap = C.instantanea(self.cliente, self.nombre_hoja)
-        if not self.hist.cargado:
-            self.hist.cargar(sembrar_desde=snap.items)
+        self.ultimo = snap
+        if not self._limpio:
+            try:
+                C.cerrar_atascadas(self.cliente, snap.atascadas, self.nombre_hoja)
+                self._limpio = True
+            except Exception as ex:
+                print("⚠️ No se pudieron cerrar filas viejas:", ex)
         return snap
 
     def marcar(self, fila, estado2=None, estado=None):
@@ -51,10 +62,18 @@ class BackendHoja:
         C.publicar_estado(self.cliente, estado, actual, siguiente, ack)
 
     def registrar(self, item):
-        self.hist.registrar(item)
+        pass  # el historial ya está en la hoja (Estado2 = Reproducido)
 
     def elegir_relleno(self, excluir):
-        return self.hist.elegir(excluir)
+        """Canción al azar de fechas anteriores, evitando las que sonaron hace poco."""
+        snap = self.ultimo or self.instantanea()
+        excluir = set(excluir)
+        pool = snap.aleatorio
+        candidatas = [i for i in pool if i.video_id not in excluir] or pool
+        if not candidatas:
+            return None
+        it = random.choice(candidatas)
+        return C.Item(None, it.titulo, it.canal, it.video_id)
 
 
 class Motor:
@@ -149,7 +168,9 @@ class Motor:
                     await self._marcar(item.fila, e2=C.E_ERROR, estado=C.E_ERROR)
                 return
             if not ya_marcada:
-                await self._marcar(item.fila, e2=C.E_PLAY)
+                # las "Pendiente" (versión vieja de la app) quedan como Agregado
+                await self._marcar(item.fila, e2=C.E_PLAY,
+                                   estado=None if item.estado == "Agregado" else "Agregado")
             if self.actual is not None and self.relleno:
                 self.previo = self.actual
             await self._reproducir(item, ruta, relleno=False)

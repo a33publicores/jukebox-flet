@@ -5,14 +5,16 @@ La hoja de cada cliente (A33, BAR01, ...) tiene las columnas:
     A Timestamp | B Cliente | C Usuario | D titulo | E canal | F videoId | G Estado | H Estado2
 
 Flujo con el reproductor propio:
-    la app agrega la fila con   Estado = "Agregado"  y  Estado2 = "En cola"
+    la app agrega la fila con   Estado = "Agregado"  y  Estado2 = "Siguiente"
+    (Timestamp en hora de Colombia)
     el reproductor la toma:     Estado2 = "En reproduccion"
     al terminar:                Estado2 = "Reproducido"
     si el admin la quita:       Estado2 = "Eliminado"
     si no se puede reproducir:  Estado  = "Error"
 
-Las filas antiguas (Agregado con Estado2 vacío) NO son cola: son historial. Así
-el reproductor jamás intenta tocar las ~1000 canciones viejas de golpe.
+Solo las filas de HOY (desde JORNADA_HORA, 6 a. m. por defecto) son cola. Las de
+fechas anteriores son el repertorio ALEATORIO que suena mientras nadie pide; en cuanto
+alguien agrega, esa canción pasa a sonar, y cuando la cola se vacía vuelve el aleatorio.
 
 Pestañas auxiliares (se crean solas):
     CONTROL      una fila por cliente: comando del admin y estado del reproductor
@@ -21,7 +23,6 @@ Pestañas auxiliares (se crean solas):
 Todas las lecturas pasan por UNA sola petición (values_batch_get) para no
 agotar la cuota de Google Sheets (60 lecturas/min).
 """
-import calendar
 import os
 import random
 import time
@@ -71,25 +72,55 @@ class Instantanea:
     control: dict = field(default_factory=dict)  # fila CONTROL del cliente
     control_fila: int | None = None
 
+    inicio: float = 0.0  # epoch del inicio de la jornada (hoy)
+
+    def de_hoy(self, it):
+        return it.ts is not None and it.ts >= self.inicio
+
     @property
     def actual(self):
         for it in self.items:
-            if it.estado2 == E_PLAY:
+            if it.estado2 == E_PLAY and self.de_hoy(it):
                 return it
         return None
 
     @property
     def cola(self):
-        """Canciones esperando, en orden de la hoja.
-
-        Se ignoran las de más de COLA_MAX_HORAS: son restos de otra noche (el reproductor
-        estuvo apagado) y no deben sonar al día siguiente.
-        """
-        limite = time.time() - COLA_MAX_HORAS * 3600
+        """Canciones pedidas HOY que esperan turno, en orden de la hoja.
+        También toma las "Pendiente" de hoy (las que guardó una versión vieja de la app)."""
         return [
             it for it in self.items
-            if it.estado2 in (E_COLA, E_SIGUE) and (it.ts is None or it.ts >= limite)
+            if self.de_hoy(it) and it.estado != E_ERROR and (
+                it.estado2 in (E_COLA, E_SIGUE)
+                or (it.estado == "Pendiente" and not it.estado2)
+            )
         ]
+
+    @property
+    def aleatorio(self):
+        """Repertorio para cuando nadie pide: canciones de fechas anteriores (sin repetir).
+        Si el lugar es nuevo y no tiene historial, usa lo ya sonado hoy."""
+        def sirve(it):
+            return it.estado != E_ERROR and it.estado2 not in (E_ELIM, E_ERROR)
+
+        vistos, lista = set(), []
+        for it in reversed(self.items):
+            if it.video_id in vistos or not sirve(it) or self.de_hoy(it):
+                continue
+            vistos.add(it.video_id)
+            lista.append(it)
+        if not lista:
+            for it in reversed(self.items):
+                if it.video_id not in vistos and sirve(it) and it.estado2 == E_HECHO:
+                    vistos.add(it.video_id)
+                    lista.append(it)
+        return lista
+
+    @property
+    def atascadas(self):
+        """Filas de días anteriores que quedaron como activas (p. ej. En reproduccion)."""
+        return [it.fila for it in self.items
+                if not self.de_hoy(it) and it.estado2 in ACTIVOS]
 
 
 # ---------------------------------------------------------------------------
@@ -123,10 +154,7 @@ def _nombre_hoja(cliente):
 
 
 def _epoch(texto):
-    try:
-        return calendar.timegm(time.strptime(str(texto).strip()[:19], "%Y-%m-%d %H:%M:%S"))
-    except Exception:
-        return None
+    return ps.epoch_local(texto)
 
 
 def _parse_items(valores):
@@ -162,13 +190,24 @@ def instantanea(cliente, nombre_hoja=None):
     hoja = rangos[0].get("values", []) if len(rangos) > 0 else []
     ctrl = rangos[1].get("values", []) if len(rangos) > 1 else []
 
-    snap = Instantanea(items=_parse_items(hoja))
+    snap = Instantanea(items=_parse_items(hoja), inicio=ps.inicio_jornada())
     for n, row in enumerate(ctrl[1:], start=2):
         if _col(row, 0) == str(cliente):
             snap.control_fila = n
             snap.control = {k: _col(row, i) for i, k in enumerate(CONTROL_COLS)}
             break
     return snap
+
+
+def cerrar_atascadas(cliente, filas, nombre_hoja=None):
+    """Marca como Reproducido, en UNA petición, las filas viejas que quedaron activas."""
+    if not filas:
+        return
+    ws = _ws_cliente(nombre_hoja or _nombre_hoja(cliente))
+    ps._con_reintentos(ws.batch_update, [
+        {"range": f"H{f}", "values": [[E_HECHO]]} for f in filas
+    ])
+    print(f"🧹 {len(filas)} filas de días anteriores pasaron a Reproducido")
 
 
 def _ws_cliente(nombre_hoja):

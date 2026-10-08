@@ -47,3 +47,10 @@ Si YouTube pide verificación al descargar, exporta las cookies a `~/PlayBarGo/c
   `Activo` en FALSE desactiva sin borrar. Los cambios valen en ~30 s, sin redeploy. `ADMIN_USER`/`ADMIN_PASS` de Railway quedan como respaldo.
 - **.exe:** `CONSTRUIR_EXE.bat` usa Python 3.12 (python.org) y compila en modo carpeta: `dist\PlayBarGO_Reproductor\PlayBarGO_Reproductor.exe`. Copia la carpeta completa, no solo el .exe.
 - **credenciales.json:** se busca en `%USERPROFILE%\PlayBarGo`, junto al .exe y en la carpeta padre del proyecto. El build lo copia solo si está en el proyecto o en `D:\Python\Musica`.
+
+## v18.2 — Sin playlist de YouTube, cola por fecha
+- Al elegir una canción en la app se guarda directo en la hoja: `Estado = Agregado`, `Estado2 = Siguiente`, con la **hora de Colombia** en Timestamp. Ya no pasa por la playlist de YouTube (para volver al modo viejo: `MODO_REPRODUCTOR=youtube` en Railway).
+- **Cola = lo pedido HOY** (desde las 6 a. m.; cambia con `JORNADA_HORA`, 0 = medianoche). Lo pedido de madrugada sigue contando para la misma noche.
+- **Aleatorio = canciones de fechas anteriores**. Cuando alguien agrega, esa suena; cuando la cola se vacía, vuelve el aleatorio.
+- Al abrir, el reproductor pasa a `Reproducido` las filas viejas que quedaron "En reproduccion" o "Siguiente".
+- `INTERRUMPIR_RELLENO=0` (variable de Windows) hace que la canción pedida espere a que termine la aleatoria en vez de entrar apenas se descarga.

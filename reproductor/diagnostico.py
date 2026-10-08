@@ -34,6 +34,10 @@ def _hoja(cliente):
         return (False, "No se encontró credenciales.json.",
                 f"Copia credenciales.json en {carpeta} (botón Abrir carpeta) y pulsa Reintentar.")
     except Exception as ex:
+        txt = str(ex)
+        if "invalid_grant" in txt or "account not found" in txt:
+            return (False, "La llave de credenciales.json ya no es válida (cuenta de servicio borrada o llave revocada).",
+                    "Usa el credenciales.json actual (el mismo de Railway) o crea una llave nueva en Google Cloud.")
         return False, f"No se pudo abrir la hoja de Google: {ex}", \
             "Revisa internet y que la hoja esté compartida con la cuenta de servicio."
     try:
