@@ -1,16 +1,12 @@
 @echo off
-REM Reproductor PlayBar GO - Windows
+REM Abre el reproductor directo desde el codigo (sin crear el .exe): sirve para probar
+REM cambios al instante. Usa el mismo entorno que CONSTRUIR_EXE.bat.
 cd /d "%~dp0"
-if not exist .venv_player (
-  echo Preparando por primera vez, un momento...
-  py -3.13 -m venv .venv_player || py -3 -m venv .venv_player
-  call .venv_player\Scripts\activate.bat
-  python -m pip install --upgrade pip
-  pip install -r reproductor\requirements.txt
-) else (
-  call .venv_player\Scripts\activate.bat
+set "VPY=%~dp0.venv_build\Scripts\python.exe"
+if not exist "%VPY%" (
+  echo Primero ejecuta CONSTRUIR_EXE.bat una vez para preparar el entorno.
+  pause
+  exit /b 1
 )
-REM Actualiza yt-dlp (YouTube cambia seguido)
-pip install -U yt-dlp >nul 2>&1
-python reproductor.py
-pause
+"%VPY%" reproductor.py
+if errorlevel 1 pause

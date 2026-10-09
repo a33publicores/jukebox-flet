@@ -24,22 +24,47 @@ if not exist ".venv_build\Scripts\activate.bat" (
   echo Creando entorno de compilacion...
   %PYBASE% -m venv .venv_build || goto error
 )
-"%VPY%" -m pip install --upgrade pip
-"%VPY%" -m pip install -r reproductor\requirements.txt pyinstaller || goto error
+REM --- Instala librerias SOLO si cambiaron (ahorra varios minutos) ---
+fc /b reproductor\requirements.txt .venv_build\requisitos_ok.txt >nul 2>&1
+if errorlevel 1 (
+  "%VPY%" -m pip install --upgrade pip
+  "%VPY%" -m pip install -r reproductor\requirements.txt pyinstaller certifi || goto error
+  copy /y reproductor\requirements.txt .venv_build\requisitos_ok.txt >nul
+) else (
+  echo Librerias ya instaladas.
+)
+"%VPY%" -m pip install -U yt-dlp -q
+
+REM --- Certificados de seguridad (sin esto falla la conexion: "TLS CA certificate bundle") ---
+set "CERTFILE="
+for /f "usebackq delims=" %%i in (`"%VPY%" -c "import certifi;print(certifi.where())"`) do set "CERTFILE=%%i"
+if not defined CERTFILE (
+  echo *** No encontre certifi en el entorno. ***
+  goto error
+)
+echo Certificados: %CERTFILE%
+
+REM --- Cierra el reproductor si esta abierto (si no, la compilacion lo deja roto) ---
+taskkill /im PlayBarGO_Reproductor.exe /f >nul 2>&1
 
 REM --- Borra compilaciones anteriores ---
-if exist build rmdir /s /q build
+REM (la carpeta build se conserva: PyInstaller reutiliza lo ya analizado y va mas rapido)
 if exist dist\PlayBarGO_Reproductor rmdir /s /q dist\PlayBarGO_Reproductor
 if exist dist\PlayBarGO_Reproductor.exe del /q dist\PlayBarGO_Reproductor.exe
 if exist PlayBarGO_Reproductor.spec del /q PlayBarGO_Reproductor.spec
 
 REM --- Compila en modo carpeta (-D): arranca rapido y no se rompe con el antivirus ---
 "%~dp0.venv_build\Scripts\flet.exe" pack reproductor.py -D --name PlayBarGO_Reproductor ^
-  --icon instalador\playbargo.ico --add-data "assets;assets" ^
+  --icon instalador\playbargo.ico --add-data "assets;assets" --add-data "%CERTFILE%;certifi" ^
   --product-name "PlayBar GO Reproductor" --product-version 1.0.0 ^
   --hidden-import unicodedata --hidden-import imageio_ffmpeg --hidden-import yt_dlp ^
   --hidden-import gspread --hidden-import googleapiclient --hidden-import flet_video -y
 if errorlevel 1 goto error
+
+if not exist "dist\PlayBarGO_Reproductor\_internal\certifi\cacert.pem" (
+  echo *** Los certificados no quedaron dentro del programa. ***
+  goto error
+)
 
 REM --- Copia credenciales.json junto al programa (si lo encuentra) ---
 set "CRED="
@@ -54,6 +79,12 @@ if defined CRED (
 
 echo.
 echo === Listo: dist\PlayBarGO_Reproductor\PlayBarGO_Reproductor.exe ===
+REM El instalador solo se crea si lo pides:  CONSTRUIR_EXE.bat instalador
+if /i not "%~1"=="instalador" (
+  echo Para crear tambien el instalador: CONSTRUIR_EXE.bat instalador
+  pause
+  exit /b 0
+)
 set ISCC="%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
 if not exist %ISCC% set ISCC="%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
 if exist %ISCC% (

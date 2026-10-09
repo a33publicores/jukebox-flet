@@ -29,6 +29,13 @@ else:
     RAIZ = Path(__file__).resolve().parent.parent
     ASSETS = RAIZ / "assets"
 CARPETA = Path(os.environ.get("PLAYBAR_HOME", Path.home() / "PlayBarGo"))
+
+if getattr(sys, "frozen", False):
+    # Certificados para conexiones seguras (Google Sheets, YouTube) dentro del .exe.
+    _cert = Path(getattr(sys, "_MEIPASS", RAIZ)) / "certifi" / "cacert.pem"
+    if _cert.is_file():
+        os.environ.setdefault("REQUESTS_CA_BUNDLE", str(_cert))
+        os.environ.setdefault("SSL_CERT_FILE", str(_cert))
 CONFIG = CARPETA / "reproductor_config.json"
 
 
@@ -100,6 +107,32 @@ def _guardar_config(cfg):
     CONFIG.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _segundos(d):
+    """Convierte lo que manda el video (Duration, dict o milisegundos) a segundos."""
+    if d is None:
+        return 0.0
+    if isinstance(d, (int, float)):
+        return float(d) / 1000.0
+    if isinstance(d, str):
+        try:
+            return float(d) / 1000.0
+        except ValueError:
+            return 0.0
+    if isinstance(d, dict):
+        g = d.get
+    else:
+        def g(k, v=0):
+            return getattr(d, k, v)
+    return ((g("days", 0) or 0) * 86400 + (g("hours", 0) or 0) * 3600
+            + (g("minutes", 0) or 0) * 60 + (g("seconds", 0) or 0)
+            + (g("milliseconds", 0) or 0) / 1000.0 + (g("microseconds", 0) or 0) / 1e6)
+
+
+def _mmss(s):
+    s = max(0, int(s))
+    return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60}:{s % 60:02d}"
+
+
 def _miniatura(video_id):
     return f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"
 
@@ -121,7 +154,20 @@ class Pantalla:
             fill_color="#000000",
             on_complete=self._on_complete,
             on_error=self._on_error,
+            on_position_change=self._on_posicion,
+            on_duration_change=self._on_duracion,
         )
+        self.dur = 0.0
+        self.pos = 0.0
+        self._ult_seg = -1
+        self._terminado_token = -1
+        self.completa = False
+        self.barra = ft.ProgressBar(value=0, expand=True, color=CYAN, bgcolor="#334155",
+                                    bar_height=6, border_radius=3)
+        self.t_pos = ft.Text("0:00", size=14, color="white", weight=ft.FontWeight.BOLD)
+        self.t_dur = ft.Text("0:00", size=14, color="#94A3B8")
+        self.zona_controles = None
+        self.logo_lista = None
         self.chip = ft.Text("Iniciando…", size=20, weight=ft.FontWeight.BOLD, color="white",
                             max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self.lista = ft.ListView(expand=True, spacing=8, padding=12)
@@ -132,8 +178,79 @@ class Pantalla:
 
     # ------------------------------------------------------------ eventos
     async def _on_complete(self, e):
-        if str(e.data).lower() in ("true", "1") and self.motor:
+        # En Flet 1.0 el evento llega sin datos (None): cuenta como terminado.
+        if str(e.data).strip().lower() in ("false", "0"):
+            return
+        await self._terminar_una_vez()
+
+    async def _terminar_una_vez(self):
+        """Pasa a la siguiente solo una vez por canción (evento o vigilante)."""
+        if self.motor and self._terminado_token != self.token:
+            self._terminado_token = self.token
             await self.motor.al_terminar(self.token)
+
+    async def vigilar_final(self):
+        """Respaldo: si el video llegó al final y no avanza en 4 s, pasa a la siguiente."""
+        quieto = 0
+        ultimo = -1.0
+        while True:
+            await asyncio.sleep(1)
+            try:
+                if not self.motor or self.motor.pausado or self.dur <= 0:
+                    quieto, ultimo = 0, self.pos
+                    continue
+                cerca_del_final = self.pos >= self.dur - 1.5
+                quieto = quieto + 1 if abs(self.pos - ultimo) < 0.2 else 0
+                ultimo = self.pos
+                if cerca_del_final and quieto >= 4:
+                    print("⏭️ Fin detectado por el vigilante")
+                    quieto = 0
+                    await self._terminar_una_vez()
+            except Exception as ex:
+                print("⚠️ vigilante:", ex)
+
+    async def _on_duracion(self, e):
+        self.dur = _segundos(e.data)
+        self.t_dur.value = _mmss(self.dur)
+        try:
+            self.t_dur.update()
+        except Exception:
+            pass
+
+    async def _on_posicion(self, e):
+        pos = _segundos(e.data)
+        self.pos = pos
+        if int(pos) == self._ult_seg:  # actualiza la pantalla 1 vez por segundo
+            return
+        self._ult_seg = int(pos)
+        if self.dur <= 0:
+            try:
+                self.dur = _segundos(await self.video.get_duration())
+                self.t_dur.value = _mmss(self.dur)
+            except Exception:
+                pass
+        self.t_pos.value = _mmss(pos)
+        self.barra.value = min(1.0, pos / self.dur) if self.dur > 0 else None
+        try:
+            self.t_pos.update()
+            self.t_dur.update()
+            self.barra.update()
+        except Exception:
+            pass
+
+    def _reiniciar_tiempo(self):
+        self.dur, self.pos, self._ult_seg = 0.0, 0.0, -1
+        self.t_pos.value, self.t_dur.value, self.barra.value = "0:00", "0:00", 0
+
+    def pantalla_completa(self, valor=None):
+        """Modo pantalla completa: solo el video (con nombre y tiempo) y la playlist."""
+        self.completa = (not self.completa) if valor is None else bool(valor)
+        self.page.window.full_screen = self.completa
+        if self.zona_controles is not None:
+            self.zona_controles.visible = not self.completa
+        if self.logo_lista is not None:
+            self.logo_lista.visible = not self.completa
+        self.page.update()
 
     async def _on_error(self, e):
         if self.motor:
@@ -146,6 +263,7 @@ class Pantalla:
     # --------------------------------------------- interfaz que usa el Motor
     async def reproducir(self, ruta, item, token):
         self.token = token
+        self._reiniciar_tiempo()
         self.video.playlist = [ftv.VideoMedia(resource=ruta)]
         self.video.update()
         try:
@@ -243,8 +361,7 @@ class Pantalla:
             await self.motor.ejecutar("siguiente")
 
         async def _full(e):
-            self.page.window.full_screen = not self.page.window.full_screen
-            self.page.update()
+            self.pantalla_completa()
 
         controles = ft.Row(
             [
@@ -258,10 +375,18 @@ class Pantalla:
             ],
             alignment=ft.MainAxisAlignment.CENTER,
         )
-        izquierda = ft.Stack(
+        tiempo = ft.Container(
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10), bgcolor="#000000",
+            content=ft.Row([self.t_pos, self.barra, self.t_dur], spacing=12,
+                           vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        )
+        video = ft.Stack(
             expand=True,
             controls=[
-                ft.Container(content=self.video, expand=True, bgcolor="#000000"),
+                ft.GestureDetector(
+                    expand=True, on_double_tap=lambda e: self.pantalla_completa(),
+                    content=ft.Container(content=self.video, expand=True, bgcolor="#000000"),
+                ),
                 ft.Container(
                     left=0, right=0, top=0, padding=ft.Padding.symmetric(horizontal=16, vertical=10),
                     bgcolor="#000000B3",
@@ -273,21 +398,20 @@ class Pantalla:
                 ),
             ],
         )
+        izquierda = ft.Column([video, tiempo], expand=True, spacing=0)
+        self.logo_lista = ft.Container(
+            padding=16,
+            content=ft.Row([
+                ft.Image(src="/logo.png", height=48, fit=ft.BoxFit.CONTAIN),
+            ], alignment=ft.MainAxisAlignment.CENTER),
+        )
+        self.zona_controles = ft.Container(padding=8, content=controles, bgcolor=PANEL)
         derecha = ft.Container(
             width=390, bgcolor=FONDO,
             border=ft.Border.only(left=ft.BorderSide(1, "#1e293b")),
             content=ft.Column(
                 spacing=0,
-                controls=[
-                    ft.Container(
-                        padding=16,
-                        content=ft.Row([
-                            ft.Image(src="/logo.png", height=48, fit=ft.BoxFit.CONTAIN),
-                        ], alignment=ft.MainAxisAlignment.CENTER),
-                    ),
-                    self.lista,
-                    ft.Container(padding=8, content=controles, bgcolor=PANEL),
-                ],
+                controls=[self.logo_lista, self.lista, self.zona_controles],
             ),
         )
         return ft.Row([izquierda, derecha], expand=True, spacing=0)
@@ -380,9 +504,10 @@ async def main(page: ft.Page):
             await motor.ejecutar("anterior")
         elif k == "c" and e.ctrl and e.shift:  # Ctrl+Shift+C: cambiar código del lugar
             _cambiar_codigo(page)
-        elif k == "f":
-            page.window.full_screen = not page.window.full_screen
-            page.update()
+        elif k == "f" or k == "f11":
+            pantalla.pantalla_completa()
+        elif k == "escape" and pantalla.completa:
+            pantalla.pantalla_completa(False)
 
     page.on_keyboard_event = teclas
 
@@ -392,6 +517,7 @@ async def main(page: ft.Page):
             _ventana_actualizacion(page, info)
 
     page.run_task(revisar_actualizacion)
+    page.run_task(pantalla.vigilar_final)
     print(f"🎬 Reproductor PlayBar GO para el cliente {cfg['cliente']}")
     await motor.correr()
 

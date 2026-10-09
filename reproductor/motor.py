@@ -141,6 +141,7 @@ class Motor:
         self._lock = asyncio.Lock()  # una sola operación de estado a la vez
         self._fallos = {}        # video_id -> descargas fallidas
         self._pend = []          # marcas que no se pudieron escribir [(fila, estado2, estado)]
+        self._hechas = set()     # filas que ya sonaron en esta sesión (aunque la hoja no lo sepa)
         self._ultimo_cid = None
         self._ack = None
         self._pub = None
@@ -162,7 +163,15 @@ class Motor:
     async def tick(self):
         async with self._lock:
             await self._reintentar_marcas()
-            snap = await asyncio.to_thread(self.backend.instantanea)
+            try:
+                snap = await asyncio.to_thread(self.backend.instantanea)
+            except Exception:
+                # Sin hoja (internet, cuota...): si no suena nada, seguir con la última
+                # lectura para no quedarse en silencio. Los cambios se escriben después.
+                if self.actual is None and not self.ocupado and self.snap is not None:
+                    await self._decidir(self.snap)
+                    await self._ui_lista(self.snap)
+                raise
             self.snap = snap
             if await self._comandos(snap):
                 # el comando cambió el estado: la lectura quedó vieja, se relee
@@ -178,10 +187,12 @@ class Motor:
         return {f for f, _, _ in self._pend}
 
     async def _decidir(self, snap):
+        omitir = self._filas_pendientes() | self._hechas
         marcada = snap.actual
-        if marcada and marcada.fila in self._filas_pendientes():
+        if marcada and marcada.fila in omitir:
             marcada = None
-        cola = [i for i in snap.cola if i.fila not in self._filas_pendientes()]
+        cola = [i for i in snap.cola if i.fila not in omitir
+                and not (self.actual is not None and i.fila == self.actual.fila)]
 
         if self.actual is None:
             if marcada:
@@ -193,7 +204,9 @@ class Motor:
         elif self.relleno:
             if cola and INTERRUMPIR_RELLENO:
                 await self._tomar(cola[0])
-        elif self.actual.fila is not None:
+        elif self.actual.fila is not None and self.actual.fila not in self._filas_pendientes():
+            # la hoja dice que ya no suena (el admin la quitó, etc.); si su marca aún no
+            # se pudo escribir, la hoja está desactualizada y se ignora
             if not marcada or marcada.fila != self.actual.fila:
                 await self._terminar("externo")
 
@@ -255,6 +268,7 @@ class Motor:
         """Cierra la canción actual y pasa a la siguiente."""
         item = self.actual
         if item is not None and item.fila is not None and motivo != "externo":
+            self._hechas.add(item.fila)
             await self._marcar(item.fila, e2=C.E_HECHO)
         if item is not None and item.fila is not None and motivo in ("ok", "saltada"):
             try:
@@ -345,6 +359,8 @@ class Motor:
         prev, cur = self.previo, self.actual
         if prev is None:
             return
+        if prev.fila is not None:
+            self._hechas.discard(prev.fila)
         if cur is not None and cur.fila is not None:
             await self._marcar(cur.fila, e2=C.E_COLA)  # vuelve al inicio de la cola
         if prev.fila is not None:
@@ -430,9 +446,10 @@ class Motor:
         self._pub, self._t_pub = clave, ahora
 
     async def _ui_lista(self, snap):
+        omitir = self._hechas | ({self.actual.fila} if self.actual and self.actual.fila else set())
         await self.ui.mostrar(
             actual=self.actual,
-            cola=snap.cola,
+            cola=[i for i in snap.cola if i.fila not in omitir],
             relleno=self.relleno,
             pausado=self.pausado,
             error=self.error,
