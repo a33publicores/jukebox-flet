@@ -69,7 +69,13 @@ async def salud(request):
         return JSONResponse({"ok": True, "servicio": "playbar-api", "hora": ps.ahora_local_txt()})
     except Exception as ex:
         print(f"❌ API salud: {type(ex).__name__}: {ex}")
-        return JSONResponse({"ok": False, "error": f"{type(ex).__name__}: {ex}"}, status_code=503)
+        try:
+            diag = await asyncio.wait_for(run_in_threadpool(db.diagnostico), timeout=12)
+        except Exception as ex2:
+            diag = {"conexion": f"{type(ex2).__name__}: {ex2}"}
+        print(f"🩺 Diagnóstico base: {diag}")
+        return JSONResponse({"ok": False, "error": f"{type(ex).__name__}: {ex}",
+                             "diagnostico": diag}, status_code=503)
 
 
 @_protegido

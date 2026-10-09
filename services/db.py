@@ -109,6 +109,29 @@ def _pool_obj():
         return _pool
 
 
+def diagnostico():
+    """Prueba una conexión directa (sin pool) y devuelve el error REAL si falla.
+    Nunca devuelve la contraseña."""
+    from urllib.parse import urlparse
+    url = os.getenv("DATABASE_URL", "").strip()
+    if not url:
+        return {"conexion": "Falta la variable DATABASE_URL en este servicio"}
+    u = urlparse(url)
+    info = {"host": u.hostname, "puerto": u.port, "base": (u.path or "").lstrip("/"),
+            "usuario": u.username}
+    try:
+        import psycopg
+        with psycopg.connect(url, connect_timeout=8) as c:
+            c.execute("SELECT 1")
+        info["conexion"] = "ok"
+    except Exception as ex:
+        texto = str(ex)
+        if u.password:
+            texto = texto.replace(u.password, "***")
+        info["conexion"] = f"{type(ex).__name__}: {texto}"
+    return info
+
+
 def _consultar_pg(sql, params):
     with _pool_obj().connection() as conn:
         cur = conn.execute(sql, params)
