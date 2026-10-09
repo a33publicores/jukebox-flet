@@ -162,15 +162,26 @@ class Pantalla:
         self._ult_seg = -1
         self._terminado_token = -1
         self.completa = False
-        self.barra = ft.ProgressBar(value=0, expand=True, color=CYAN, bgcolor="#334155",
-                                    bar_height=6, border_radius=3)
+        self._arrastrando = False
+        self.barra = ft.Slider(
+            value=0, min=0, max=1, expand=True, active_color=CYAN,
+            inactive_color="#334155", thumb_color="white",
+            on_change_start=self._barra_inicio, on_change=self._barra_mueve,
+            on_change_end=self._barra_suelta,
+        )
         self.t_pos = ft.Text("0:00", size=14, color="white", weight=ft.FontWeight.BOLD)
         self.t_dur = ft.Text("0:00", size=14, color="#94A3B8")
         self.zona_controles = None
         self.logo_lista = None
         self.chip = ft.Text("Iniciando…", size=20, weight=ft.FontWeight.BOLD, color="white",
                             max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-        self.lista = ft.ListView(expand=True, spacing=8, padding=12)
+        self.encabezado = ft.Column(spacing=8)
+        self.lista = ft.ReorderableListView(
+            expand=True, padding=12, header=self.encabezado,
+            show_default_drag_handles=True, on_reorder=self._on_reorder,
+        )
+        self._cola_vista = []
+        self.cabecera = None
         self.btn_pausa = ft.IconButton(
             icon=ft.Icons.PAUSE_CIRCLE, icon_size=44, icon_color=CYAN,
             on_click=self._click_pausa,
@@ -230,13 +241,52 @@ class Pantalla:
             except Exception:
                 pass
         self.t_pos.value = _mmss(pos)
-        self.barra.value = min(1.0, pos / self.dur) if self.dur > 0 else None
+        if not self._arrastrando:
+            self.barra.value = min(1.0, pos / self.dur) if self.dur > 0 else 0
         try:
             self.t_pos.update()
             self.t_dur.update()
             self.barra.update()
         except Exception:
             pass
+
+    # ------------------------------------------- barra de tiempo (adelantar)
+    def _barra_inicio(self, e):
+        self._arrastrando = True
+
+    def _barra_mueve(self, e):
+        if self.dur > 0:
+            self.t_pos.value = _mmss(float(self.barra.value or 0) * self.dur)
+            try:
+                self.t_pos.update()
+            except Exception:
+                pass
+
+    async def _barra_suelta(self, e):
+        try:
+            if self.dur > 0 and self.motor and self.motor.actual is not None:
+                destino = max(0.0, min(self.dur - 1, float(self.barra.value or 0) * self.dur))
+                await self.video.seek(ft.Duration(milliseconds=int(destino * 1000)))
+                self.pos = destino
+                self._ult_seg = -1
+        except Exception as ex:
+            print("⚠️ No se pudo adelantar:", ex)
+        finally:
+            self._arrastrando = False
+
+    # ------------------------------------------------- mover canciones
+    async def _on_reorder(self, e):
+        viejo, nuevo = e.old_index, e.new_index
+        if viejo is None or nuevo is None or not (0 <= viejo < len(self._cola_vista)):
+            return
+        nuevo = max(0, min(nuevo, len(self._cola_vista) - 1))
+        it = self._cola_vista.pop(viejo)
+        self._cola_vista.insert(nuevo, it)
+        tarjeta = self.lista.controls.pop(viejo)
+        self.lista.controls.insert(nuevo, tarjeta)
+        self.lista.update()
+        if self.motor:
+            await self.motor.reordenar([i.fila for i in self._cola_vista])
 
     def _reiniciar_tiempo(self):
         self.dur, self.pos, self._ult_seg = 0.0, 0.0, -1
@@ -245,7 +295,10 @@ class Pantalla:
     def pantalla_completa(self, valor=None):
         """Modo pantalla completa: solo el video (con nombre y tiempo) y la playlist."""
         self.completa = (not self.completa) if valor is None else bool(valor)
+        self.page.window.title_bar_hidden = self.completa
         self.page.window.full_screen = self.completa
+        if self.cabecera is not None:
+            self.cabecera.visible = not self.completa
         if self.zona_controles is not None:
             self.zona_controles.visible = not self.completa
         if self.logo_lista is not None:
@@ -299,7 +352,7 @@ class Pantalla:
             else (error or "Esperando canciones…")
         )
 
-        filas = []
+        filas = []  # parte fija de arriba (error, lo que suena, título)
         if error:
             filas.append(ft.Container(
                 padding=10, border_radius=10, bgcolor="#7f1d1d",
@@ -312,15 +365,17 @@ class Pantalla:
                 resaltada=True,
             ))
         if cola:
-            filas.append(ft.Text(f"SIGUE ({len(cola)})", size=12, color="#94A3B8",
-                                 weight=ft.FontWeight.BOLD))
-            for it in cola[:20]:
-                filas.append(self._tarjeta(it, "", quitar=True))
-            if len(cola) > 20:
-                filas.append(ft.Text(f"… y {len(cola) - 20} más", color="#94A3B8", size=12))
+            filas.append(ft.Text(f"SIGUE ({len(cola)}) · arrastra ☰ para cambiar el orden",
+                                 size=12, color="#94A3B8", weight=ft.FontWeight.BOLD))
         elif actual:
             filas.append(ft.Text("No hay más canciones en cola", size=12, color="#94A3B8"))
-        self.lista.controls = filas
+        self.encabezado.controls = filas
+        self._cola_vista = list(cola[:40])
+        self.lista.controls = [
+            ft.Container(key=f"f{it.fila}", padding=ft.Padding.only(bottom=8),
+                         content=self._tarjeta(it, "", quitar=True))
+            for it in self._cola_vista
+        ]
         self.page.update()
 
     # ------------------------------------------------------------- piezas
@@ -352,6 +407,10 @@ class Pantalla:
             border=ft.Border.all(1, CYAN) if resaltada else None,
             content=ft.Row(fila, vertical_alignment=ft.CrossAxisAlignment.CENTER),
         )
+
+    def _crear_cabecera(self, **kw):
+        self.cabecera = ft.Container(**kw)
+        return self.cabecera
 
     def construir(self):
         async def _ant(e):
@@ -387,7 +446,7 @@ class Pantalla:
                     expand=True, on_double_tap=lambda e: self.pantalla_completa(),
                     content=ft.Container(content=self.video, expand=True, bgcolor="#000000"),
                 ),
-                ft.Container(
+                self._crear_cabecera(
                     left=0, right=0, top=0, padding=ft.Padding.symmetric(horizontal=16, vertical=10),
                     bgcolor="#000000B3",
                     content=ft.Row(

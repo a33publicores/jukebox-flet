@@ -60,6 +60,9 @@ class BackendHoja:
                 print("⚠️ No se pudieron cerrar filas viejas:", ex)
         return snap
 
+    def reordenar(self, filas):
+        C.reordenar(self.cliente, self.ultimo, filas, self.nombre_hoja)
+
     def marcar(self, fila, estado2=None, estado=None):
         C.marcar(self.cliente, fila, estado2=estado2, estado=estado, nombre_hoja=self.nombre_hoja)
 
@@ -325,6 +328,16 @@ class Motor:
             cambio = await self._ejecutar(cmd)
         self._ack = cid
         return cambio
+
+    async def reordenar(self, filas):
+        """Nuevo orden de la cola elegido en la pantalla (arrastrando)."""
+        async with self._lock:
+            try:
+                await asyncio.to_thread(self.backend.reordenar, filas)
+                self.snap = await asyncio.to_thread(self.backend.instantanea)
+                await self._ui_lista(self.snap)
+            except Exception as ex:
+                print("⚠️ No se pudo guardar el nuevo orden:", ex)
 
     async def ejecutar(self, cmd):
         """Botones locales de la pantalla (toman el candado si cambian la cola)."""

@@ -5,6 +5,7 @@ Esta capa reemplaza el antiguo Flask/Bot. Flet llama directamente a
 Google Sheets y YouTube desde el mismo proceso Python.
 """
 import base64
+import html
 import json
 import os
 import threading
@@ -351,8 +352,8 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
                 ahora_local_txt(),
                 str(cliente),
                 str(telefono),
-                str(titulo),
-                str(canal),
+                html.unescape(str(titulo)),
+                html.unescape(str(canal)),
                 str(video_id),
                 "Agregado" if MODO_PROPIO else "Pendiente",
                 "Siguiente" if MODO_PROPIO else "",

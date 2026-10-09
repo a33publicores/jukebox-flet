@@ -23,6 +23,7 @@ Pestañas auxiliares (se crean solas):
 Todas las lecturas pasan por UNA sola petición (values_batch_get) para no
 agotar la cuota de Google Sheets (60 lecturas/min).
 """
+import html
 import os
 import random
 import time
@@ -64,6 +65,11 @@ class Item:
     estado: str = ""
     estado2: str = ""
     ts: float | None = None  # epoch UTC del Timestamp de la fila
+    orden: float | None = None  # columna I "Orden" (al mover canciones en el reproductor)
+
+    @property
+    def clave(self):
+        return self.orden if self.orden is not None else float(self.fila or 0)
 
 
 @dataclass
@@ -86,15 +92,15 @@ class Instantanea:
 
     @property
     def cola(self):
-        """Canciones pedidas HOY que esperan turno, en orden de la hoja.
+        """Canciones pedidas HOY que esperan turno, en orden (columna Orden o fila).
         También toma las "Pendiente" de hoy (las que guardó una versión vieja de la app)."""
-        return [
+        return sorted([
             it for it in self.items
             if self.de_hoy(it) and it.estado != E_ERROR and (
                 it.estado2 in (E_COLA, E_SIGUE)
                 or (it.estado == "Pendiente" and not it.estado2)
             )
-        ]
+        ], key=lambda it: it.clave)
 
     @property
     def aleatorio(self):
@@ -157,6 +163,13 @@ def _epoch(texto):
     return ps.epoch_local(texto)
 
 
+def _num(texto):
+    try:
+        return float(str(texto).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_items(valores):
     items = []
     for n, row in enumerate(valores[1:], start=2):
@@ -165,13 +178,14 @@ def _parse_items(valores):
             continue
         items.append(Item(
             fila=n,
-            titulo=_col(row, 3),
-            canal=_col(row, 4),
+            titulo=html.unescape(_col(row, 3)),
+            canal=html.unescape(_col(row, 4)),
             video_id=vid,
             usuario=_col(row, 2),
             estado=_col(row, 6),
             estado2=_col(row, 7),
             ts=_epoch(_col(row, 0)),
+            orden=_num(_col(row, 8)),
         ))
     return items
 
@@ -184,7 +198,7 @@ def instantanea(cliente, nombre_hoja=None):
         _hoja_aux(HOJA_CONTROL, CONTROL_COLS)
     resp = ps._con_reintentos(
         ss.values_batch_get,
-        [f"'{nombre_hoja}'!A:H", f"'{HOJA_CONTROL}'!A:I"],
+        [f"'{nombre_hoja}'!A:I", f"'{HOJA_CONTROL}'!A:I"],
     )
     rangos = resp.get("valueRanges", [])
     hoja = rangos[0].get("values", []) if len(rangos) > 0 else []
@@ -197,6 +211,24 @@ def instantanea(cliente, nombre_hoja=None):
             snap.control = {k: _col(row, i) for i, k in enumerate(CONTROL_COLS)}
             break
     return snap
+
+
+def reordenar(cliente, snap, filas, nombre_hoja=None):
+    """Guarda el nuevo orden de la cola en la columna I (Orden), en UNA petición.
+    Reparte las mismas claves que ya tenían esas canciones, así las que pidan
+    después siguen quedando al final."""
+    if not filas or snap is None:
+        return
+    por_fila = {it.fila: it for it in snap.items}
+    elegidas = [por_fila[f] for f in filas if f in por_fila]
+    claves = sorted(it.clave for it in elegidas)
+    datos = [{"range": "I1", "values": [["Orden"]]}]
+    for it, k in zip(elegidas, claves):
+        datos.append({"range": f"I{it.fila}", "values": [[k]]})
+        it.orden = k
+    ws = _ws_cliente(nombre_hoja or _nombre_hoja(cliente))
+    ps._con_reintentos(ws.batch_update, datos)
+    print(f"↕️ Nuevo orden guardado ({len(elegidas)} canciones)")
 
 
 def cerrar_atascadas(cliente, filas, nombre_hoja=None):
