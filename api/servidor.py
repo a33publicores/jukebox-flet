@@ -63,11 +63,13 @@ async def _json(request):
 
 # ---------------------------------------------------------------------------
 async def salud(request):
+    import asyncio
     try:
-        await run_in_threadpool(db.asegurar)
+        await asyncio.wait_for(run_in_threadpool(db.asegurar), timeout=15)
         return JSONResponse({"ok": True, "servicio": "playbar-api", "hora": ps.ahora_local_txt()})
     except Exception as ex:
-        return JSONResponse({"ok": False, "error": str(ex)}, status_code=503)
+        print(f"❌ API salud: {type(ex).__name__}: {ex}")
+        return JSONResponse({"ok": False, "error": f"{type(ex).__name__}: {ex}"}, status_code=503)
 
 
 @_protegido

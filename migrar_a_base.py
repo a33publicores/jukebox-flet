@@ -24,14 +24,24 @@ sys.path.insert(0, str(AQUI))
 SPREADSHEET_ID = "1F1SMAyyY1iUKRX5QjiyrrMmv7W4z27gBsRMS8ZVGNS0"
 
 
+ALCANCE = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+
+
 def _abrir_hoja():
     import gspread
     from google.oauth2 import service_account
+    b64 = os.environ.get("GOOGLE_CREDENTIALS_B64", "").strip()
+    if b64:  # en Railway: la misma variable que usaba la app con Sheets
+        import base64
+        import json
+        info = json.loads(base64.b64decode(b64).decode("utf-8"))
+        creds = service_account.Credentials.from_service_account_info(info, scopes=ALCANCE)
+        print("🔑 Credenciales: variable GOOGLE_CREDENTIALS_B64")
+        return gspread.authorize(creds).open_by_key(SPREADSHEET_ID)
     for d in (AQUI, AQUI.parent, Path.home() / "PlayBarGo"):
         f = d / "credenciales.json"
         if f.is_file():
-            creds = service_account.Credentials.from_service_account_file(
-                str(f), scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
+            creds = service_account.Credentials.from_service_account_file(str(f), scopes=ALCANCE)
             print(f"🔑 Credenciales: {f}")
             return gspread.authorize(creds).open_by_key(SPREADSHEET_ID)
     raise SystemExit("❌ No encontré credenciales.json (en esta carpeta o en la de arriba).")
@@ -127,6 +137,24 @@ def migrar(ss, forzar=False, pausa=1.2):
     return resumen, negocios
 
 
+def migrar_automatica():
+    """En Railway, al arrancar la app: si la base está vacía y existe
+    GOOGLE_CREDENTIALS_B64, copia todo desde Sheets sin que nadie corra nada."""
+    from services import db
+    try:
+        if db.clientes():
+            return  # ya hay datos: nunca se repite
+        if not os.environ.get("GOOGLE_CREDENTIALS_B64", "").strip():
+            print("ℹ️ Base vacía y sin GOOGLE_CREDENTIALS_B64: crea los negocios desde /super")
+            return
+        print("🚚 Base vacía: copiando automáticamente desde Google Sheets…")
+        resumen, _ = migrar(_abrir_hoja())
+        print(f"✅ Migración automática: {resumen['negocios']} negocios, {resumen['admins']} admins, "
+              f"{resumen['pedidos']} pedidos. Las llaves se ven en /super.")
+    except Exception as ex:
+        print(f"❌ Migración automática falló: {type(ex).__name__}: {ex}")
+
+
 def _guardar_llaves(negocios):
     from services import db
     lineas = ["Llaves de los reproductores PlayBar GO (NO compartir ni subir a GitHub)", ""]
@@ -146,6 +174,9 @@ def main():
         url = input("> ").strip()
     if not url.startswith("postgres"):
         raise SystemExit("❌ Esa no parece la dirección de PostgreSQL (empieza por postgresql://).")
+    if "railway.internal" in url:
+        raise SystemExit("❌ Esa es la dirección INTERNA (solo funciona dentro de Railway).\n"
+                         "   Usa DATABASE_PUBLIC_URL (la que dice ...proxy.rlwy.net:NÚMERO).")
     os.environ["DATABASE_URL"] = url
     resumen, negocios = migrar(_abrir_hoja(), forzar="--forzar" in sys.argv)
     destino, lineas = _guardar_llaves(negocios)

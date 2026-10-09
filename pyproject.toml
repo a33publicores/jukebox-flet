@@ -11,6 +11,8 @@ dependencies = [
     "starlette",
     "uvicorn",
     "openpyxl",
+    "gspread",
+    "google-auth",
 ]
 
 [tool.flet]

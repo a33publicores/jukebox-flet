@@ -271,8 +271,18 @@ def iniciar_procesador():
         print("❌ Falta DATABASE_URL: agrega PostgreSQL al proyecto de Railway "
               "y la variable DATABASE_URL a este servicio.")
         return
-    try:
-        db.asegurar()
-        print(f"🩺 Base OK: {len(db.clientes())} negocios")
-    except Exception as ex:
-        print("❌ No se pudo conectar a la base de datos:", ex)
+    def _arrancar():
+        try:
+            db.asegurar()
+            print(f"🩺 Base OK: {len(db.clientes())} negocios")
+        except Exception as ex:
+            print("❌ No se pudo conectar a la base de datos:", ex)
+            return
+        try:
+            import migrar_a_base
+            migrar_a_base.migrar_automatica()
+        except Exception as ex:
+            print("⚠️ Migración automática no disponible:", ex)
+
+    # En segundo plano: la app abre de una vez aunque la base tarde o la copia dure.
+    threading.Thread(target=_arrancar, daemon=True).start()

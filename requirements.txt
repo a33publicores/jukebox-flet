@@ -5,3 +5,5 @@ psycopg-pool
 starlette
 uvicorn
 openpyxl
+gspread
+google-auth

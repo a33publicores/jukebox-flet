@@ -24,8 +24,9 @@ ESTADOS_ACTIVOS = ("En cola", "En reproduccion", "Siguiente")
 VENTANA_DUPLICADO_HORAS = float(os.getenv("DUPLICADO_HORAS", "12"))
 
 _pool = None
-_lock = threading.Lock()
-_listo = False
+_lock_pool = threading.Lock()     # crear la conexión
+_lock_esquema = threading.Lock()  # crear las tablas (son candados DISTINTOS: con uno
+_listo = False                    # solo, crear tablas esperaba a la conexión para siempre)
 
 ESQUEMA = [
     """CREATE TABLE IF NOT EXISTS clientes (
@@ -92,7 +93,7 @@ def disponible():
 
 def _pool_obj():
     global _pool
-    with _lock:
+    with _lock_pool:
         if _pool is None:
             from psycopg.rows import dict_row
             from psycopg_pool import ConnectionPool
@@ -101,8 +102,8 @@ def _pool_obj():
                 os.environ["DATABASE_URL"],
                 min_size=1,
                 max_size=int(os.getenv("DB_POOL_MAX", "8")),
-                kwargs={"autocommit": True, "row_factory": dict_row},
-                timeout=20,
+                kwargs={"autocommit": True, "row_factory": dict_row, "connect_timeout": 10},
+                timeout=15,
                 open=True,
             )
         return _pool
@@ -128,7 +129,7 @@ def asegurar():
     global _listo
     if _listo:
         return
-    with _lock:
+    with _lock_esquema:
         if _listo:
             return
         for sql in ESQUEMA:
