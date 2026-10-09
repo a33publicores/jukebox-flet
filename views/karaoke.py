@@ -30,10 +30,9 @@ def karaoke_view(page, codigo, cliente, telefono, logo_url):
 
     def agregar(cancion):
         posicion = KaraokeQueue.agregar(cliente, telefono, cancion)
-        page.snack_bar = ft.SnackBar(
+        page.show_dialog(ft.SnackBar(
             content=ft.Text(f"🎤 Canción agregada\nPosición #{posicion}")
-        )
-        page.snack_bar.open = True
+        ))
         page.update()
 
     def cargar_lista(items):

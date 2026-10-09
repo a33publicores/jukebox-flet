@@ -1,6 +1,7 @@
 flet
 requests
-gspread
-google-api-python-client
-google-auth
-google-auth-oauthlib
+psycopg[binary]
+psycopg-pool
+starlette
+uvicorn
+openpyxl

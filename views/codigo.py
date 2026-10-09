@@ -61,11 +61,9 @@ def codigo_view(page: ft.Page):
         codigo_local = codigo.value.strip()
 
         if not codigo_local:
-            page.snack_bar = ft.SnackBar(
+            page.show_dialog(ft.SnackBar(
                 content=ft.Text("Ingresa un código")
-            )
-
-            page.snack_bar.open = True
+            ))
 
             page.update()
             return
@@ -87,25 +85,21 @@ def codigo_view(page: ft.Page):
 
             else:
 
-                page.snack_bar = ft.SnackBar(
+                page.show_dialog(ft.SnackBar(
                     content=ft.Text(
                         "Código inválido"
                     )
-                )
-
-                page.snack_bar.open = True
+                ))
 
             page.update()
 
         except Exception as ex:
 
-            page.snack_bar = ft.SnackBar(
+            page.show_dialog(ft.SnackBar(
                 content=ft.Text(
                     f"Error: {ex}"
                 )
-            )
-
-            page.snack_bar.open = True
+            ))
 
             page.update()
 
@@ -135,8 +129,22 @@ def codigo_view(page: ft.Page):
         )
     )
 
+    # Entrada oculta del super administrador: 5 toques seguidos al logo.
+    toques = {"n": 0, "t": 0.0}
+
+    def toque_logo(e):
+        ahora = time.time()
+        toques["n"] = toques["n"] + 1 if ahora - toques["t"] < 1.5 else 1
+        toques["t"] = ahora
+        if toques["n"] >= 5:
+            toques["n"] = 0
+            from views.super_admin import super_login_view
+            super_login_view(page)
+
+    logo_toque = ft.GestureDetector(content=logo, on_tap=toque_logo)
+
     page.add(
-        logo,
+        logo_toque,
         ft.Container(height=20),
         titulo,
         ft.Container(height=8),

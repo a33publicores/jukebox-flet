@@ -8,5 +8,17 @@ if not exist "%VPY%" (
   pause
   exit /b 1
 )
+REM Instala librerias nuevas solo si cambiaron
+fc /b reproductor\requirements.txt .venv_build\requisitos_ok.txt >nul 2>&1
+if errorlevel 1 (
+  echo Instalando librerias nuevas, un momento...
+  "%VPY%" -m pip install -r reproductor\requirements.txt pyinstaller certifi || goto error
+  copy /y reproductor\requirements.txt .venv_build\requisitos_ok.txt >nul
+)
 "%VPY%" reproductor.py
 if errorlevel 1 pause
+exit /b 0
+:error
+echo *** No se pudieron instalar las librerias. Copia el mensaje de arriba y me lo envias. ***
+pause
+exit /b 1

@@ -1,11 +1,11 @@
 """
 Panel de administrador de PlayBar GO.
 
-Entra con usuario y contraseña de la pestaña ADMINS de la hoja (respaldo: ADMIN_USER/ADMIN_PASS en Railway). Desde aquí se controla el
+Entra con usuario y contraseña creados por el super administrador (tabla admins de la base). Desde aquí se controla el
 reproductor del lugar: pausar/reanudar, siguiente, anterior, y se ve qué suena,
 qué sigue y la playlist (con opción de quitar canciones de la cola).
 
-El panel no reproduce nada: manda comandos a la hoja CONTROL y el reproductor
+El panel no reproduce nada: manda comandos (tabla control) y el reproductor
 de escritorio los ejecuta en pocos segundos.
 """
 import hmac
@@ -22,77 +22,32 @@ MAX_HORAS_PANEL = 3  # el panel deja de consultar solo después de esto
 _intentos = {"n": 0, "hasta": 0.0}
 
 
-HOJA_ADMINS = "ADMINS"
-ADMINS_COLS = ["Codigo", "Usuario", "Clave", "Activo", "Nota"]
-_cache_admins = {"filas": None, "t": 0.0}
-
-
-def _admins_hoja():
-    """Filas de la pestaña ADMINS (se crea sola). Caché de 30 s."""
-    if _cache_admins["filas"] is not None and time.time() - _cache_admins["t"] < 30:
-        return _cache_admins["filas"]
-    ws = cola._hoja_aux(HOJA_ADMINS, ADMINS_COLS)
-    filas = ws.get_all_values()[1:]
-    _cache_admins.update(filas=filas, t=time.time())
-    return filas
-
-
 def credenciales_correctas(usuario, clave, codigo=None):
-    """Valida contra la pestaña ADMINS de la hoja (Codigo | Usuario | Clave | Activo).
-    Codigo = el código del lugar, o * para un admin de todos los lugares.
-    Respaldo: variables ADMIN_USER / ADMIN_PASS (o ADMIN_PIN) de Railway.
-    Devuelve (ok, mensaje_de_error)."""
+    """Valida contra la tabla admins de la base (los crea el super administrador).
+    Respaldo: variables ADMIN_USER / ADMIN_PASS de Railway. Devuelve (ok, mensaje)."""
     if time.time() < _intentos["hasta"]:
         return False, "Demasiados intentos. Espera un minuto."
-
-    def limpio(x):
-        x = str(x or "").strip()
-        return x[:-2] if x.endswith(".0") and x[:-2].isdigit() else x  # 1234.0 -> 1234
-
-    def igual(a, b):
-        return hmac.compare_digest(limpio(a).encode(), limpio(b).encode())
-
-    def igual_usuario(a, b):  # el celular suele poner la primera letra en mayúscula
-        return igual(limpio(a).lower(), limpio(b).lower())
-
-    ok = False
-    codigo = limpio(codigo)
-    hay_alguno = False
+    codigo = str(codigo or "").strip()
+    ok, hay = False, False
     try:
-        for fila in _admins_hoja():
-            fila = list(fila) + [""] * 5
-            cod, usr, pwd, activo = (limpio(x) for x in fila[:4])
-            if not usr or not pwd or activo.upper() in ("FALSE", "NO", "0"):
-                continue
-            if cod not in ("*", codigo):
-                continue
-            hay_alguno = True
-            if igual_usuario(usuario, usr) and igual(clave, pwd):
-                ok = True
-                break
+        from services import db
+        ok, hay = db.validar_admin(codigo, usuario, clave)
     except Exception as ex:
-        print("⚠️ No se pudo leer la pestaña ADMINS:", ex)
-        error_hoja = True
-    else:
-        error_hoja = False
+        print("⚠️ No se pudo validar el admin en la base:", ex)
+        return False, "No se pudo conectar con la base. Intenta de nuevo."
 
     if not ok:
         esp_user = os.environ.get("ADMIN_USER", "").strip()
         esp_pass = os.environ.get("ADMIN_PASS", "").strip()
-        esp_pin = os.environ.get("ADMIN_PIN", "").strip()
         if esp_user and esp_pass:
-            hay_alguno = True
-            ok = igual_usuario(usuario, esp_user) and igual(clave, esp_pass)
-        elif esp_pin:
-            hay_alguno = True
-            ok = igual(clave, esp_pin)
+            hay = True
+            ok = (hmac.compare_digest(str(usuario or "").strip().lower().encode(),
+                                      esp_user.lower().encode())
+                  and hmac.compare_digest(str(clave or "").strip().encode(), esp_pass.encode()))
 
-    print(f"🔐 Admin lugar={codigo!r} usuario={limpio(usuario)!r} ok={ok} "
-          f"admins_del_lugar={hay_alguno} error_hoja={error_hoja}")
-    if not ok and error_hoja:
-        return False, "No se pudo leer la pestaña ADMINS. Intenta de nuevo."
-    if not hay_alguno:
-        return False, f"No hay administradores para el lugar {codigo} (pestaña ADMINS)"
+    print(f"🔐 Admin lugar={codigo!r} usuario={str(usuario or '').strip()!r} ok={ok} hay={hay}")
+    if not hay:
+        return False, f"No hay administradores para el lugar {codigo}"
     if ok:
         _intentos["n"] = 0
         return True, ""

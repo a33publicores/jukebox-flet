@@ -56,9 +56,9 @@ if exist PlayBarGO_Reproductor.spec del /q PlayBarGO_Reproductor.spec
 REM --- Compila en modo carpeta (-D): arranca rapido y no se rompe con el antivirus ---
 "%~dp0.venv_build\Scripts\flet.exe" pack reproductor.py -D --name PlayBarGO_Reproductor ^
   --icon instalador\playbargo.ico --add-data "assets;assets" --add-data "%CERTFILE%;certifi" ^
-  --product-name "PlayBar GO Reproductor" --product-version 1.0.0 ^
+  --product-name "PlayBar GO Reproductor" --product-version 1.1.0 ^
   --hidden-import unicodedata --hidden-import imageio_ffmpeg --hidden-import yt_dlp ^
-  --hidden-import gspread --hidden-import googleapiclient --hidden-import flet_video -y
+  --hidden-import openpyxl --hidden-import flet_video -y
 if errorlevel 1 goto error
 
 if not exist "dist\PlayBarGO_Reproductor\_internal\certifi\cacert.pem" (
@@ -66,16 +66,7 @@ if not exist "dist\PlayBarGO_Reproductor\_internal\certifi\cacert.pem" (
   goto error
 )
 
-REM --- Copia credenciales.json junto al programa (si lo encuentra) ---
-set "CRED="
-if exist "credenciales.json" set "CRED=credenciales.json"
-if not defined CRED if exist "..\credenciales.json" set "CRED=..\credenciales.json"
-if defined CRED (
-  copy /y "%CRED%" "dist\PlayBarGO_Reproductor\credenciales.json" >nul
-  echo credenciales.json copiado junto al programa.
-) else (
-  echo AVISO: no encontre credenciales.json. Copialo en dist\PlayBarGO_Reproductor\
-)
+REM (el reproductor ya no lleva credenciales de Google: usa la llave de su bar)
 
 echo.
 echo === Listo: dist\PlayBarGO_Reproductor\PlayBarGO_Reproductor.exe ===

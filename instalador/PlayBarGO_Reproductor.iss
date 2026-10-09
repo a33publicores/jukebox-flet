@@ -1,5 +1,5 @@
 ; Inno Setup 6 - instalador del reproductor PlayBar GO
-#define Version "1.0.0"
+#define Version "1.1.0"
 [Setup]
 AppId={{6F2B0C1E-7A41-4D58-9B3A-0A1B2C3D4E5F}
 AppName=PlayBar GO Reproductor
@@ -19,9 +19,8 @@ Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; Flags
 Name: "autoinicio"; Description: "Abrir automáticamente al iniciar sesión en Windows"; Flags: unchecked
 
 [Files]
-; Programa completo (modo carpeta). credenciales.json va aparte para no sobrescribirlo al actualizar.
+; Programa completo (modo carpeta). Sin credenciales de Google: el bar entra con su llave.
 Source: "..\dist\PlayBarGO_Reproductor\*"; DestDir: "{app}"; Excludes: "credenciales.json"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\dist\PlayBarGO_Reproductor\credenciales.json"; DestDir: "{app}"; Flags: onlyifdoesntexist skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\PlayBar GO Reproductor"; Filename: "{app}\PlayBarGO_Reproductor.exe"

@@ -10,6 +10,7 @@ Reglas:
   * Solo cuentan las filas de HOY. Suena la de Estado2 = "En reproduccion"; si no hay,
     la primera "Siguiente"/"En cola".
   * Si no hay cola, suena al azar una canción de fechas anteriores (relleno).
+  * El reproductor habla con la API de Railway (BackendApi), nunca con la base directo.
   * Si llega una canción nueva mientras suena RELLENO, se interrumpe y suena la nueva
     (cuando ya está descargada, sin cortar el relleno antes de tiempo).
   * Si suena una canción pedida, la nueva espera su turno.
@@ -36,51 +37,59 @@ COMANDO_MAX_EDAD = 120  # ignorar comandos más viejos (p. ej. de antes de reini
 INTERRUMPIR_RELLENO = os.getenv("INTERRUMPIR_RELLENO", "1").strip() not in ("0", "false", "no")
 
 
-class BackendHoja:
-    """Acceso real a Google Sheets para un cliente."""
+class BackendApi:
+    """Acceso del reproductor a la API de PlayBar GO (con la llave de su negocio)."""
 
-    def __init__(self, cliente):
+    def __init__(self, api, cliente=""):
+        self.api = api                 # services.api_cliente.ApiCliente
         self.cliente = str(cliente)
-        self.nombre_hoja = None
         self.ultimo = None
-        self._limpio = False
-        self._playlist = None      # canciones de la playlist del negocio (CLIENTES)
+        self._config = None
+        self._pool = []                # aleatorio: lo pedido en fechas anteriores
+        self._t_pool = 0.0
+        self._playlist = None          # canciones de la playlist del negocio
         self._t_playlist = 0.0
 
     def instantanea(self):
-        if self.nombre_hoja is None:
-            self.nombre_hoja = C._nombre_hoja(self.cliente)
-        snap = C.instantanea(self.cliente, self.nombre_hoja)
+        snap = self.api.instantanea()
         self.ultimo = snap
-        if not self._limpio:
-            try:
-                C.cerrar_atascadas(self.cliente, snap.atascadas, self.nombre_hoja)
-                self._limpio = True
-            except Exception as ex:
-                print("⚠️ No se pudieron cerrar filas viejas:", ex)
         return snap
 
     def reordenar(self, filas):
-        C.reordenar(self.cliente, self.ultimo, filas, self.nombre_hoja)
+        self.api.reordenar(filas)
 
     def marcar(self, fila, estado2=None, estado=None):
-        C.marcar(self.cliente, fila, estado2=estado2, estado=estado, nombre_hoja=self.nombre_hoja)
+        self.api.marcar(fila, estado2=estado2, estado=estado)
 
     def publicar(self, estado, actual, siguiente, ack=None):
-        C.publicar_estado(self.cliente, estado, actual, siguiente, ack)
+        self.api.estado(estado, actual, siguiente, ack)
 
     def registrar(self, item):
-        pass  # el historial ya está en la hoja (Estado2 = Reproducido)
+        pass  # el historial ya queda en la base (estado2 = Reproducido)
+
+    def config(self):
+        if self._config is None:
+            self._config = self.api.config()
+        return self._config
+
+    def aleatorio(self):
+        """Lo pedido en fechas anteriores (se pide a la API cada 15 min, no a cada rato)."""
+        if not self._pool or time.time() - self._t_pool > 900:
+            try:
+                self._pool, self._t_pool = self.api.aleatorio(), time.time()
+                print(f"🎲 Aleatorio: {len(self._pool)} canciones del historial")
+            except Exception as ex:
+                print("⚠️ No se pudo traer el aleatorio (sigo con el anterior):", ex)
+        return self._pool
 
     def canciones_playlist(self):
-        """Playlist de YouTube del negocio (columna Playlist de CLIENTES), leída con
+        """Playlist de YouTube del negocio (la define el super admin), leída con
         yt-dlp (sin cuota de API). Se guarda en disco y se refresca cada 12 h."""
         if self._playlist is not None and time.time() - self._t_playlist < 12 * 3600:
             return self._playlist
-        cache = CARPETA_DATOS / f"playlist_{self.cliente}.json"
+        cache = CARPETA_DATOS / f"playlist_{self.cliente or 'bar'}.json"
         try:
-            from services import playbar_service as ps
-            pl = str((ps.obtener_config_cliente(self.cliente) or {}).get("playlist", "")).strip()
+            pl = str(self.config().get("playlist", "")).strip()
             if not pl:
                 self._playlist, self._t_playlist = [], time.time()
                 return []
@@ -110,9 +119,8 @@ class BackendHoja:
     def elegir_relleno(self, excluir):
         """Canción al azar: playlist del negocio + lo pedido en fechas anteriores,
         evitando las que sonaron hace poco."""
-        snap = self.ultimo or self.instantanea()
         excluir = set(excluir)
-        pool = list(snap.aleatorio)
+        pool = list(self.aleatorio())
         ya = {i.video_id for i in pool}
         pool += [C.Item(None, p["t"], p["c"], p["id"]) for p in self.canciones_playlist()
                  if p["id"] not in ya]

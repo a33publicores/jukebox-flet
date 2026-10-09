@@ -12,6 +12,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import flet as ft
@@ -20,10 +21,12 @@ import flet_video as ftv
 from reproductor import actualizador, diagnostico
 from reproductor.version import VERSION
 from reproductor.descargas import Descargador
-from reproductor.motor import BackendHoja, Motor
+from reproductor.motor import BackendApi, Motor
+from reproductor.version import API_POR_DEFECTO
+from services.api_cliente import ApiCliente
 
 if getattr(sys, "frozen", False):  # instalado como .exe
-    RAIZ = Path(sys.executable).resolve().parent          # aquí va credenciales.json
+    RAIZ = Path(sys.executable).resolve().parent
     ASSETS = Path(getattr(sys, "_MEIPASS", RAIZ)) / "assets"
 else:
     RAIZ = Path(__file__).resolve().parent.parent
@@ -31,55 +34,12 @@ else:
 CARPETA = Path(os.environ.get("PLAYBAR_HOME", Path.home() / "PlayBarGo"))
 
 if getattr(sys, "frozen", False):
-    # Certificados para conexiones seguras (Google Sheets, YouTube) dentro del .exe.
+    # Certificados para conexiones seguras (API de PlayBar GO, YouTube) dentro del .exe.
     _cert = Path(getattr(sys, "_MEIPASS", RAIZ)) / "certifi" / "cacert.pem"
     if _cert.is_file():
         os.environ.setdefault("REQUESTS_CA_BUNDLE", str(_cert))
         os.environ.setdefault("SSL_CERT_FILE", str(_cert))
 CONFIG = CARPETA / "reproductor_config.json"
-
-
-def _candidatos_credenciales():
-    """Todos los credenciales.json disponibles, en orden: carpeta PlayBarGo del usuario,
-    junto al .exe, carpeta actual y carpeta padre del proyecto (sin repetir)."""
-    vistos, lista = set(), []
-    for d in (CARPETA, RAIZ, Path.cwd(), RAIZ.parent):
-        f = (Path(d) / "credenciales.json").resolve()
-        if f.is_file() and f not in vistos:
-            vistos.add(f)
-            lista.append(f)
-    return lista
-
-
-def _usar_credencial(ruta):
-    """Apunta playbar_service a ese archivo y olvida la conexión anterior."""
-    from services import playbar_service as ps
-    os.environ["PLAYBAR_CREDENCIALES"] = str(ruta)
-    ps._spreadsheet = None
-    ps._google = None
-
-
-def _es_problema_credencial(problemas):
-    return any("credenciales" in m or "hoja de Google" in m for m, _ in problemas)
-
-
-def _revisar_con_credenciales(cliente):
-    """Prueba cada credenciales.json hasta que uno funcione (p. ej. si hay una llave vieja)."""
-    candidatos = [] if os.environ.get("GOOGLE_CREDENTIALS_B64") else _candidatos_credenciales()
-    problemas = []
-    for ruta in candidatos or [None]:
-        if ruta:
-            _usar_credencial(ruta)
-        problemas = diagnostico.revisar(cliente)
-        if not _es_problema_credencial(problemas):
-            if ruta:
-                print("🔑 Usando credenciales:", ruta)
-            return problemas
-        print("⚠️ No sirvió", ruta, "→", problemas[0][0] if problemas else "")
-    if len(candidatos) > 1:
-        problemas.append(("Ninguna de las credenciales encontradas funcionó:",
-                          " · ".join(str(c) for c in candidatos)))
-    return problemas
 
 
 def _abrir_carpeta(e=None):
@@ -408,6 +368,108 @@ class Pantalla:
             content=ft.Row(fila, vertical_alignment=ft.CrossAxisAlignment.CENTER),
         )
 
+    # ------------------------------------------------ ventana "Ver tabla"
+    async def ver_tabla(self, dias=1):
+        """Muestra los pedidos del bar (lo que antes se veía en la hoja de Google)."""
+        if not self.motor:
+            return
+        api = self.motor.backend.api
+        filtros = [("Hoy", 1), ("7 días", 7), ("30 días", 30), ("Todo", 0)]
+        info = ft.Text("Cargando…", color="#94A3B8", size=13)
+        tabla = ft.DataTable(
+            columns=[ft.DataColumn(label=ft.Text(t, weight=ft.FontWeight.BOLD, color="white"))
+                     for t in ("Fecha y hora", "Usuario", "Canción", "Estado", "Estado2", "Orden")],
+            rows=[], heading_row_color="#0b1220", data_row_min_height=34, data_row_max_height=48,
+            column_spacing=18, horizontal_lines=ft.BorderSide(1, "#1e293b"),
+        )
+        datos = {"filas": [], "dias": dias}
+        botones = ft.Row(spacing=6)
+
+        def pintar_botones():
+            botones.controls = [
+                ft.Container(
+                    padding=ft.Padding.symmetric(horizontal=14, vertical=6), border_radius=14,
+                    bgcolor=CYAN if d == datos["dias"] else "#1e293b",
+                    content=ft.Text(t, color="#020617" if d == datos["dias"] else "white", size=13),
+                    on_click=lambda e, d=d: self.page.run_task(cargar, d),
+                ) for t, d in filtros
+            ]
+
+        async def cargar(d):
+            datos["dias"] = d
+            pintar_botones()
+            info.value = "Cargando…"
+            self.page.update()
+            try:
+                r = await asyncio.to_thread(api.tabla, d, 2000)
+            except Exception as ex:
+                info.value = f"No se pudo cargar: {ex}"
+                self.page.update()
+                return
+            from services.exportar import fecha_local
+            datos["filas"] = r.get("filas", [])
+            tabla.rows = [
+                ft.DataRow(cells=[
+                    ft.DataCell(content=ft.Text(fecha_local(f.get("ts")), size=12, color="#cbd5e1")),
+                    ft.DataCell(content=ft.Text(f.get("usuario", ""), size=12, color="#cbd5e1")),
+                    ft.DataCell(content=ft.Text(f.get("titulo", ""), size=12, color="white",
+                                                max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+                                                width=420)),
+                    ft.DataCell(content=ft.Text(f.get("estado", ""), size=12, color="#94A3B8")),
+                    ft.DataCell(content=ft.Text(f.get("estado2", ""), size=12,
+                                                color=CYAN if f.get("estado2") == "En reproduccion"
+                                                else "#94A3B8")),
+                    ft.DataCell(content=ft.Text("" if f.get("orden") is None else
+                                                str(int(f["orden"])), size=12, color="#64748b")),
+                ]) for f in datos["filas"]
+            ]
+            info.value = (f"{len(datos['filas'])} pedidos en este filtro · "
+                          f"{r.get('total', 0)} en total")
+            self.page.update()
+
+        async def exportar_excel(e):
+            from services import exportar
+            try:
+                carpeta = Path.home() / "Documents" / "PlayBarGo"
+                carpeta.mkdir(parents=True, exist_ok=True)
+                nombre = carpeta / f"pedidos_{self.motor.backend.cliente}_{time.strftime('%Y%m%d_%H%M')}.xlsx"
+                filas = datos["filas"]
+                if datos["dias"] != 0:  # el Excel lleva todo el filtro elegido completo
+                    filas = (await asyncio.to_thread(api.tabla, datos["dias"], 5000)).get("filas", [])
+                nombre.write_bytes(await asyncio.to_thread(exportar.excel_bytes, filas))
+                info.value = f"Excel guardado en {nombre}"
+                self.page.update()
+                try:
+                    os.startfile(str(nombre))  # lo abre con Excel (Windows)
+                except Exception:
+                    pass
+            except Exception as ex:
+                info.value = f"No se pudo crear el Excel: {ex}"
+                self.page.update()
+
+        def cerrar(e):
+            dlg.open = False
+            self.page.update()
+
+        pintar_botones()
+        dlg = ft.AlertDialog(
+            modal=False, bgcolor="#0f172a",
+            title=ft.Row([ft.Text("📋 Pedidos del bar", color="white", weight=ft.FontWeight.BOLD),
+                          ft.Container(expand=True), botones]),
+            content=ft.Container(
+                width=1100, height=560,
+                content=ft.Column([info, ft.Column([tabla], scroll=ft.ScrollMode.AUTO, expand=True)],
+                                  expand=True),
+            ),
+            actions=[ft.OutlinedButton("Exportar a Excel", icon=ft.Icons.DOWNLOAD,
+                                       on_click=exportar_excel),
+                     ft.FilledButton("Cerrar", on_click=cerrar)],
+        )
+        self.page.overlay.append(dlg)
+        dlg.open = True
+        self.page.update()
+        await cargar(dias)
+
     def _crear_cabecera(self, **kw):
         self.cabecera = ft.Container(**kw)
         return self.cabecera
@@ -431,6 +493,9 @@ class Pantalla:
                               on_click=_sig, tooltip="Siguiente"),
                 ft.IconButton(icon=ft.Icons.FULLSCREEN, icon_size=28, icon_color="#94A3B8",
                               on_click=_full, tooltip="Pantalla completa (F)"),
+                ft.IconButton(icon=ft.Icons.TABLE_CHART, icon_size=26, icon_color="#94A3B8",
+                              on_click=lambda e: self.page.run_task(self.ver_tabla),
+                              tooltip="Ver tabla de pedidos (T)"),
             ],
             alignment=ft.MainAxisAlignment.CENTER,
         )
@@ -477,23 +542,53 @@ class Pantalla:
 
 
 async def _pantalla_config(page: ft.Page, mensaje=""):
-    """Primera vez: pide el código del cliente (el mismo que usan los clientes en la app)."""
+    """Primera vez: código del lugar + llave del bar (las da el super administrador)."""
     page.controls.clear()
-    campo = ft.TextField(label="Código del lugar (ej. 8523)", width=320, autofocus=True,
-                         border_color=CYAN, color="white")
-    texto = ft.Text(mensaje, color="#fca5a5")
+    previo = _leer_config()
+    campo = ft.TextField(label="Código del lugar (ej. 8523)", width=380, autofocus=True,
+                         border_color=CYAN, color="white", value=previo.get("cliente", ""))
+    llave = ft.TextField(label="Llave del bar (pbg_...)", width=380, border_color=CYAN,
+                         color="white", password=True, can_reveal_password=True,
+                         value=previo.get("llave", ""))
+    servidor = ft.TextField(label="Servidor de PlayBar GO", width=380, border_color="#334155",
+                            color="#cbd5e1", value=previo.get("api") or API_POR_DEFECTO,
+                            hint_text="https://playbar-api-production.up.railway.app")
+    texto = ft.Text(mensaje, color="#fca5a5", width=380, text_align=ft.TextAlign.CENTER)
     hecho = asyncio.Event()
 
     async def guardar(e):
-        if campo.value.strip():
-            _guardar_config({"cliente": campo.value.strip()})
-            hecho.set()
+        cod, ll, url = campo.value.strip(), llave.value.strip(), servidor.value.strip()
+        if not (cod and ll and url):
+            texto.value = "Escribe el código, la llave y el servidor."
+            page.update()
+            return
+        texto.value = "Comprobando la llave…"
+        texto.color = "#94A3B8"
+        page.update()
+        try:
+            datos = await asyncio.to_thread(ApiCliente(url, ll).config)
+        except Exception as ex:
+            texto.value = f"No funcionó: {ex}"
+            texto.color = "#fca5a5"
+            page.update()
+            return
+        if str(datos.get("codigo")) != cod:
+            texto.value = (f"Esa llave es del lugar {datos.get('codigo')} "
+                           f"({datos.get('nombre')}), no del {cod}.")
+            texto.color = "#fca5a5"
+            page.update()
+            return
+        _guardar_config({**previo, "cliente": cod, "llave": ll, "api": url})
+        hecho.set()
 
-    campo.on_submit = guardar
+    campo.on_submit = lambda e: llave.focus()
+    llave.on_submit = guardar
     page.add(ft.Column(
-        [ft.Image(src="/logo.png", width=260), ft.Text("Configurar reproductor", size=24,
+        [ft.Image(src="/logo.png", width=240), ft.Text("Configurar reproductor", size=24,
                                                       color="white", weight=ft.FontWeight.BOLD),
-         campo, ft.FilledButton("Guardar y empezar", on_click=guardar), texto],
+         ft.Text("Pide el código y la llave de tu bar al administrador de PlayBar GO.",
+                 color="#94A3B8", size=13),
+         campo, llave, servidor, ft.FilledButton("Guardar y empezar", on_click=guardar), texto],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER,
         expand=True,
     ))
@@ -509,17 +604,19 @@ async def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
 
     cfg = _leer_config()
-    while not cfg.get("cliente"):
-        await _pantalla_config(page)
+    while not (cfg.get("cliente") and cfg.get("llave") and cfg.get("api")):
+        await _pantalla_config(page, "" if not cfg.get("cliente") else
+                               "Esta versión ya no usa Google: falta la llave del bar.")
         cfg = _leer_config()
+    api = ApiCliente(cfg["api"], cfg["llave"])
 
     page.controls.clear()
     page.add(ft.Container(expand=True, alignment=ft.Alignment.CENTER,
                           content=ft.Image(src="/logo.png", width=300)))
     page.update()
 
-    # Verificaciones previas (internet, ffmpeg, credenciales, código del lugar).
-    problemas = await asyncio.to_thread(_revisar_con_credenciales, cfg["cliente"])
+    # Verificaciones previas (internet, ffmpeg, servidor y llave del bar).
+    problemas = await asyncio.to_thread(diagnostico.revisar, api, cfg["cliente"])
     if problemas:
         page.controls.clear()
         page.add(ft.Container(expand=True, alignment=ft.Alignment.CENTER, padding=30,
@@ -530,8 +627,7 @@ async def main(page: ft.Page):
                                                ft.Text("  " + sol, color="#94A3B8")], spacing=2)
                                     for m, sol in problemas],
                                   ft.Row([
-                                      ft.OutlinedButton("Abrir carpeta", on_click=_abrir_carpeta),
-                                      ft.OutlinedButton("Cambiar código del lugar",
+                                      ft.OutlinedButton("Cambiar código o llave",
                                                         on_click=lambda e: _cambiar_codigo(page)),
                                       ft.FilledButton("Reintentar", on_click=lambda e: _reiniciar(page)),
                                   ], alignment=ft.MainAxisAlignment.CENTER),
@@ -546,7 +642,7 @@ async def main(page: ft.Page):
         cookies=os.environ.get("YTDLP_COOKIES", str(CARPETA / "cookies.txt")),
         max_gb=float(cfg.get("cache_gb", 5)),
     )
-    motor = Motor(BackendHoja(cfg["cliente"]), descargas, pantalla)
+    motor = Motor(BackendApi(api, cfg["cliente"]), descargas, pantalla)
     pantalla.motor = motor
 
     page.controls.clear()
@@ -565,6 +661,8 @@ async def main(page: ft.Page):
             _cambiar_codigo(page)
         elif k == "f" or k == "f11":
             pantalla.pantalla_completa()
+        elif k == "t" and not e.ctrl:
+            page.run_task(pantalla.ver_tabla)
         elif k == "escape" and pantalla.completa:
             pantalla.pantalla_completa(False)
 
@@ -582,9 +680,11 @@ async def main(page: ft.Page):
 
 
 def _cambiar_codigo(page):
-    """Borra el código guardado y reinicia: vuelve a pedir el código del lugar."""
+    """Olvida la llave y reinicia: vuelve a pedir código y llave del lugar."""
+    cfg = _leer_config()
+    cfg.pop("llave", None)
     try:
-        CONFIG.unlink()
+        _guardar_config(cfg)
     except Exception:
         pass
     _reiniciar(page)
@@ -602,7 +702,8 @@ def _ventana_actualizacion(page, info):
     obligatoria = bool(info.get("obligatoria"))
 
     def descargar(e):
-        page.launch_url(info["url"])
+        import webbrowser
+        webbrowser.open(info["url"])  # abre el navegador del PC con la descarga
 
     def luego(e):
         dlg.open = False

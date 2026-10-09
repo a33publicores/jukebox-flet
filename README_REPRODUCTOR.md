@@ -63,3 +63,23 @@ Si YouTube pide verificación al descargar, exporta las cookies a `~/PlayBarGo/c
 5. Aleatorio de cada negocio = su playlist de YouTube + lo que pidieron en fechas anteriores en su pestaña. Cola = lo que piden hoy en su pestaña.
 - La pestaña **REPRODUCIDAS** ya no se usa (era el aleatorio de la versión anterior); se puede borrar.
 - Teléfono: solo números, 10 dígitos, empieza por 3 (sin +57).
+
+## v19 — Base de datos en Railway (adiós Google Sheets)
+Todo vive en **PostgreSQL** en Railway: negocios, admins, pedidos, control y caché de búsquedas.
+- **App web** (servicio jukebox-flet): lee y escribe la base directo (DATABASE_URL).
+- **API** (servicio nuevo `playbar-api`, mismo repo): la usan los reproductores con la **llave de su bar**. Arranque: `python -m api.servidor`.
+- **Reproductor**: ya no usa credenciales de Google. Pide **código + llave + servidor** la primera vez. Botón 📋 (o tecla T) = ver tabla de pedidos y **exportar a Excel**.
+- **Super administrador**: en la app web, 5 toques al logo de la pantalla del código o la dirección `/super`. Crea negocios (con su llave), admins por negocio, super admins, ve pedidos y descarga Excel.
+- **Búsqueda**: ahora muestra hasta 50 resultados (la caché de Sheets los recortaba a ~10).
+
+### Variables en Railway
+| Servicio | Variable | Valor |
+|---|---|---|
+| jukebox-flet | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+| jukebox-flet | `SUPERADMIN_USER` / `SUPERADMIN_PASS` | tu usuario y clave de super admin |
+| jukebox-flet | `PLAYBAR_API_URL` | dirección pública de playbar-api (para descargar Excel) |
+| jukebox-flet | `YOUTUBE_API_KEYS` | (la que ya tienes) |
+| playbar-api | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+
+### Migrar lo que había en Sheets (una vez)
+`MIGRAR_A_BASE.bat` → pega `DATABASE_PUBLIC_URL` (Railway → PostgreSQL → Variables). Copia CLIENTES, ADMINS y la pestaña de cada bar; crea `llaves_bares.txt` con la llave de cada bar (secreto, no se sube a GitHub). Se puede repetir sin duplicar.

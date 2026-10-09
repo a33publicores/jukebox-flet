@@ -12,8 +12,6 @@ BUILD = "flet-musica-karaoke-v8-splash"
 
 async def main(page: ft.Page):
     page.title = "PlayBar GO"
-    page.window_width = 450
-    page.window_height = 850
 
     print(f"🚀 PlayBar GO build {BUILD} iniciado")
     iniciar_procesador()
@@ -21,6 +19,12 @@ async def main(page: ft.Page):
     # La sesión se consulta mientras se muestra el splash.
     # Así el usuario siempre ve el arranque de PlayBar GO, incluso
     # cuando existe una sesión restaurable.
+    # Entrada directa del super administrador:  https://<app>/super
+    if str(getattr(page, "route", "") or "").rstrip("/").endswith("/super"):
+        from views.super_admin import super_login_view
+        await asyncio.to_thread(super_login_view, page)
+        return
+
     preparar_prefs(page)
     session_task = asyncio.create_task(cargar_sesion(page))
 

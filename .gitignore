@@ -21,3 +21,6 @@ build/
 dist/
 *.spec
 instalador/Output/
+
+# llaves de los reproductores (secretas)
+llaves_bares.txt

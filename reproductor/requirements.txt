@@ -1,11 +1,9 @@
 # Reproductor de escritorio PlayBar GO  ->  pip install -r reproductor/requirements.txt
+# (ya no usa Google: habla con la API de PlayBar GO en Railway)
 flet==1.0.3
 flet-desktop==1.0.3
 flet-video
 yt-dlp
 imageio-ffmpeg
 requests
-gspread
-google-auth
-google-auth-oauthlib
-google-api-python-client
+openpyxl

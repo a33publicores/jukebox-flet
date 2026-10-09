@@ -24,41 +24,34 @@ def _ffmpeg():
     return False, "Falta ffmpeg.", "Reinstala el reproductor."
 
 
-def _hoja(cliente):
-    from services import playbar_service as ps
+def _servidor(api, cliente):
+    from services.api_cliente import LlaveInvalida
     try:
-        ps._spreadsheet_obj()
-    except FileNotFoundError:
-        from pathlib import Path
-        carpeta = os.environ.get("PLAYBAR_HOME", str(Path.home() / "PlayBarGo"))
-        return (False, "No se encontró credenciales.json.",
-                f"Copia credenciales.json en {carpeta} (botón Abrir carpeta) y pulsa Reintentar.")
+        api.salud()
     except Exception as ex:
-        txt = str(ex)
-        if "invalid_grant" in txt or "account not found" in txt:
-            return (False, "La llave de credenciales.json ya no es válida (cuenta de servicio borrada o llave revocada).",
-                    "Usa el credenciales.json actual (el mismo de Railway) o crea una llave nueva en Google Cloud.")
-        return False, f"No se pudo abrir la hoja de Google: {ex}", \
-            "Revisa internet y que la hoja esté compartida con la cuenta de servicio."
+        return (False, f"No responde el servidor de PlayBar GO ({api.url}): {ex}",
+                "Revisa la dirección del servidor (botón Cambiar código o llave) o espera un momento.")
     try:
-        if not ps.obtener_config_cliente(cliente):
-            return (False, f"El código {cliente} no existe en la pestaña CLIENTES.",
-                    "Borra reproductor_config.json (carpeta PlayBarGo del usuario) para escribir otro código.")
+        datos = api.config()
+    except LlaveInvalida:
+        return (False, "La llave del bar no es válida (o el negocio está inactivo).",
+                "Pide la llave actual al super administrador y escríbela con 'Cambiar código o llave'.")
     except Exception as ex:
-        return False, f"No se pudo leer CLIENTES: {ex}", "Intenta de nuevo en unos segundos."
+        return False, f"No se pudo leer la configuración del bar: {ex}", "Intenta de nuevo."
+    if str(datos.get("codigo")) != str(cliente):
+        return (False, f"La llave es del lugar {datos.get('codigo')}, no del {cliente}.",
+                "Usa 'Cambiar código o llave'.")
     return True, "", ""
 
 
-def revisar(cliente):
+def revisar(api, cliente):
     """Devuelve la lista de problemas [(mensaje, solucion)]; vacía si todo está bien."""
-    problemas = []
     ok, m, s = _internet()
     if not ok:
         return [(m, s)]  # sin internet las demás no tienen sentido
-    for f in (_ffmpeg, lambda: _hoja(cliente)):
+    problemas = []
+    for f in (_ffmpeg, lambda: _servidor(api, cliente)):
         ok, m, s = f()
         if not ok:
             problemas.append((m, s))
-            if "credenciales" in m:
-                break
     return problemas
