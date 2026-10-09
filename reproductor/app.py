@@ -442,7 +442,8 @@ class Pantalla:
         if error:
             filas.append(ft.Container(
                 padding=10, border_radius=10, bgcolor="#7f1d1d",
-                content=ft.Text(f"Sin conexión con la hoja — sigo con lo que hay\n{error[:90]}",
+                content=ft.Text(f"⚠️ {error[:120]}\nLa música sigue sonando; los pedidos nuevos "
+                                "llegan solos cuando vuelva la conexión.",
                                 size=12, color="white"),
             ))
         if actual:
@@ -770,6 +771,7 @@ async def main(page: ft.Page):
     )
     motor = Motor(BackendApi(api, cfg["cliente"]), descargas, pantalla)
     pantalla.motor = motor
+    _aviso["pantalla"] = pantalla
 
     page.controls.clear()
     page.add(pantalla.construir())
@@ -811,6 +813,28 @@ def _cambiar_codigo(page):
     _reiniciar(page)
 
 
+async def _cerrar_todo(page):
+    """Cierra la ventana y el programa sin dejar la ventana colgada en "Working...".
+    La ventana de Flet (flet.exe) es otro proceso, hijo de este: se cierra ella primero.
+    No se toca al instalador (también es hijo de este proceso)."""
+    try:
+        await asyncio.wait_for(page.window.destroy(), 3)
+    except Exception:
+        pass
+    if sys.platform == "win32":
+        try:
+            import subprocess
+            ps = (f"Get-CimInstance Win32_Process -Filter 'ParentProcessId={os.getpid()}' | "
+                  "Where-Object { $_.Name -like 'flet*' } | "
+                  "ForEach-Object { taskkill /F /T /PID $_.ProcessId | Out-Null }")
+            subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                           creationflags=0x08000000, timeout=10,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+    os._exit(0)
+
+
 def _reiniciar(page):
     """Vuelve a abrir el programa (sirve después de corregir el problema)."""
     try:
@@ -839,6 +863,26 @@ async def _vigilar_actualizaciones(page):
         except Exception as ex:
             print("ℹ️ Revisión de actualizaciones:", ex)
         await asyncio.sleep(max(0.25, REVISAR_CADA_HORAS) * 3600)
+
+
+async def _esperar_fin_cancion(page, texto, estado_ui, max_seg=15 * 60):
+    """Espera a que termine la canción que suena (o a que toquen "Instalar ahora")."""
+    pant = _aviso.get("pantalla")
+    motor = getattr(pant, "motor", None)
+    if pant is None or motor is None:
+        return
+    token0 = motor.token
+    inicio = time.time()
+    while not estado_ui.get("ya") and time.time() - inicio < max_seg:
+        if motor.actual is None or motor.pausado or motor.token != token0:
+            return  # no suena nada (o ya cambió): se puede instalar sin cortar música
+        falta = pant.dur - pant.pos if pant.dur > 0 else 0
+        if pant.dur > 0 and falta <= 1.0:
+            return
+        texto.value = (f"Lista. Se instalará sola al terminar esta canción "
+                       f"(faltan {_mmss(max(0, falta))}).")
+        page.update()
+        await asyncio.sleep(1)
 
 
 def _mb(n):
@@ -872,6 +916,8 @@ def _ventana_actualizacion(page, info):
         if estado_ui["trabajando"]:
             return
         estado_ui["trabajando"] = True
+        explicacion.value = ("Se descarga mientras sigue la música. Luego se instala sola "
+                             "y el reproductor se vuelve a abrir.")
         b_actualizar.disabled = True
         if b_luego:
             b_luego.disabled = True
@@ -922,8 +968,14 @@ def _ventana_actualizacion(page, info):
             return
 
         barra.value = 1
-        texto.value = "Instalando... el reproductor se cerrará y se abrirá solo en unos segundos."
+        # No se corta la canción que está sonando: se instala cuando termine.
+        estado_ui["ya"] = False
+        b_ya.visible = True
+        b_actualizar.visible = False
         texto.color = "#22d3ee"
+        await _esperar_fin_cancion(page, texto, estado_ui)
+        b_ya.disabled = True
+        texto.value = "Instalando... el reproductor se cerrará y se abrirá solo en unos segundos."
         page.update()
         try:
             await asyncio.to_thread(actualizador.instalar, ruta)
@@ -935,8 +987,8 @@ def _ventana_actualizacion(page, info):
             estado_ui["trabajando"] = False
             page.update()
             return
-        await asyncio.sleep(2)
-        os._exit(0)  # libera los archivos para que el instalador los reemplace
+        await asyncio.sleep(1.5)
+        await _cerrar_todo(page)  # cierra ventana y programa: el instalador lo vuelve a abrir
 
     async def cuenta_regresiva():
         for faltan in range(ESPERA_OBLIGATORIA_SEG, 0, -1):
@@ -947,9 +999,14 @@ def _ventana_actualizacion(page, info):
             await asyncio.sleep(1)
         await actualizar()
 
+    def instalar_ya(e):
+        estado_ui["ya"] = True
+
     b_actualizar = ft.FilledButton("Actualizar", icon=ft.Icons.SYSTEM_UPDATE_ALT, on_click=actualizar)
+    b_ya = ft.FilledButton("Instalar ahora", icon=ft.Icons.SYSTEM_UPDATE_ALT, on_click=instalar_ya,
+                           visible=False)
     b_luego = None if obligatoria else ft.TextButton("Más tarde", on_click=luego)
-    acciones = [b for b in (b_luego, b_actualizar) if b]
+    acciones = [b for b in (b_luego, b_actualizar, b_ya) if b]
     notas = str(info.get("notas", "") or "").strip()
     dlg = ft.AlertDialog(
         modal=True, bgcolor="#111827",
@@ -968,7 +1025,30 @@ def _ventana_actualizacion(page, info):
         page.run_task(cuenta_regresiva)
 
 
+def _cerrar_ventanas_viejas():
+    """Si quedó abierta una ventana vieja del reproductor (por ejemplo, después de una
+    actualización con una versión anterior), se cierra antes de abrir la nueva. Así nunca
+    quedan dos reproductores ni una ventana congelada."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return
+    import subprocess
+    yo = os.getpid()
+    ps = (
+        "Get-Process -Name flet -ErrorAction SilentlyContinue | "
+        "Where-Object { $_.MainWindowTitle -like 'PlayBar GO*' } | Stop-Process -Force; "
+        f"Get-Process -Name '{Path(sys.executable).stem}' -ErrorAction SilentlyContinue | "
+        f"Where-Object {{ $_.Id -ne {yo} }} | Stop-Process -Force"
+    )
+    try:
+        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                       creationflags=0x08000000, timeout=15,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as ex:
+        print("ℹ️ No se pudieron revisar ventanas viejas:", ex)
+
+
 def ejecutar():
     os.chdir(RAIZ)  # para encontrar credenciales.json junto al programa
     CARPETA.mkdir(parents=True, exist_ok=True)
+    _cerrar_ventanas_viejas()
     ft.run(main, assets_dir=str(ASSETS))

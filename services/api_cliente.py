@@ -1,4 +1,7 @@
 """Cliente de la API de PlayBar GO para el reproductor del bar (sin Google, sin base)."""
+import threading
+import time
+
 import requests
 
 from services import cola as C
@@ -9,14 +12,37 @@ class LlaveInvalida(Exception):
 
 
 class ApiCliente:
-    def __init__(self, url, llave, timeout=12):
+    """timeout = (segundos para conectar, segundos para responder). Las lecturas se
+    reintentan una vez: un corte de 1-2 s de internet no debe verse como error."""
+
+    def __init__(self, url, llave, timeout=(6, 10), reintentos=1):
         self.url = str(url or "").strip().rstrip("/")
         if self.url and not self.url.startswith("http"):
             self.url = "https://" + self.url
-        self.s = requests.Session()
-        self.s.headers.update({"X-Llave": str(llave or "").strip(),
-                               "User-Agent": "PlayBarGO-Reproductor"})
+        self.llave = str(llave or "").strip()
         self.timeout = timeout
+        self.reintentos = reintentos
+        self._local = threading.local()  # una sesión por hilo (requests no es seguro entre hilos)
+
+    @property
+    def s(self):
+        ses = getattr(self._local, "s", None)
+        if ses is None:
+            ses = requests.Session()
+            ses.headers.update({"X-Llave": self.llave, "User-Agent": "PlayBarGO-Reproductor"})
+            self._local.s = ses
+        return ses
+
+    def _pedir(self, metodo, ruta, reintentar=True, **kw):
+        intentos = 1 + (self.reintentos if reintentar else 0)
+        for n in range(intentos):
+            try:
+                return self._revisar(getattr(self.s, metodo)(self.url + ruta, timeout=self.timeout, **kw))
+            except (requests.ConnectionError, requests.Timeout):
+                if n + 1 >= intentos:
+                    raise
+                self._local.s = None  # conexión dañada: se abre una nueva
+                time.sleep(1.5)
 
     def _revisar(self, r):
         if r.status_code == 401:
@@ -28,14 +54,15 @@ class ApiCliente:
         return d
 
     def _get(self, ruta, **params):
-        return self._revisar(self.s.get(self.url + ruta, params=params, timeout=self.timeout))
+        return self._pedir("get", ruta, params=params)
 
     def _post(self, ruta, datos):
-        return self._revisar(self.s.post(self.url + ruta, json=datos, timeout=self.timeout))
+        # las escrituras dejan el mismo resultado si se repiten (poner un estado), se reintentan
+        return self._pedir("post", ruta, json=datos)
 
     # --------------------------------------------------------------- lecturas
     def salud(self):
-        return self._revisar(self.s.get(self.url + "/api/salud", timeout=self.timeout))
+        return self._pedir("get", "/api/salud", reintentar=False)
 
     def config(self):
         return self._get("/api/v1/config")

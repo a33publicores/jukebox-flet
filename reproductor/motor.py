@@ -132,6 +132,18 @@ class BackendApi:
         return C.Item(None, it.titulo, it.canal, it.video_id)
 
 
+AVISAR_SIN_RED_SEG = 45
+
+
+def _explicar(ex):
+    texto = f"{type(ex).__name__}: {ex}"
+    if "Timeout" in texto or "timed out" in texto:
+        return "El servidor no responde (internet lento o caído)."
+    if "Connection" in texto or "Max retries" in texto or "NameResolution" in texto:
+        return "Sin internet o sin conexión con el servidor."
+    return texto[:120]
+
+
 class Motor:
     def __init__(self, backend, descargas, pantalla, ahora=time.time):
         self.backend = backend
@@ -165,14 +177,27 @@ class Motor:
 
     # ------------------------------------------------------------------ bucle
     async def correr(self):
+        desde = None  # cuándo empezó a fallar la conexión
         while True:
             try:
                 await self.tick()
-                self.error = ""
+                if desde is not None:
+                    print(f"✅ Conexión recuperada ({int(self.ahora() - desde)} s sin servidor)")
+                desde = None
+                if self.error:
+                    self.error = ""
+                    if self.snap is not None:
+                        await self._ui_lista(self.snap)
             except Exception as ex:  # nunca morir por un fallo de red
-                self.error = f"{type(ex).__name__}: {ex}"
-                print(f"⚠️ Motor: {self.error}")
-                await self._ui_estado()
+                print(f"⚠️ Motor: {type(ex).__name__}: {ex}")
+                desde = desde if desde is not None else self.ahora()
+                # Un corte de segundos (internet, el servidor reiniciándose) no se muestra:
+                # la música sigue igual. Solo se avisa si dura más de AVISAR_SIN_RED_SEG.
+                if self.ahora() - desde >= AVISAR_SIN_RED_SEG and not self.error:
+                    self.error = _explicar(ex)
+                    await self._ui_estado()
+                    if self.snap is not None:
+                        await self._ui_lista(self.snap)
             await asyncio.sleep(INTERVALO)
 
     async def tick(self):

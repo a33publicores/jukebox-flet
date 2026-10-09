@@ -4,7 +4,7 @@ Actualización automática del reproductor PlayBar GO.
 De dónde sale la versión nueva (en este orden):
   1. La última "Release" publicada en GitHub (a33publicores/jukebox-flet) que traiga
      el archivo PlayBarGO_Reproductor_Setup.exe. La versión es la etiqueta (v1.1.1).
-     Si en la descripción de la release escribes  [obligatoria]  el bar no puede
+     Si en la descripción hay una línea que dice solo  [obligatoria]  el bar no puede
      dejarla para más tarde.
   2. Si no hay release: el archivo reproductor_version.json del repo (forma antigua).
 
@@ -57,12 +57,16 @@ def _desde_release(url, timeout):
         return None
     exe = next((a for a in activos if a.get("name") == NOMBRE_INSTALADOR), activos[0])
     cuerpo = str(rel.get("body") or "")
+    lineas = [l.strip() for l in cuerpo.replace("\r", "").split("\n")]
+    obligatoria = any(l.lower() == "[obligatoria]" for l in lineas)
+    notas = "\n".join(l for l in lineas if l and l.lower() != "[obligatoria]"
+                      and not l.startswith("(") and l not in ("-", "Qué cambió:")).strip()
     return {
         "version": str(rel.get("tag_name") or "").lstrip("vV"),
         "url": exe.get("browser_download_url"),
         "tamano": int(exe.get("size") or 0),
-        "notas": cuerpo.replace("[obligatoria]", "").strip()[:600],
-        "obligatoria": "[obligatoria]" in cuerpo.lower(),
+        "notas": notas[:600],
+        "obligatoria": obligatoria,
         "pagina": rel.get("html_url"),
     }
 

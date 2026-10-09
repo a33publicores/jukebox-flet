@@ -61,16 +61,24 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Codigo: Integer;
+  Carpeta: String;
 begin
-  { Cierra el reproductor y su ventana (flet.exe) si siguen abiertos desde esta carpeta,
-    para poder reemplazar los archivos. }
-  if DirExists(ExpandConstant('{app}')) then
+  { Antes de copiar: el reproductor de ESTA instalación tiene que estar cerrado.
+    1) se le dan hasta 10 s para cerrarse solo (cuando él mismo lanzó la actualización);
+    2) si sigue abierto se cierra SOLO ese programa (sin /T: el instalador es hijo suyo
+       y no debe cerrarse a sí mismo);
+    3) la ventana (flet.exe) vive fuera de esta carpeta: se cierra por su título. }
+  Carpeta := ExpandConstant('{app}');
+  if DirExists(Carpeta) then
   begin
     Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-      '-NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.Path -like ''' +
-      ExpandConstant('{app}') + '\*'' } | Stop-Process -Force"',
+      '-NoProfile -ExecutionPolicy Bypass -Command "' +
+      '$p = Get-Process | Where-Object { $_.Path -like ''' + Carpeta + '\*'' }; ' +
+      'if ($p) { $p | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue }; ' +
+      'Get-Process | Where-Object { $_.Path -like ''' + Carpeta + '\*'' } | Stop-Process -Force -ErrorAction SilentlyContinue; ' +
+      'Get-Process -Name flet -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like ''PlayBar GO*'' } | Stop-Process -Force"',
       '', SW_HIDE, ewWaitUntilTerminated, Codigo);
-    Sleep(1500);
+    Sleep(1000);
   end;
   Result := '';
 end;

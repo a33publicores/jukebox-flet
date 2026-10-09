@@ -108,9 +108,16 @@ def certificados():
 
 
 def cerrar_reproductor():
-    subprocess.run(["taskkill", "/im", f"{NOMBRE}.exe", "/f"],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1)
+    """Cierra SOLO una copia de prueba que se esté ejecutando desde la carpeta dist (hay que
+    reemplazarla). El reproductor INSTALADO, que puede estar sonando, no se toca."""
+    carpeta = str(SALIDA).replace("'", "''")
+    ps = ("Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '"
+          + carpeta + "\\*' } | ForEach-Object { taskkill /F /T /PID $_.Id | Out-Null; $_.Id }")
+    r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                       capture_output=True, text=True)
+    if (r.stdout or "").strip():
+        print("Se cerró la copia de prueba de la carpeta dist.")
+        time.sleep(1)
 
 
 def compilar(cert):
@@ -219,13 +226,14 @@ def publicar():
     v = version()
     paso(f"Publicar la versión {v} para los bares")
     datos = {"tag": f"v{v}", "title": f"PlayBar GO Reproductor {v}",
-             "body": "Qué cambió:\n- \n\n(Escribe [obligatoria] aquí si los bares NO pueden dejarla para después)"}
+             "body": "Qué cambió:\n- "}
     url = f"https://github.com/{REPO}/releases/new?" + urllib.parse.urlencode(datos)
     print(f"""
 Se abrió GitHub en el navegador y la carpeta con el instalador.
   1. Arrastra  PlayBarGO_Reproductor_Setup.exe  al cuadro "Attach binaries"
      (NO le cambies el nombre). Espera a que termine de subir.
   2. Escribe qué cambió (opcional) y dale  "Publish release".
+     Solo si los bares NO deben poder posponerla, agrega una línea que diga: [obligatoria]
 Listo: en máximo 3 horas (o al abrir el programa) los bares verán "Actualizar".
 Recuerda subir también el código a GitHub (version.py cambió) como siempre.
 """)
