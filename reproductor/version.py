@@ -13,4 +13,4 @@ UPDATE_URL = os.environ.get(
 
 # Dirección de la API de PlayBar GO en Railway (servicio playbar-api). Se puede cambiar
 # en la pantalla de configuración del reproductor o con la variable PLAYBAR_API.
-API_POR_DEFECTO = os.environ.get("PLAYBAR_API", "")
+API_POR_DEFECTO = os.environ.get("PLAYBAR_API", "https://playbar-api-production.up.railway.app")

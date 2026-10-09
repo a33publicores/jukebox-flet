@@ -52,7 +52,14 @@ def seleccionar_modo_view(page, codigo, nombre, logo):
 
     def abrir_admin(e):
         from views.admin import admin_view, pedir_pin
-        pedir_pin(page, lambda: admin_view(page, codigo, nombre, logo), codigo)
+        from services.session_manager import guardar_sesion
+
+        def entrar_admin():
+            guardar_sesion(page, {"codigo": codigo, "cliente": nombre, "logo": logo,
+                                  "telefono": "ADMIN", "modo": "admin"}, rol="admin")
+            admin_view(page, codigo, nombre, logo)
+
+        pedir_pin(page, entrar_admin, codigo)
 
     page.add(
         ft.Image(src="/logohallowen.png", width=150),

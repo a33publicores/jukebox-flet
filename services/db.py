@@ -76,6 +76,13 @@ ESQUEMA = [
         datos    TEXT NOT NULL,
         ts       DOUBLE PRECISION NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS sesiones (
+        token  TEXT PRIMARY KEY,
+        rol    TEXT NOT NULL DEFAULT 'usuario',
+        datos  TEXT NOT NULL,
+        creado DOUBLE PRECISION NOT NULL,
+        expira DOUBLE PRECISION NOT NULL
+    )""",
     """CREATE TABLE IF NOT EXISTS descargas (
         token  TEXT PRIMARY KEY,
         codigo TEXT NOT NULL,
@@ -485,3 +492,43 @@ def usar_descarga(token):
     if not f or float(f["expira"]) < time.time():
         return None
     return f["codigo"]
+
+
+# ---------------------------------------------------------------------------
+# Sesiones de la app web (sobreviven a F5, cerrar la app y reinicios del servidor)
+# ---------------------------------------------------------------------------
+DURACION_SESION_HORAS = {"usuario": 24 * 30, "admin": 24, "super": 12}
+
+
+def crear_sesion(datos, rol="usuario"):
+    token = secrets.token_urlsafe(24)
+    ahora = time.time()
+    horas = DURACION_SESION_HORAS.get(rol, 24)
+    ejecutar("DELETE FROM sesiones WHERE expira < %s", (ahora,))
+    ejecutar("INSERT INTO sesiones (token, rol, datos, creado, expira) VALUES (%s, %s, %s, %s, %s)",
+             (token, rol, json.dumps(datos, ensure_ascii=False), ahora, ahora + horas * 3600))
+    return token
+
+
+def leer_sesion(token):
+    """Datos de la sesión (con 'rol' y 'token') o None si no existe o venció.
+    Las de usuario se renuevan solas cada vez que se usan."""
+    if not token:
+        return None
+    f = uno("SELECT rol, datos, expira FROM sesiones WHERE token = %s", (str(token),))
+    if not f or float(f["expira"]) < time.time():
+        return None
+    try:
+        datos = json.loads(f["datos"])
+    except Exception:
+        return None
+    if f["rol"] == "usuario":
+        ejecutar("UPDATE sesiones SET expira = %s WHERE token = %s",
+                 (time.time() + DURACION_SESION_HORAS["usuario"] * 3600, str(token)))
+    datos.update(rol=f["rol"], token=str(token))
+    return datos
+
+
+def borrar_sesion(token):
+    if token:
+        ejecutar("DELETE FROM sesiones WHERE token = %s", (str(token),))

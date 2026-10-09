@@ -119,6 +119,9 @@ def super_login_view(page):
         if ok:
             _intentos["n"] = 0
             _sesiones_super.add(id(page))
+            from services.session_manager import guardar_sesion
+            guardar_sesion(page, {"codigo": "*", "telefono": "SUPER", "usuario": usuario.value},
+                           rol="super")
             super_inicio(page)
             return
         _intentos["n"] += 1
@@ -165,6 +168,8 @@ def super_inicio(page):
 
     def salir(e):
         _sesiones_super.discard(id(page))
+        from services.session_manager import cerrar_sesion
+        cerrar_sesion(page)
         from views.codigo import codigo_view
         codigo_view(page)
 

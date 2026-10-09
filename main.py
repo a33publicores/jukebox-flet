@@ -40,6 +40,26 @@ async def main(page: ft.Page):
         page.title = "PlayBar GO"
         try:
             modo = session.get("modo", "musica")
+            rol = session.get("rol", "usuario")
+            if rol == "super":
+                from views import super_admin
+
+                super_admin._sesiones_super.add(id(page))
+                await asyncio.to_thread(super_admin.super_inicio, page)
+                return
+            if rol == "admin" and modo == "admin":
+                from views.admin import admin_view
+
+                await asyncio.to_thread(admin_view, page, session["codigo"],
+                                        session.get("cliente", ""), session.get("logo", ""))
+                return
+            if rol == "admin":  # el admin estaba en "Colocar música"
+                from views.jukebox import jukebox_view
+
+                await asyncio.to_thread(jukebox_view, page, session["codigo"],
+                                        session.get("cliente", ""), "ADMIN",
+                                        session.get("logo", ""), True)
+                return
             if modo == "karaoke":
                 from views.karaoke import karaoke_view
 

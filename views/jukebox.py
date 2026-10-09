@@ -67,7 +67,10 @@ def jukebox_view(
         codigo_view(page)
 
     def volver_admin(e):
+        from services.session_manager import guardar_sesion
         from views.admin import admin_view
+        guardar_sesion(page, {"codigo": codigo, "cliente": cliente, "logo": logo_url,
+                              "telefono": "ADMIN", "modo": "admin"}, rol="admin")
         admin_view(page, codigo, cliente, logo_url)
 
     logo_playbar = ft.Image(

@@ -1,169 +1,195 @@
 """
-Sesión persistente de PlayBar GO (versión web / Railway).
+Sesión persistente de PlayBar GO (app web en Railway).
 
-Por qué existe: `page.session.store` vive en la memoria del servidor y se borra
-cada vez que el navegador recarga (F5), se cierra la pestaña o el celular
-suspende la página. Aquí la sesión se guarda en el DISPOSITIVO del usuario
-(Flet SharedPreferences = localStorage del navegador), así que sobrevive a:
-cerrar la app, F5, cambiar de app y reiniciar el servidor.
+La sesión vive en la BASE DE DATOS (tabla sesiones) y el navegador solo guarda una
+llave larga y aleatoria, en DOS lugares:
 
-Solo se borra cuando el usuario pulsa "Cerrar sesión".
+  1. La dirección:  https://.../s/<llave>   → F5 la recupera al instante, sin
+     preguntarle nada al celular (antes eso fallaba por tiempo agotado).
+  2. El almacenamiento del dispositivo (SharedPreferences = localStorage) → al
+     cerrar la app y volver a abrirla desde el ícono o el favorito.
+
+Sirve para usuarios (teléfono), administradores del bar y el super administrador.
+Solo se borra con "Cerrar sesión" / "Salir", o cuando vence:
+usuario 30 días (se renueva con el uso), admin 24 h, super admin 12 h.
 """
 import asyncio
 import json
 
-SESSION_KEY = "playbar_session"
-_OBLIGATORIOS = ("codigo", "telefono")
+SESSION_KEY = "playbar_session"   # en el dispositivo: la llave (antes: el JSON completo)
+PREFIJO_RUTA = "/s/"
+ESPERA_DISPOSITIVO = 4            # segundos por intento al leer el almacenamiento
 
-# Último error de almacenamiento (para diagnóstico en el título de la pestaña).
 estado = {"error": None}
-
-_prefs_extra = {}
+_prefs = {}    # id(page) -> SharedPreferences
+_tokens = {}   # id(page) -> llave de la sesión actual
 _tareas = set()
 
 
 # ---------------------------------------------------------------------------
-# Acceso a SharedPreferences
+# Almacenamiento del dispositivo (con reintento si no responde)
 # ---------------------------------------------------------------------------
-def _prefs(page):
-    """Devuelve el servicio SharedPreferences de la página."""
+def _nuevo_servicio(page):
+    import flet as ft
+    prefs = ft.SharedPreferences()  # en Flet 1.0 se registra solo en la página actual
+    _prefs[id(page)] = prefs
     try:
-        prefs = page.shared_preferences
-        if prefs is not None:
-            return prefs
+        page.update()
     except Exception:
         pass
+    return prefs
 
-    # Respaldo: crear y registrar el servicio manualmente.
-    clave = id(page)
-    if clave not in _prefs_extra:
-        import flet as ft
 
-        prefs = ft.SharedPreferences()
-        try:
-            page.services.append(prefs)
-        except Exception:
-            pass
-        _prefs_extra[clave] = prefs
-    return _prefs_extra[clave]
+def _servicio(page):
+    return _prefs.get(id(page)) or _nuevo_servicio(page)
 
 
 def preparar_prefs(page):
-    """Crea el servicio SharedPreferences y lo envía al navegador ANTES de usarlo.
-    Si se invoca `get` justo al crear el servicio, el navegador aún no lo tiene
-    y falla con "Control must be added to the page first" o por tiempo agotado."""
+    """Crear el servicio lo antes posible, para que el navegador ya lo tenga listo."""
     try:
-        _prefs(page)
-        page.update()
+        _servicio(page)
     except Exception as ex:
-        print(f"⚠️ No se pudo preparar el almacenamiento de sesión: {ex}")
+        print(f"⚠️ No se pudo preparar el almacenamiento: {ex}")
 
 
-def _decodificar(valor):
-    if isinstance(valor, dict):
-        return valor
-    if isinstance(valor, str) and valor:
+async def _con_reintento(page, metodo, *args):
+    """Llama prefs.<metodo>; si el navegador no responde, recrea el servicio y reintenta."""
+    ultimo = None
+    for intento in range(2):
+        prefs = _servicio(page) if intento == 0 else _nuevo_servicio(page)
+        if intento:
+            await asyncio.sleep(0.6)
         try:
-            return json.loads(valor)
-        except Exception:
-            return None
-    return None
+            return await asyncio.wait_for(getattr(prefs, metodo)(*args), ESPERA_DISPOSITIVO)
+        except Exception as ex:
+            ultimo = ex
+            if "Session closed" in str(ex) or "destroyed session" in str(ex):
+                break
+    estado["error"] = f"{type(ultimo).__name__}: {ultimo}"
+    raise ultimo
 
 
-def _valida(datos):
-    return isinstance(datos, dict) and all(datos.get(c) for c in _OBLIGATORIOS)
-
-
-def _ejecutar(page, fn, *args):
-    """
-    Lanza la corrutina `fn(*args)` desde código síncrono (handlers de botones).
-      - Si estamos en un hilo: usa page.run_task y espera el resultado.
-      - Si estamos dentro del event loop: la deja corriendo en segundo plano.
-    """
+def _en_segundo_plano(page, corrutina_fn, *args):
+    """Lanza una tarea sin esperarla (sirve desde hilos y desde el event loop)."""
     try:
         asyncio.get_running_loop()
-        en_loop = True
+        tarea = asyncio.ensure_future(corrutina_fn(*args))
+        _tareas.add(tarea)
+        tarea.add_done_callback(_tareas.discard)
     except RuntimeError:
-        en_loop = False
+        try:
+            page.run_task(corrutina_fn, *args)
+        except Exception as ex:
+            print(f"⚠️ session_manager: {ex}")
 
+
+async def _poner_ruta(page, ruta):
     try:
-        if en_loop:
-            tarea = asyncio.ensure_future(fn(*args))
-            _tareas.add(tarea)
-            tarea.add_done_callback(_tareas.discard)
-            return
-        futuro = page.run_task(fn, *args)
-        futuro.result(timeout=8)
+        await asyncio.wait_for(page.push_route(ruta), ESPERA_DISPOSITIVO)
     except Exception as ex:
-        estado["error"] = str(ex)
-        print(f"⚠️ session_manager: {ex}")
+        print(f"ℹ️ No se pudo cambiar la dirección a {ruta}: {ex}")
 
 
 # ---------------------------------------------------------------------------
 # API pública
 # ---------------------------------------------------------------------------
-async def cargar_sesion(page):
-    """Lee la sesión guardada en el dispositivo. Devuelve dict o None."""
-    ultimo = None
-    for intento in range(3):
-        try:
-            valor = await _prefs(page).get(SESSION_KEY)
-            datos = _decodificar(valor)
-            if _valida(datos):
-                print("✅ Sesión recuperada del dispositivo")
-                return datos
-            print("ℹ️ No hay sesión guardada")
-            return None
-        except Exception as ex:
-            ultimo = ex
-            texto = str(ex)
-            if "Session closed" in texto or "destroyed session" in texto:
-                break  # el usuario cerró la pestaña: no hay a quién reintentar
-            if "must be added" in texto:
-                try:
-                    page.update()
-                except Exception:
-                    pass
-                await asyncio.sleep(0.4)
-            elif intento >= 1:
-                break  # un timeout ya tarda 10 s; no encadenar más
-    estado["error"] = str(ultimo)
-    print(f"⚠️ No se pudo leer la sesión: {ultimo}")
+def _token_de_ruta(page):
+    ruta = str(getattr(page, "route", "") or "")
+    if PREFIJO_RUTA in ruta:
+        return ruta.split(PREFIJO_RUTA, 1)[1].split("?")[0].strip("/") or None
     return None
 
 
-def guardar_sesion(page, session):
-    """Guarda la sesión (codigo, cliente, logo, telefono, modo) en el dispositivo."""
-    texto = json.dumps(dict(session), ensure_ascii=False)
+async def cargar_sesion(page):
+    """Recupera la sesión: primero de la dirección (F5), luego del dispositivo.
+    Devuelve un dict con 'rol' (usuario/admin/super) o None."""
+    from services import db
+
+    token = _token_de_ruta(page)
+    origen = "dirección"
+    viejo = None
+    if not token:
+        origen = "dispositivo"
+        try:
+            valor = await _con_reintento(page, "get", SESSION_KEY)
+        except Exception as ex:
+            print(f"⚠️ No se pudo leer el almacenamiento del dispositivo: {ex}")
+            valor = None
+        if isinstance(valor, str) and valor.strip().startswith("{"):
+            try:
+                viejo = json.loads(valor)  # formato anterior: el JSON completo
+            except Exception:
+                viejo = None
+        elif isinstance(valor, str) and valor.strip():
+            token = valor.strip()
+
+    datos = None
+    if token:
+        try:
+            datos = await asyncio.to_thread(db.leer_sesion, token)
+        except Exception as ex:
+            print(f"⚠️ No se pudo leer la sesión en la base: {ex}")
+    elif viejo and viejo.get("codigo") and viejo.get("telefono"):
+        guardar_sesion(page, viejo)  # se pasa al formato nuevo
+        datos = dict(viejo, rol="usuario", token=_tokens.get(id(page)))
+
+    if not datos:
+        print(f"ℹ️ No hay sesión guardada ({origen})")
+        return None
+    _tokens[id(page)] = datos.get("token")
+    if origen == "dispositivo":  # deja la llave en la dirección para que F5 sea instantáneo
+        _en_segundo_plano(page, _poner_ruta, page, PREFIJO_RUTA + datos["token"])
+    print(f"✅ Sesión recuperada ({origen}, {datos.get('rol')})")
+    return datos
+
+
+def guardar_sesion(page, session, rol="usuario"):
+    """Crea la sesión en la base y deja la llave en la dirección y en el dispositivo.
+    No espera al navegador: la persona entra de una vez."""
+    from services import db
+
+    anterior = _tokens.get(id(page))
+    try:
+        token = db.crear_sesion(dict(session), rol)
+    except Exception as ex:
+        estado["error"] = str(ex)
+        print(f"⚠️ No se pudo crear la sesión en la base: {ex}")
+        return None
+    _tokens[id(page)] = token
+    if anterior and anterior != token:
+        try:
+            db.borrar_sesion(anterior)
+        except Exception:
+            pass
 
     async def _guardar():
-        for intento in range(2):
-            try:
-                resultado = await _prefs(page).set(SESSION_KEY, texto)
-                if resultado is False:
-                    raise RuntimeError("SharedPreferences.set devolvió False")
-                print("✅ Sesión guardada en el dispositivo")
-                return
-            except Exception as ex:
-                if "Session closed" in str(ex) or "destroyed session" in str(ex):
-                    return
-                if intento == 1:
-                    estado["error"] = str(ex)
-                    print(f"⚠️ No se pudo guardar la sesión: {ex}")
-                    return
-                await asyncio.sleep(0.5)
+        await _poner_ruta(page, PREFIJO_RUTA + token)
+        try:
+            await _con_reintento(page, "set", SESSION_KEY, token)
+            print(f"✅ Sesión guardada ({rol})")
+        except Exception as ex:
+            print(f"⚠️ La sesión quedó en la dirección pero no en el dispositivo: {ex}")
 
-    _ejecutar(page, _guardar)
+    _en_segundo_plano(page, _guardar)
+    return token
 
 
 def cerrar_sesion(page):
-    """Borra la sesión. Solo se llama desde el botón 'Cerrar sesión'."""
+    """Borra la sesión (botón 'Cerrar sesión' / 'Salir')."""
+    from services import db
+
+    token = _tokens.pop(id(page), None)
+    try:
+        db.borrar_sesion(token)
+    except Exception as ex:
+        print(f"⚠️ No se pudo borrar la sesión en la base: {ex}")
 
     async def _borrar():
+        await _poner_ruta(page, "/")
         try:
-            await _prefs(page).remove(SESSION_KEY)
-            print("🗑️ Sesión eliminada del dispositivo")
+            await _con_reintento(page, "remove", SESSION_KEY)
+            print("🗑️ Sesión eliminada")
         except Exception as ex:
-            print(f"⚠️ No se pudo eliminar la sesión: {ex}")
+            print(f"⚠️ No se pudo borrar la llave del dispositivo: {ex}")
 
-    _ejecutar(page, _borrar)
+    _en_segundo_plano(page, _borrar)

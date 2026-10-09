@@ -201,11 +201,16 @@ def admin_view(page, codigo, nombre, logo):
     def colocar_musica(e):
         """El admin pide canciones sin escribir teléfono."""
         vivo["v"] = False
+        from services.session_manager import guardar_sesion
+        guardar_sesion(page, {"codigo": codigo, "cliente": nombre, "logo": logo,
+                              "telefono": "ADMIN", "modo": "musica_admin"}, rol="admin")
         from views.jukebox import jukebox_view
         jukebox_view(page, codigo, nombre, "ADMIN", logo, es_admin=True)
 
     def salir(e):
         vivo["v"] = False
+        from services.session_manager import cerrar_sesion
+        cerrar_sesion(page)
         from views.seleccionar_modo import seleccionar_modo_view
         seleccionar_modo_view(page, codigo, nombre, logo)
 
