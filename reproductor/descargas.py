@@ -32,11 +32,24 @@ class Descargador:
         self._archivo_revisadas = self.carpeta / "revisadas.json"
         self._lock_rev = threading.Lock()
         self._revisados = self._leer_revisadas()  # nombre -> tamaño de canciones comprobadas
+        # video que no sirve -> otro video de la MISMA canción que sí se pudo bajar
+        self._archivo_alt = self.carpeta / "alternativas.json"
+        try:
+            self._alt = json.loads(self._archivo_alt.read_text("utf-8"))
+        except Exception:
+            self._alt = {}
         threading.Thread(target=self.revisar_cache, daemon=True).start()
 
     # -- caché ---------------------------------------------------------
     def ruta(self, video_id):
-        """Ruta de la canción ya descargada y COMPLETA (video + audio unidos), o None."""
+        """Ruta de la canción ya descargada y COMPLETA (video + audio unidos), o None.
+        Si ese video no servía y se usó otro de la misma canción, devuelve el otro."""
+        directa = self._ruta_directa(video_id)
+        if directa is None and video_id in self._alt:
+            return self._ruta_directa(self._alt[video_id])
+        return directa
+
+    def _ruta_directa(self, video_id):
         for ext in _EXT_VIDEO:
             p = self.carpeta / f"{video_id}{ext}"
             try:
@@ -170,10 +183,82 @@ class Descargador:
         except Exception:
             return False  # sin ffmpeg: solo formatos ya combinados
 
-    def obtener(self, video_id):
+    def obtener(self, video_id, titulo=None, canal=None):
         """Descarga (si hace falta) y devuelve la ruta del archivo. Bloqueante.
-        Siempre devuelve un archivo CON sonido (si no, lo vuelve a bajar)."""
-        ya = self.ruta(video_id)
+        Si ese video no se puede usar (bloqueado, borrado, sin sonido...) y se conoce el
+        nombre, busca en YouTube la MISMA canción (nombre y artista) y usa otro video."""
+        try:
+            return self._obtener_directo(video_id)
+        except Exception as ex:
+            if not titulo:
+                raise
+            print(f"⚠️ El video {video_id} no sirve ({str(ex)[:120]}): busco otro de «{titulo}»")
+            error = ex
+        previo = self._alt.get(video_id)
+        candidatos = ([previo] if previo else []) + [
+            c for c in self.alternativas(titulo, canal, excluir={video_id}) if c != previo]
+        for alt in candidatos[:4]:
+            try:
+                ruta = self._obtener_directo(alt)
+            except Exception as ex:
+                print(f"   ✗ {alt} tampoco sirve: {str(ex)[:80]}")
+                continue
+            self._alt[video_id] = alt
+            try:
+                self._archivo_alt.write_text(json.dumps(self._alt), "utf-8")
+            except Exception:
+                pass
+            print(f"   ✓ Uso {alt} en lugar de {video_id}")
+            return ruta
+        raise RuntimeError(f"Ningún video de «{titulo}» se pudo usar ({str(error)[:100]})")
+
+    @staticmethod
+    def _palabras(texto):
+        import unicodedata
+        texto = re.sub(r"[\(\[].*?[\)\]]", " ", str(texto or "").lower())  # (Video Oficial)…
+        texto = "".join(c for c in unicodedata.normalize("NFD", texto)
+                        if unicodedata.category(c) != "Mn")  # ilusioné = ilusione
+        ruido = {"video", "oficial", "official", "lyric", "lyrics", "letra", "audio", "hd",
+                 "en", "vivo", "live", "ft", "feat", "the", "de", "la", "el", "los", "las", "y"}
+        return {w for w in re.findall(r"[a-z0-9]+", texto) if len(w) > 1 and w not in ruido}
+
+    def alternativas(self, titulo, canal=None, excluir=(), maximo=6):
+        """Otros videos de la misma canción, del más parecido al menos. Sin usar la API de
+        YouTube (yt-dlp hace la búsqueda). Descarta lo que no se parece o dura demasiado."""
+        import yt_dlp
+
+        canal_txt = "" if not canal or re.search(r"(?i)vevo|topic|records|music", canal) else canal
+        consulta = f"{titulo} {canal_txt}".strip()
+        opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
+                "skip_download": True, "socket_timeout": 20}
+        if self.cookies:
+            opts["cookiefile"] = self.cookies
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                datos = ydl.extract_info(f"ytsearch{maximo + 4}:{consulta}", download=False)
+        except Exception as ex:
+            print(f"⚠️ No se pudo buscar otro video: {ex}")
+            return []
+        buscadas = self._palabras(titulo)
+        puntajes = []
+        for e in (datos or {}).get("entries") or []:
+            vid = (e or {}).get("id")
+            if not vid or vid in excluir:
+                continue
+            dur = e.get("duration") or 0
+            if dur and (dur < 60 or dur > 15 * 60):  # ni cortos ni mezclas de una hora
+                continue
+            if e.get("live_status") in ("is_live", "is_upcoming"):
+                continue
+            tiene = self._palabras(e.get("title"))
+            parecido = len(buscadas & tiene) / max(1, len(buscadas))
+            if parecido >= 0.6:  # que de verdad sea la misma canción
+                puntajes.append((parecido, vid))
+        puntajes.sort(key=lambda x: -x[0])
+        return [vid for _, vid in puntajes[:maximo]]
+
+    def _obtener_directo(self, video_id):
+        ya = self._ruta_directa(video_id)
         if ya:
             if self.tiene_audio(ya):
                 os.utime(ya, None)
@@ -240,7 +325,7 @@ class Descargador:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
 
-        ruta = self.ruta(video_id)
+        ruta = self._ruta_directa(video_id)
         if not ruta:
             raise RuntimeError(f"No se pudo descargar {video_id}")
         return ruta

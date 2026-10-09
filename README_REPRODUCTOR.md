@@ -121,3 +121,16 @@ unión se cortaba) y por eso algunas sonaban mudas. Ahora:
 - cada canción se revisa con ffmpeg antes de sonar: si no tiene audio se vuelve a bajar
   (y si sigue muda, en el formato que ya viene combinado);
 - al abrir, se borran los pedazos de descargas cortadas y las canciones mudas que ya estaban.
+
+## v27 – Canciones que se cortaban a los 2 segundos
+Al pasar de canción, el video manda por un momento avisos atrasados de la canción ANTERIOR
+(su posición y su "terminó"). Si la anterior era más larga, la nueva parecía estar al final y se
+saltaba (y un pedido quedaba como "Reproducido" sin sonar). Ahora el fin de canción solo se toma
+del cambio de puesto, las posiciones imposibles se descartan y el vigilante confirma con el
+reproductor antes de cortar. Además todo queda anotado en `%USERPROFILE%\PlayBarGo\registro.txt`.
+
+## v28 – Si el video no sirve, busca otro de la misma canción
+Antes, un video bloqueado (edad, país, derechos, borrado) o dañado se intentaba 2 veces, se
+marcaba "Error" y desaparecía de la lista. Ahora el reproductor busca en YouTube la misma canción
+(nombre y artista, sin gastar la API), descarta mezclas largas y canciones distintas, prueba hasta
+4 videos y suena con el primero que funcione. Se recuerda en `cache\alternativas.json`.

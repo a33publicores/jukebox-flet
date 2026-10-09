@@ -277,7 +277,7 @@ class Motor:
         try:
             await self._ui_estado(f"Preparando: {item.titulo}")
             try:
-                ruta = await self._descargar(item.video_id)
+                ruta = await self._descargar(item.video_id, item)
             except Exception as ex:
                 n = self._fallos.get(item.video_id, 0) + 1
                 self._fallos[item.video_id] = n
@@ -303,7 +303,7 @@ class Motor:
             if self._relleno_sig is None or self._relleno_sig.video_id in self.recientes:
                 self._relleno_sig = await self._elegir_relleno()
             if self._relleno_sig is not None:
-                await self._descargar(self._relleno_sig.video_id)
+                await self._descargar(self._relleno_sig.video_id, self._relleno_sig)
         except Exception as ex:
             print(f"⚠️ No se pudo preparar el próximo aleatorio: {ex}")
             self._relleno_sig = None
@@ -322,7 +322,7 @@ class Motor:
                     await self._ui_estado("Sin canciones en cola ni historial")
                     return
                 try:
-                    ruta = await self._descargar(item.video_id)
+                    ruta = await self._descargar(item.video_id, item)
                 except Exception as ex:
                     print(f"❌ Relleno {item.video_id}: {ex}")
                     self.recientes.append(item.video_id)
@@ -454,7 +454,7 @@ class Motor:
         self.previo = None
         self.ocupado = True
         try:
-            ruta = await self._descargar(prev.video_id)
+            ruta = await self._descargar(prev.video_id, prev)
             await self._reproducir(prev, ruta, relleno=prev.fila is None)
         except Exception as ex:
             print(f"❌ No se pudo volver a la anterior: {ex}")
@@ -504,18 +504,23 @@ class Motor:
                 pass
 
     # ------------------------------------------------------------ descargas
-    async def _descargar(self, video_id):
+    async def _descargar(self, video_id, item=None):
         ruta = self.desc.ruta(video_id)
         if ruta:
             return ruta
         tarea = self._en_curso.get(video_id)
         if tarea is None:
-            tarea = self._lanzar_descarga(video_id)
+            tarea = self._lanzar_descarga(video_id, item)
         return await tarea
 
-    def _lanzar_descarga(self, video_id):
+    def _lanzar_descarga(self, video_id, item=None):
+        titulo = getattr(item, "titulo", None)
+        canal = getattr(item, "canal", None)
+
         async def _hacer():
             async with self._sem:
+                if titulo:  # con el nombre puede buscar otro video si este no sirve
+                    return await asyncio.to_thread(self.desc.obtener, video_id, titulo, canal)
                 return await asyncio.to_thread(self.desc.obtener, video_id)
 
         tarea = asyncio.ensure_future(_hacer())
@@ -534,7 +539,7 @@ class Motor:
         pendientes = [i for i in snap.cola if i.fila not in omitir][:PRECARGA]
         for it in pendientes:
             if not self.desc.ruta(it.video_id) and it.video_id not in self._en_curso:
-                self._lanzar_descarga(it.video_id)
+                self._lanzar_descarga(it.video_id, it)
         # si no hay pedidos esperando, deja lista la próxima aleatoria
         if not pendientes and self.actual is not None and not self._preparando_relleno:
             self._preparando_relleno = True

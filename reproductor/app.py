@@ -146,6 +146,7 @@ class Pantalla:
         self.pos = 0.0
         self._ult_seg = -1
         self._terminado_token = -1
+        self._t_inicio = self._t_real = time.time()
         self.completa = False
         self._arrastrando = False
         self.tiempo = None
@@ -177,13 +178,10 @@ class Pantalla:
 
     # ------------------------------------------------------------ eventos
     async def _on_complete(self, e):
-        # En Flet 1.0 el evento llega sin datos (None): cuenta como terminado.
-        if str(e.data).strip().lower() in ("false", "0"):
-            return
-        # Solo vale si de verdad íbamos llegando al final (evita avisos tardíos del
-        # video anterior, que llegan después de saltar a otro puesto).
-        if self.dur > 0 and self.pos >= self.dur - 3:
-            await self._terminar_una_vez()
+        # Con la lista de 3 puestos en bucle, el fin de una canción SIEMPRE llega como
+        # cambio de puesto (_on_pista). Este aviso a veces llega TARDE, de la canción
+        # anterior, y cortaba la nueva a los 2 s: ya no se usa para pasar de canción.
+        print(f"ℹ️ aviso de fin ignorado (pos {self.pos:.0f}/{self.dur:.0f} s)")
 
     async def _on_pista(self, e):
         """El reproductor cambió de puesto: porque saltamos nosotros, o porque terminó la
@@ -218,27 +216,40 @@ class Pantalla:
             await self.motor.al_terminar(self.token)
 
     async def vigilar_final(self):
-        """Respaldo: si el video llegó al final y no avanza en 2 s, pasa a la siguiente."""
+        """Respaldo: si el video quedó quieto en el final 3 s, pasa a la siguiente.
+        Antes de cortar le pregunta al reproductor la posición y duración REALES (los
+        avisos de posición de la canción anterior llegan tarde y engañaban)."""
         quieto = 0
         ultimo = -1.0
         while True:
             await asyncio.sleep(1)
             try:
-                if not self.motor or self.motor.pausado or self.dur <= 0:
+                if (not self.motor or self.motor.pausado or self.dur <= 0
+                        or time.time() - self._t_real < 8):
                     quieto, ultimo = 0, self.pos
                     continue
-                cerca_del_final = self.pos >= self.dur - 1.0
+                cerca_del_final = self.dur - 1.0 <= self.pos <= self.dur + 2
                 quieto = quieto + 1 if abs(self.pos - ultimo) < 0.2 else 0
                 ultimo = self.pos
-                if cerca_del_final and quieto >= 2:
-                    print("⏭️ Fin detectado por el vigilante")
+                if cerca_del_final and quieto >= 3:
                     quieto = 0
-                    await self._terminar_una_vez()
+                    token = self.token
+                    try:
+                        pos = _segundos(await self.video.get_current_position())
+                        dur = _segundos(await self.video.get_duration())
+                    except Exception:
+                        continue
+                    if token == self.token and dur > 0 and pos >= dur - 1.5:
+                        print(f"⏭️ Fin detectado por el vigilante ({pos:.0f}/{dur:.0f} s)")
+                        await self._terminar_una_vez()
             except Exception as ex:
                 print("⚠️ vigilante:", ex)
 
     async def _on_duracion(self, e):
-        self.dur = _segundos(e.data)
+        dur = _segundos(e.data)
+        if dur <= 0:
+            return
+        self.dur = dur
         self.t_dur.value = _mmss(self.dur)
         try:
             self.t_dur.update()
@@ -247,6 +258,10 @@ class Pantalla:
 
     async def _on_posicion(self, e):
         pos = _segundos(e.data)
+        # Aviso tardío de la canción anterior: una canción que empezó hace 1 s no puede
+        # ir en el minuto 4. Se descarta (si no, parecía terminada y se saltaba).
+        if pos > (time.time() - self._t_inicio) + 4:
+            return
         self.pos = pos
         if int(pos) == self._ult_seg:  # actualiza la pantalla 1 vez por segundo
             return
@@ -319,6 +334,7 @@ class Pantalla:
                 destino = max(0.0, min(self.dur - 1, float(self.barra.value or 0) * self.dur))
                 await self.video.seek(ft.Duration(milliseconds=int(destino * 1000)))
                 self.pos = destino
+                self._t_inicio = time.time() - destino
                 self._ult_seg = -1
         except Exception as ex:
             print("⚠️ No se pudo adelantar:", ex)
@@ -341,6 +357,7 @@ class Pantalla:
 
     def _reiniciar_tiempo(self):
         self.dur, self.pos, self._ult_seg = 0.0, 0.0, -1
+        self._t_inicio = self._t_real = time.time()  # "inicio" se corre al adelantar
         self.t_pos.value, self.t_dur.value, self.barra.value = "0:00", "0:00", 0
 
     def pantalla_completa(self, valor=None):
@@ -357,8 +374,16 @@ class Pantalla:
         self.page.update()
 
     async def _on_error(self, e):
+        print(f"❌ Error del video: {e.data}")
+        token = self.token
+        # El aviso puede ser del archivo ANTERIOR (llega tarde al cambiar de canción):
+        # solo cuenta si 2 s después la canción actual de verdad no está sonando.
+        await asyncio.sleep(2)
+        if token != self.token or self.pos >= 1.0 or (self.motor and self.motor.pausado):
+            print("ℹ️ aviso de error ignorado: la canción actual suena bien")
+            return
         if self.motor:
-            await self.motor.al_error(self.token, str(e.data))
+            await self.motor.al_error(token, str(e.data))
 
     async def _click_pausa(self, e):
         if self.motor:
@@ -1094,8 +1119,53 @@ def _cerrar_ventanas_viejas():
         print("ℹ️ No se pudieron revisar ventanas viejas:", ex)
 
 
+class _Registro:
+    """Copia todo lo que el programa escribe a PlayBarGo\\registro.txt (con hora), para
+    poder revisar qué pasó en un bar. Se renueva solo al pasar de 3 MB."""
+
+    def __init__(self, ruta, original=None):
+        self.original = original
+        self.f = open(ruta, "a", encoding="utf-8", buffering=1)
+        self._nueva = True
+
+    def write(self, texto):
+        try:
+            if self.original:
+                self.original.write(texto)
+        except Exception:
+            pass
+        try:
+            for parte in texto.splitlines(True):
+                if self._nueva:
+                    self.f.write(time.strftime("%Y-%m-%d %H:%M:%S  "))
+                self.f.write(parte)
+                self._nueva = parte.endswith("\n")
+        except Exception:
+            pass
+        return len(texto)
+
+    def flush(self):
+        try:
+            self.f.flush()
+        except Exception:
+            pass
+
+
+def _activar_registro():
+    ruta = CARPETA / "registro.txt"
+    try:
+        if ruta.exists() and ruta.stat().st_size > 3 * 1024 * 1024:
+            os.replace(ruta, CARPETA / "registro_anterior.txt")
+        sys.stdout = _Registro(ruta, sys.stdout)
+        sys.stderr = _Registro(ruta, sys.stderr)
+        print(f"===== PlayBar GO Reproductor v{VERSION} =====")
+    except Exception:
+        pass
+
+
 def ejecutar():
     os.chdir(RAIZ)  # para encontrar credenciales.json junto al programa
     CARPETA.mkdir(parents=True, exist_ok=True)
+    _activar_registro()
     _cerrar_ventanas_viejas()
     ft.run(main, assets_dir=str(ASSETS))
