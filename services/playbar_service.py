@@ -122,21 +122,53 @@ def _spreadsheet_obj():
     return _spreadsheet
 
 
+_ws_cache = {}
+_clientes_cache = {"filas": None, "t": 0.0}
+CLIENTES_CACHE_SEG = 60
+
+
+def _no_existe(ex):
+    """True solo si Google dice que la pestaña no existe (no por cuota/red)."""
+    nf = getattr(getattr(gspread, "exceptions", None), "WorksheetNotFound", None)
+    return (nf is not None and isinstance(ex, nf)) or type(ex).__name__ == "WorksheetNotFound"
+
+
 def obtener_hoja_cliente(nombre):
+    """Pestaña por nombre. Se guarda en memoria: pedirla cuesta una lectura de cuota."""
+    ws = _ws_cache.get(nombre)
+    if ws is not None:
+        return ws
     spreadsheet = _spreadsheet_obj()
     try:
-        return spreadsheet.worksheet(nombre)
-    except Exception:
+        ws = _con_reintentos(spreadsheet.worksheet, nombre)
+    except Exception as ex:
+        if not _no_existe(ex):
+            raise  # cuota, red...: NO intentar crearla
         print("🆕 Creando hoja:", nombre)
         ws = spreadsheet.add_worksheet(title=nombre, rows="1000", cols="10")
         ws.append_row(["Timestamp", "Cliente", "Usuario", "titulo", "canal",
-                       "videoId", "Estado", "Estado2"])
-        return ws
+                       "videoId", "Estado", "Estado2", "Orden"])
+    _ws_cache[nombre] = ws
+    return ws
+
+
+def _filas_clientes():
+    """Pestaña CLIENTES con caché de 60 s (se consulta en cada acción de la app)."""
+    c = _clientes_cache
+    if c["filas"] is not None and time.time() - c["t"] < CLIENTES_CACHE_SEG:
+        return c["filas"]
+    try:
+        filas = _con_reintentos(obtener_hoja_cliente("CLIENTES").get_all_records)
+    except Exception:
+        if c["filas"] is not None:
+            return c["filas"]  # sin conexión: usar lo último conocido
+        raise
+    c.update(filas=filas, t=time.time())
+    return filas
 
 
 def obtener_config_cliente(codigo):
-    sheet = _spreadsheet_obj().worksheet("CLIENTES")
-    for row in sheet.get_all_records():
+    for row in _filas_clientes():
         codigo_sheet = str(row.get("Codigo", row.get("codigo", ""))).strip()
         if codigo_sheet == str(codigo).strip():
             return {
@@ -149,8 +181,7 @@ def obtener_config_cliente(codigo):
 
 def validar_cliente(codigo):
     try:
-        sheet = _spreadsheet_obj().worksheet("CLIENTES")
-        for row in sheet.get_all_records():
+        for row in _filas_clientes():
             codigo_sheet = str(row.get("Codigo", row.get("codigo", ""))).strip()
             activo = str(row.get("Activo", row.get("activo", ""))).upper().strip()
             if codigo_sheet == str(codigo).strip() and activo == "TRUE":

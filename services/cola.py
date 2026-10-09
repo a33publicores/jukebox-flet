@@ -139,16 +139,25 @@ def _col(row, i):
     return str(row[i]).strip() if len(row) > i and row[i] is not None else ""
 
 
+_aux_cache = {}
+
+
 def _hoja_aux(nombre, encabezados):
-    """Obtiene la pestaña auxiliar; la crea con encabezados si no existe."""
+    """Obtiene la pestaña auxiliar (en memoria); la crea con encabezados si no existe."""
+    ws = _aux_cache.get(nombre)
+    if ws is not None:
+        return ws
     ss = ps._spreadsheet_obj()
     try:
-        ws = ss.worksheet(nombre)
-    except Exception:
+        ws = ps._con_reintentos(ss.worksheet, nombre)
+    except Exception as ex:
+        if not ps._no_existe(ex):
+            raise
         ws = ss.add_worksheet(title=nombre, rows="1000", cols=str(len(encabezados) + 2))
         ws.append_row(encabezados)
         print(f"🆕 Pestaña creada: {nombre}")
     _hojas_listas.add(nombre)
+    _aux_cache[nombre] = ws
     return ws
 
 
@@ -208,6 +217,7 @@ def instantanea(cliente, nombre_hoja=None):
     for n, row in enumerate(ctrl[1:], start=2):
         if _col(row, 0) == str(cliente):
             snap.control_fila = n
+            _fila_control[str(cliente)] = n
             snap.control = {k: _col(row, i) for i, k in enumerate(CONTROL_COLS)}
             break
     return snap
@@ -258,13 +268,20 @@ def marcar(cliente, fila, estado2=None, estado=None, nombre_hoja=None):
 # ---------------------------------------------------------------------------
 # CONTROL: comandos del admin y estado del reproductor
 # ---------------------------------------------------------------------------
+_fila_control = {}
+
+
 def _asegurar_fila_control(cliente):
     ws = _hoja_aux(HOJA_CONTROL, CONTROL_COLS)
+    if str(cliente) in _fila_control:
+        return ws, _fila_control[str(cliente)]
     col = ps._con_reintentos(ws.col_values, 1)
     for n, v in enumerate(col, start=1):
         if v.strip() == str(cliente):
+            _fila_control[str(cliente)] = n
             return ws, n
     ps._con_reintentos(ws.append_row, [str(cliente)] + [""] * (len(CONTROL_COLS) - 1))
+    _fila_control[str(cliente)] = len(col) + 1
     return ws, len(col) + 1
 
 

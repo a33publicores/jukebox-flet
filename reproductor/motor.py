@@ -26,7 +26,7 @@ from collections import deque
 from services import cola as C
 
 CARPETA_DATOS = Path(os.environ.get("PLAYBAR_HOME", Path.home() / "PlayBarGo"))
-INTERVALO = 3.0        # segundos entre lecturas de la hoja
+INTERVALO = 4.0        # segundos entre lecturas de la hoja (cuota: 60 lecturas/min)
 LATIDO = 15.0          # segundos entre latidos al panel admin
 PRECARGA = 2           # canciones por delante que se descargan
 RECIENTES = 15         # relleno: no repetir las últimas N
@@ -208,10 +208,23 @@ class Motor:
             if cola and INTERRUMPIR_RELLENO:
                 await self._tomar(cola[0])
         elif self.actual.fila is not None and self.actual.fila not in self._filas_pendientes():
-            # la hoja dice que ya no suena (el admin la quitó, etc.); si su marca aún no
-            # se pudo escribir, la hoja está desactualizada y se ignora
-            if not marcada or marcada.fila != self.actual.fila:
+            # Solo se corta si en la hoja ESA fila fue quitada a propósito (admin la
+            # eliminó). Que otra fila diga "En reproduccion" es un dato viejo: se corrige.
+            fila_hoja = next((i for i in snap.items if i.fila == self.actual.fila), None)
+            if fila_hoja is not None and fila_hoja.estado2 in (C.E_ELIM, C.E_ERROR):
                 await self._terminar("externo")
+            elif marcada and marcada.fila != self.actual.fila:
+                await self._corregir_marcada(marcada)
+
+    async def _corregir_marcada(self, marcada):
+        """Otra fila quedó como "En reproduccion" en la hoja (escritura atrasada)."""
+        if marcada.fila in self._filas_pendientes():
+            return
+        estado = C.E_HECHO if marcada.fila in self._hechas else C.E_SIGUE
+        print(f"🩹 Corrigiendo fila {marcada.fila}: {estado}")
+        await self._marcar(marcada.fila, e2=estado)
+        if self.actual and self.actual.fila is not None:
+            await self._marcar(self.actual.fila, e2=C.E_PLAY)
 
     async def _tomar(self, item, ya_marcada=False):
         """Descarga `item` (el relleno sigue sonando) y lo pone a sonar."""

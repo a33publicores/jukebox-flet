@@ -32,7 +32,8 @@ def jukebox_view(
     codigo,
     cliente,
     telefono,
-    logo_url
+    logo_url,
+    es_admin=False,
 ):
 
     page.clean()
@@ -64,6 +65,10 @@ def jukebox_view(
         from views.codigo import codigo_view
 
         codigo_view(page)
+
+    def volver_admin(e):
+        from views.admin import admin_view
+        admin_view(page, codigo, cliente, logo_url)
 
     logo_playbar = ft.Image(
         src="/logohallowen.png",
@@ -101,13 +106,15 @@ def jukebox_view(
                             text_align=ft.TextAlign.CENTER,
                         ),
                         ft.Text(
-                            f"👤 {telefono}",
+                            ("🔧 Administrador" if es_admin else f"👤 {telefono}"),
                             size=12,
                             color="#94a3b8",
                             text_align=ft.TextAlign.CENTER,
                         ),
                         ft.Container(height=6),
-                        _boton("Cerrar sesión", cerrar_sesion, ancho=150, alto=36)[0],
+                        (_boton("🔧 Volver al panel", volver_admin, ancho=170, alto=36)[0]
+                         if es_admin else
+                         _boton("Cerrar sesión", cerrar_sesion, ancho=150, alto=36)[0]),
                     ],
                 ),
                 logo_local,

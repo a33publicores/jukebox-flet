@@ -17,7 +17,8 @@ import flet as ft
 
 from services import cola
 
-REFRESCO_SEG = 4
+REFRESCO_SEG = 6
+MAX_HORAS_PANEL = 3  # el panel deja de consultar solo después de esto
 _intentos = {"n": 0, "hasta": 0.0}
 
 
@@ -225,15 +226,28 @@ def admin_view(page, codigo, nombre, logo):
         ]
         if st["comando_pendiente"]:
             aviso.value = "Esperando al reproductor…"
-        page.update()
+        try:
+            page.update()
+        except Exception:
+            vivo["v"] = False  # el navegador se cerró: dejar de consultar la hoja
 
     def bucle():
-        while vivo["v"]:
-            refrescar()
+        fin = time.time() + MAX_HORAS_PANEL * 3600
+        while vivo["v"] and time.time() < fin:
+            try:
+                refrescar()
+            except Exception as ex:
+                print("⚠️ panel admin:", ex)
             for _ in range(REFRESCO_SEG * 2):
                 if not vivo["v"]:
                     return
                 time.sleep(0.5)
+
+    def colocar_musica(e):
+        """El admin pide canciones sin escribir teléfono."""
+        vivo["v"] = False
+        from views.jukebox import jukebox_view
+        jukebox_view(page, codigo, nombre, "ADMIN", logo, es_admin=True)
 
     def salir(e):
         vivo["v"] = False
@@ -264,6 +278,15 @@ def admin_view(page, codigo, nombre, logo):
                 ft.Text("PLAYLIST", color="#94A3B8", size=13, weight=ft.FontWeight.BOLD),
                 lista,
                 ft.Container(height=10),
+                ft.Container(
+                    width=260, height=52, border_radius=16,
+                    gradient=ft.LinearGradient(colors=["#00D4FF", "#B44CFF"]),
+                    content=ft.TextButton(
+                        content=ft.Text("🎵 Colocar música", color="white", size=17,
+                                        weight=ft.FontWeight.BOLD),
+                        on_click=colocar_musica,
+                    ),
+                ),
                 ft.TextButton("← Salir del modo administrador", on_click=salir),
             ],
         ),
