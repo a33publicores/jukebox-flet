@@ -83,3 +83,41 @@ Todo vive en **PostgreSQL** en Railway: negocios, admins, pedidos, control y cac
 
 ### Migrar lo que había en Sheets (una vez)
 `MIGRAR_A_BASE.bat` → pega `DATABASE_PUBLIC_URL` (Railway → PostgreSQL → Variables). Copia CLIENTES, ADMINS y la pestaña de cada bar; crea `llaves_bares.txt` con la llave de cada bar (secreto, no se sube a GitHub). Se puede repetir sin duplicar.
+
+## v20 – Actualización automática para los bares
+
+**Qué se le entrega a cada bar (una sola vez):** `instalador\Output\PlayBarGO_Reproductor_Setup.exe`
+(lo crea `CONSTRUIR_EXE.bat`; si falta Inno Setup en tu PC, el script lo descarga e instala solo.
+Los bares no necesitan instalar nada más: el Setup trae todo)
++ su código y su llave (panel `/super`). Nunca `credenciales.json` ni `llaves_bares.txt`.
+
+**Sacar una versión nueva:**
+1. Haz los cambios y pruébalos con `INICIAR_REPRODUCTOR.bat`.
+2. Doble clic en `PUBLICAR_ACTUALIZACION.bat` (o `PUBLICAR_ACTUALIZACION.bat 1.1.2`).
+   Sube el número de versión, crea el .exe y el instalador, y abre GitHub.
+3. En GitHub arrastra `PlayBarGO_Reproductor_Setup.exe` (sin cambiarle el nombre) y dale
+   **Publish release**. Si escribes `[obligatoria]` en la descripción, el bar no puede
+   posponerla y se instala sola en 60 s.
+4. Sube el código a GitHub como siempre.
+
+**En el bar:** al abrir el reproductor y cada 3 horas revisa
+`api.github.com/repos/a33publicores/jukebox-flet/releases/latest`. Si hay versión mayor sale
+"🔄 Hay una actualización" → **Actualizar** → barra de descarga → instalación silenciosa →
+el reproductor se abre solo. El código y la llave se conservan (`%USERPROFILE%\PlayBarGo`).
+"Más tarde" vuelve a avisar en 6 horas.
+
+## v21 – Minimizado ya no repite la canción
+La lista del video de Flet solo se aplica cuando Windows redibuja la ventana, y minimizada no
+redibuja: por eso repetía la canción. Ahora la lista tiene 3 puestos fijos
+(`%USERPROFILE%\PlayBarGo\en_cola\puesto0..2.mp4`, enlaces a los archivos del caché) y
+el reproductor solo salta entre puestos. La siguiente queda lista de antemano y entra sola
+al terminar la actual (sin pausa), aunque esté minimizado.
+
+## v22 – Canciones sin sonido
+yt-dlp baja el video (`ID.f136.mp4`) y el audio (`ID.f140.m4a`) por separado y luego los une en
+`ID.mp4`. El reproductor aceptaba el pedazo de solo video (mientras se unía, o para siempre si la
+unión se cortaba) y por eso algunas sonaban mudas. Ahora:
+- solo cuenta como canción `ID.mp4` (los IDs de YouTube no tienen punto);
+- cada canción se revisa con ffmpeg antes de sonar: si no tiene audio se vuelve a bajar
+  (y si sigue muda, en el formato que ya viene combinado);
+- al abrir, se borran los pedazos de descargas cortadas y las canciones mudas que ya estaban.

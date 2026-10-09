@@ -11,8 +11,8 @@ Reglas:
     la primera "Siguiente"/"En cola".
   * Si no hay cola, suena al azar una canción de fechas anteriores (relleno).
   * El reproductor habla con la API de Railway (BackendApi), nunca con la base directo.
-  * Si llega una canción nueva mientras suena RELLENO, se interrumpe y suena la nueva
-    (cuando ya está descargada, sin cortar el relleno antes de tiempo).
+  * Si llega una canción nueva mientras suena RELLENO, NO se corta: queda de siguiente
+    (ya descargada) y suena apenas termine la aleatoria.
   * Si suena una canción pedida, la nueva espera su turno.
   * Comandos del admin (hoja CONTROL): pausar, reanudar, siguiente, anterior.
 """
@@ -29,12 +29,13 @@ from services import cola as C
 CARPETA_DATOS = Path(os.environ.get("PLAYBAR_HOME", Path.home() / "PlayBarGo"))
 INTERVALO = 4.0        # segundos entre lecturas de la hoja (cuota: 60 lecturas/min)
 LATIDO = 15.0          # segundos entre latidos al panel admin
-PRECARGA = 2           # canciones por delante que se descargan
+PRECARGA = 3           # canciones pedidas por delante que se descargan
 RECIENTES = 15         # relleno: no repetir las últimas N
 COMANDO_MAX_EDAD = 120  # ignorar comandos más viejos (p. ej. de antes de reiniciar)
+# False (por defecto): la canción pedida queda de SIGUIENTE y espera a que termine la
+#   canción aleatoria que está sonando (no se corta). Mientras tanto ya se descarga.
 # True: la canción pedida entra apenas se descarga (corta el aleatorio).
-# False: espera a que termine la canción aleatoria que está sonando.
-INTERRUMPIR_RELLENO = os.getenv("INTERRUMPIR_RELLENO", "1").strip() not in ("0", "false", "no")
+INTERRUMPIR_RELLENO = os.getenv("INTERRUMPIR_RELLENO", "0").strip().lower() in ("1", "true", "si", "sí")
 
 
 class BackendApi:
@@ -153,6 +154,9 @@ class Motor:
         self._fallos = {}        # video_id -> descargas fallidas
         self._pend = []          # marcas que no se pudieron escribir [(fila, estado2, estado)]
         self._hechas = set()     # filas que ya sonaron en esta sesión (aunque la hoja no lo sepa)
+        self._relleno_sig = None  # próxima canción aleatoria, elegida y descargada por adelantado
+        self._marcas = set()      # escrituras a la API en segundo plano
+        self._preparando_relleno = False
         self._ultimo_cid = None
         self._ack = None
         self._pub = None
@@ -190,6 +194,7 @@ class Motor:
                 self.snap = snap
             await self._decidir(snap)
             self._precargar(snap)
+            await self._anticipar(snap)
             await self._publicar(snap)
             await self._ui_lista(snap)
 
@@ -248,23 +253,39 @@ class Motor:
                 if n >= 2:  # un corte de red momentáneo no debe descartar la canción
                     await self._marcar(item.fila, e2=C.E_ERROR, estado=C.E_ERROR)
                 return
-            if not ya_marcada:
-                # las "Pendiente" (versión vieja de la app) quedan como Agregado
-                await self._marcar(item.fila, e2=C.E_PLAY,
-                                   estado=None if item.estado == "Agregado" else "Agregado")
             if self.actual is not None and self.relleno:
                 self.previo = self.actual
-            await self._reproducir(item, ruta, relleno=False)
+            await self._reproducir(item, ruta, relleno=False)  # primero suena…
+            if not ya_marcada:  # …y la marca viaja a la API en segundo plano
+                self._marcar_luego(item.fila, e2=C.E_PLAY,
+                                   estado=None if item.estado == "Agregado" else "Agregado")
         finally:
             self.ocupado = False
+
+    async def _elegir_relleno(self):
+        return await asyncio.to_thread(self.backend.elegir_relleno, list(self.recientes))
+
+    async def _preparar_relleno(self):
+        """Mientras suena una canción, deja elegida y descargada la próxima aleatoria."""
+        try:
+            if self._relleno_sig is None or self._relleno_sig.video_id in self.recientes:
+                self._relleno_sig = await self._elegir_relleno()
+            if self._relleno_sig is not None:
+                await self._descargar(self._relleno_sig.video_id)
+        except Exception as ex:
+            print(f"⚠️ No se pudo preparar el próximo aleatorio: {ex}")
+            self._relleno_sig = None
 
     async def _poner_relleno(self):
         self.ocupado = True
         try:
+            # 1) la que ya quedó lista mientras sonaba la anterior: entra al instante
+            sig, self._relleno_sig = self._relleno_sig, None
+            if sig is not None and self.desc.ruta(sig.video_id):
+                await self._reproducir(sig, self.desc.ruta(sig.video_id), relleno=True)
+                return
             for _ in range(3):
-                item = await asyncio.to_thread(
-                    self.backend.elegir_relleno, list(self.recientes)
-                )
+                item = await self._elegir_relleno()
                 if item is None:
                     await self._ui_estado("Sin canciones en cola ni historial")
                     return
@@ -287,26 +308,25 @@ class Motor:
         self.recientes.append(item.video_id)
         await self.ui.reproducir(ruta, item, self.token)
         print(f"▶️ {'(relleno) ' if relleno else ''}{item.titulo}")
+        await self._anticipar()
 
     async def _terminar(self, motivo):
         """Cierra la canción actual y pasa a la siguiente."""
         item = self.actual
         if item is not None and item.fila is not None and motivo != "externo":
             self._hechas.add(item.fila)
-            await self._marcar(item.fila, e2=C.E_HECHO)
-        if item is not None and item.fila is not None and motivo in ("ok", "saltada"):
-            try:
-                await asyncio.to_thread(self.backend.registrar, item)
-            except Exception as ex:
-                print(f"⚠️ No se pudo registrar en REPRODUCIDAS: {ex}")
+            self._marcar_luego(item.fila, e2=C.E_HECHO)  # no se espera a la API
         self.previo = item
         self.actual = None
         self.relleno = False
         self.token += 1  # invalida eventos tardíos del video anterior
+        # La siguiente se decide con la última lectura (tiene máx. 4 s): sin esperar a la red.
         try:
-            snap = await asyncio.to_thread(self.backend.instantanea)
-            self.snap = snap
-            await self._decidir(snap)
+            if self.snap is not None:
+                await self._decidir(self.snap)
+            else:
+                self.snap = await asyncio.to_thread(self.backend.instantanea)
+                await self._decidir(self.snap)
         except Exception as ex:
             print(f"⚠️ Siguiente canción se decidirá en el próximo ciclo: {ex}")
 
@@ -419,6 +439,26 @@ class Motor:
             print(f"⚠️ No se pudo escribir en la hoja (se reintenta): {ex}")
             self._pend.append((fila, e2, estado))
 
+    def _marcar_luego(self, fila, e2=None, estado=None):
+        """Escribe en la API sin frenar la música (si falla, se reintenta en el próximo ciclo)."""
+        if fila is None:
+            return
+        self._pend.append((fila, e2, estado))  # cuenta como pendiente mientras viaja
+
+        async def _ir():
+            try:
+                await asyncio.to_thread(self.backend.marcar, fila, e2, estado)
+                try:
+                    self._pend.remove((fila, e2, estado))
+                except ValueError:
+                    pass
+            except Exception as ex:
+                print(f"⚠️ No se pudo escribir (se reintenta): {ex}")
+
+        t = asyncio.ensure_future(_ir())
+        self._marcas.add(t)
+        t.add_done_callback(self._marcas.discard)
+
     async def _reintentar_marcas(self):
         pend, self._pend = self._pend, []
         for fila, e2, est in pend:
@@ -454,9 +494,51 @@ class Motor:
         return tarea
 
     def _precargar(self, snap):
-        for it in snap.cola[:PRECARGA]:
+        omitir = self._hechas | ({self.actual.fila} if self.actual and self.actual.fila else set())
+        pendientes = [i for i in snap.cola if i.fila not in omitir][:PRECARGA]
+        for it in pendientes:
             if not self.desc.ruta(it.video_id) and it.video_id not in self._en_curso:
                 self._lanzar_descarga(it.video_id)
+        # si no hay pedidos esperando, deja lista la próxima aleatoria
+        if not pendientes and self.actual is not None and not self._preparando_relleno:
+            self._preparando_relleno = True
+
+            async def _prep():
+                try:
+                    await self._preparar_relleno()
+                finally:
+                    self._preparando_relleno = False
+
+            t = asyncio.ensure_future(_prep())
+            self._marcas.add(t)
+            t.add_done_callback(self._marcas.discard)
+
+    def _proxima(self, snap):
+        """La canción que sonará cuando termine la actual (misma regla que _decidir)."""
+        if snap is None:
+            return None
+        omitir = self._filas_pendientes() | self._hechas
+        if self.actual is not None and self.actual.fila is not None:
+            omitir = omitir | {self.actual.fila}
+        marcada = snap.actual
+        if marcada is not None and marcada.fila not in omitir:
+            return marcada
+        cola = [i for i in snap.cola if i.fila not in omitir]
+        if cola:
+            return cola[0]
+        return self._relleno_sig
+
+    async def _anticipar(self, snap=None):
+        """Deja la próxima canción (si ya está descargada) lista en el reproductor, para
+        que entre sola al terminar la actual: sin pausa y aunque la ventana esté minimizada."""
+        if not hasattr(self.ui, "preparar_siguiente") or self.actual is None:
+            return
+        it = self._proxima(snap if snap is not None else self.snap)
+        ruta = self.desc.ruta(it.video_id) if it is not None else None
+        try:
+            await self.ui.preparar_siguiente(ruta)
+        except Exception as ex:
+            print(f"⚠️ No se pudo dejar lista la siguiente: {ex}")
 
     # ----------------------------------------------------------- publicación
     def _estado_txt(self):
@@ -467,7 +549,8 @@ class Motor:
         return "relleno" if self.relleno else "reproduciendo"
 
     async def _publicar(self, snap):
-        cola = snap.cola
+        omitir = self._hechas | ({self.actual.fila} if self.actual and self.actual.fila else set())
+        cola = [i for i in snap.cola if i.fila not in omitir]
         actual = self.actual.titulo if self.actual else ""
         sig = cola[0].titulo if cola else ""
         clave = (self._estado_txt(), actual, sig, self._ack)

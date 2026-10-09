@@ -1,6 +1,6 @@
 @echo off
 REM Crea el reproductor PlayBar GO (.exe). Todo el trabajo lo hace construir_exe.py.
-REM Para crear tambien el instalador:  CONSTRUIR_EXE.bat instalador
+REM Crea el .exe y el instalador (Inno Setup se instala solo si falta).
 cd /d "%~dp0"
 py -3.12 -c "pass" >nul 2>&1
 if not errorlevel 1 (

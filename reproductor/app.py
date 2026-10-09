@@ -19,7 +19,7 @@ import flet as ft
 import flet_video as ftv
 
 from reproductor import actualizador, diagnostico
-from reproductor.version import VERSION
+from reproductor.version import REVISAR_CADA_HORAS, VERSION
 from reproductor.descargas import Descargador
 from reproductor.motor import BackendApi, Motor
 from reproductor.version import API_POR_DEFECTO
@@ -48,6 +48,15 @@ def _abrir_carpeta(e=None):
         os.startfile(str(CARPETA))  # solo Windows
     except Exception as ex:
         print("No se pudo abrir la carpeta:", ex)
+
+PUESTOS = 3  # lugares fijos en la lista del video: el que suena, el siguiente y uno libre
+
+
+def _misma(a, b):
+    if not a or not b:
+        return False
+    return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
+
 
 FONDO = "#020617"
 PANEL = "#0b1220"
@@ -112,11 +121,27 @@ class Pantalla:
             autoplay=True,
             controls=None,
             fill_color="#000000",
+            playlist_mode=ftv.PlaylistMode.LOOP,
+            # Es una rockola: minimizada o detrás de otra ventana debe seguir sonando.
+            pause_upon_entering_background_mode=False,
+            resume_upon_entering_foreground_mode=False,
             on_complete=self._on_complete,
+            on_track_change=self._on_pista,
             on_error=self._on_error,
             on_position_change=self._on_posicion,
             on_duration_change=self._on_duracion,
         )
+        # Puestos fijos del reproductor (ver _poner_en_puesto): la lista del video se
+        # arma una sola vez y después solo se SALTA entre puestos, porque cambiar la
+        # lista necesita que Windows redibuje la ventana (y minimizada no redibuja).
+        self.puestos = [CARPETA / "en_cola" / f"puesto{i}.mp4" for i in range(PUESTOS)]
+        self.fuente = [None] * PUESTOS      # qué canción (ruta del caché) hay en cada puesto
+        self.anticipada = [False] * PUESTOS  # True = es la próxima de verdad (no un sobrante)
+        self.cur = 0
+        self._lista_armada = False
+        self._salto = None                  # puesto al que saltamos nosotros
+        self._entro_sola = None             # (puesto, ruta) si la siguiente entró sola
+        self._lock_puestos = asyncio.Lock()
         self.dur = 0.0
         self.pos = 0.0
         self._ult_seg = -1
@@ -152,6 +177,35 @@ class Pantalla:
         # En Flet 1.0 el evento llega sin datos (None): cuenta como terminado.
         if str(e.data).strip().lower() in ("false", "0"):
             return
+        # Solo vale si de verdad íbamos llegando al final (evita avisos tardíos del
+        # video anterior, que llegan después de saltar a otro puesto).
+        if self.dur > 0 and self.pos >= self.dur - 3:
+            await self._terminar_una_vez()
+
+    async def _on_pista(self, e):
+        """El reproductor cambió de puesto: porque saltamos nosotros, o porque terminó la
+        canción y entró sola la del puesto siguiente (funciona aunque esté minimizado)."""
+        try:
+            idx = int(str(e.data).strip())
+        except Exception:
+            return
+        if self._salto is not None and idx == self._salto:
+            self._salto = None
+            self.cur = idx
+            return
+        if idx == self.cur or not self._lista_armada:
+            return
+        self.cur = idx
+        if self.anticipada[idx] and self.fuente[idx]:
+            self._entro_sola = (idx, self.fuente[idx])  # ya suena la correcta, sin pausa
+        else:
+            self._entro_sola = None
+            try:
+                await self.video.pause()  # era un sobrante: silencio hasta que el motor decida
+            except Exception:
+                pass
+        self.anticipada[idx] = False
+        self._reiniciar_tiempo()
         await self._terminar_una_vez()
 
     async def _terminar_una_vez(self):
@@ -161,7 +215,7 @@ class Pantalla:
             await self.motor.al_terminar(self.token)
 
     async def vigilar_final(self):
-        """Respaldo: si el video llegó al final y no avanza en 4 s, pasa a la siguiente."""
+        """Respaldo: si el video llegó al final y no avanza en 2 s, pasa a la siguiente."""
         quieto = 0
         ultimo = -1.0
         while True:
@@ -170,10 +224,10 @@ class Pantalla:
                 if not self.motor or self.motor.pausado or self.dur <= 0:
                     quieto, ultimo = 0, self.pos
                     continue
-                cerca_del_final = self.pos >= self.dur - 1.5
+                cerca_del_final = self.pos >= self.dur - 1.0
                 quieto = quieto + 1 if abs(self.pos - ultimo) < 0.2 else 0
                 ultimo = self.pos
-                if cerca_del_final and quieto >= 4:
+                if cerca_del_final and quieto >= 2:
                     print("⏭️ Fin detectado por el vigilante")
                     quieto = 0
                     await self._terminar_una_vez()
@@ -276,15 +330,87 @@ class Pantalla:
     # --------------------------------------------- interfaz que usa el Motor
     async def reproducir(self, ruta, item, token):
         self.token = token
-        self._reiniciar_tiempo()
-        self.video.playlist = [ftv.VideoMedia(resource=ruta)]
-        self.video.update()
+        entro = self._entro_sola
+        self._entro_sola = None
+        if entro and entro[0] == self.cur and _misma(entro[1], ruta):
+            pass  # la siguiente ya entró sola y es la que el motor eligió: no se toca
+        elif not self._lista_armada:
+            await self._armar_lista(ruta)
+        else:
+            async with self._lock_puestos:
+                destino = None
+                for cand in ((self.cur + 1) % PUESTOS, (self.cur + 2) % PUESTOS):
+                    try:
+                        await asyncio.to_thread(self._poner_en_puesto, cand, ruta)
+                        destino = cand
+                        break
+                    except Exception as ex:  # archivo ocupado: se prueba el otro puesto libre
+                        print(f"⚠️ Puesto {cand} ocupado: {ex}")
+                if destino is None:
+                    raise RuntimeError("No hay puesto libre para la canción")
+                self.anticipada[destino] = False
+                self._salto = destino
+                self._reiniciar_tiempo()
+                try:
+                    await self.video.jump_to(destino)
+                except Exception as ex:
+                    print(f"⚠️ No se pudo saltar al puesto {destino}: {ex}")
+                self.cur = destino
         try:
             await self.video.play()
         except Exception:
             pass
         self.chip.value = item.titulo
         self.page.update()
+
+    async def preparar_siguiente(self, ruta):
+        """Deja en el puesto siguiente la próxima canción (el motor la conoce de antemano)."""
+        if not self._lista_armada:
+            return
+        async with self._lock_puestos:
+            sig = (self.cur + 1) % PUESTOS
+            if ruta is None:
+                self.anticipada[sig] = False
+                return
+            if self.anticipada[sig] and _misma(self.fuente[sig], ruta):
+                return
+            try:
+                await asyncio.to_thread(self._poner_en_puesto, sig, ruta)
+                self.anticipada[sig] = True
+            except Exception as ex:
+                self.anticipada[sig] = False
+                print(f"⚠️ No se pudo dejar lista la siguiente: {ex}")
+
+    async def _armar_lista(self, ruta):
+        """Primera canción: arma la lista fija de puestos (una sola vez)."""
+        for i in range(PUESTOS):
+            await asyncio.to_thread(self._poner_en_puesto, i, ruta)
+        self.anticipada = [False] * PUESTOS
+        self.cur = 0
+        self._reiniciar_tiempo()
+        self.video.playlist = [ftv.VideoMedia(resource=str(p)) for p in self.puestos]
+        self.video.update()
+        self._lista_armada = True
+
+    def _poner_en_puesto(self, i, ruta):
+        """Pone la canción `ruta` en el puesto i (enlace al archivo del caché: instantáneo
+        y sin ocupar espacio; si no se puede, copia)."""
+        destino = self.puestos[i]
+        if _misma(self.fuente[i], ruta) and destino.exists():
+            return
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        tmp = destino.with_name(destino.stem + ".tmp")
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+        try:
+            os.link(ruta, tmp)
+        except Exception:
+            import shutil
+            shutil.copyfile(ruta, tmp)
+        os.replace(tmp, destino)
+        self.fuente[i] = str(ruta)
 
     async def pausar(self):
         await self.video.pause()
@@ -668,12 +794,7 @@ async def main(page: ft.Page):
 
     page.on_keyboard_event = teclas
 
-    async def revisar_actualizacion():
-        info = await asyncio.to_thread(actualizador.hay_actualizacion)
-        if info:
-            _ventana_actualizacion(page, info)
-
-    page.run_task(revisar_actualizacion)
+    page.run_task(_vigilar_actualizaciones, page)
     page.run_task(pantalla.vigilar_final)
     print(f"🎬 Reproductor PlayBar GO para el cliente {cfg['cliente']}")
     await motor.correr()
@@ -695,36 +816,156 @@ def _reiniciar(page):
     try:
         os.execv(sys.executable, [sys.executable] + ([] if getattr(sys, "frozen", False) else sys.argv))
     except Exception:
-        page.window.close()
+        os._exit(0)
+
+
+_aviso = {"abierta": None, "pospuesta": {}}  # versión en pantalla / versión -> hora de "Más tarde"
+VOLVER_A_AVISAR_SEG = 6 * 3600
+ESPERA_OBLIGATORIA_SEG = 60
+
+
+async def _vigilar_actualizaciones(page):
+    """Revisa al abrir y luego cada REVISAR_CADA_HORAS (el bar lo deja prendido toda la noche)."""
+    await asyncio.sleep(8)  # primero que arranque la música
+    await asyncio.to_thread(actualizador.limpiar_viejos)
+    while True:
+        try:
+            info = await asyncio.to_thread(actualizador.hay_actualizacion)
+            if info:
+                v = info["version"]
+                pospuesta = _aviso["pospuesta"].get(v, 0)
+                if _aviso["abierta"] != v and time.time() - pospuesta > VOLVER_A_AVISAR_SEG:
+                    _ventana_actualizacion(page, info)
+        except Exception as ex:
+            print("ℹ️ Revisión de actualizaciones:", ex)
+        await asyncio.sleep(max(0.25, REVISAR_CADA_HORAS) * 3600)
+
+
+def _mb(n):
+    return f"{n / 1048576:.1f} MB"
 
 
 def _ventana_actualizacion(page, info):
     obligatoria = bool(info.get("obligatoria"))
+    version = info.get("version", "")
+    _aviso["abierta"] = version
+    estado_ui = {"trabajando": False}
 
-    def descargar(e):
-        import webbrowser
-        webbrowser.open(info["url"])  # abre el navegador del PC con la descarga
+    barra = ft.ProgressBar(value=0, color=CYAN, bgcolor="#1e293b", bar_height=8, visible=False)
+    texto = ft.Text("", color="#94A3B8", size=12)
+    explicacion = ft.Text(
+        "Se descarga, se instala sola y el reproductor se vuelve a abrir con el mismo "
+        "código y llave. La música se detiene unos segundos.", color="#94A3B8", size=12)
+    if obligatoria:
+        explicacion.value = (f"Esta actualización es necesaria. Empieza sola en "
+                             f"{ESPERA_OBLIGATORIA_SEG} segundos.")
 
     def luego(e):
+        if estado_ui["trabajando"]:
+            return
+        _aviso["pospuesta"][version] = time.time()
+        _aviso["abierta"] = None
         dlg.open = False
         page.update()
 
-    acciones = [ft.FilledButton("Descargar", on_click=descargar)]
-    if not obligatoria:
-        acciones.insert(0, ft.TextButton("Más tarde", on_click=luego))
+    async def actualizar(e=None):
+        if estado_ui["trabajando"]:
+            return
+        estado_ui["trabajando"] = True
+        b_actualizar.disabled = True
+        if b_luego:
+            b_luego.disabled = True
+        if not actualizador.puede_instalar_solo():
+            import webbrowser
+            webbrowser.open(info.get("pagina") or info["url"])
+            texto.value = "Modo desarrollo: se abrió el navegador con la descarga."
+            estado_ui["trabajando"] = False
+            b_actualizar.disabled = False
+            if b_luego:
+                b_luego.disabled = False
+            page.update()
+            return
+
+        barra.visible = True
+        barra.value = None  # animada hasta saber el tamaño
+        texto.value = "Descargando..."
+        texto.color = "#94A3B8"
+        page.update()
+        avance = {"bajado": 0, "total": int(info.get("tamano") or 0)}
+
+        def progreso(bajado, total):
+            avance["bajado"], avance["total"] = bajado, total or avance["total"]
+
+        tarea = asyncio.ensure_future(asyncio.to_thread(actualizador.descargar, info, progreso))
+        while not tarea.done():
+            if avance["total"]:
+                barra.value = min(1.0, avance["bajado"] / avance["total"])
+                texto.value = (f"Descargando... {_mb(avance['bajado'])} de {_mb(avance['total'])}"
+                               f"  ({int(barra.value * 100)}%)")
+            elif avance["bajado"]:
+                texto.value = f"Descargando... {_mb(avance['bajado'])}"
+            page.update()
+            await asyncio.sleep(0.4)
+        try:
+            ruta = tarea.result()
+        except Exception as ex:
+            print("❌ Descarga de la actualización:", ex)
+            barra.visible = False
+            texto.value = f"No se pudo descargar: {ex}. Revisa internet y vuelve a intentar."
+            texto.color = "#f87171"
+            b_actualizar.content = "Reintentar"
+            b_actualizar.disabled = False
+            if b_luego:
+                b_luego.disabled = False
+            estado_ui["trabajando"] = False
+            page.update()
+            return
+
+        barra.value = 1
+        texto.value = "Instalando... el reproductor se cerrará y se abrirá solo en unos segundos."
+        texto.color = "#22d3ee"
+        page.update()
+        try:
+            await asyncio.to_thread(actualizador.instalar, ruta)
+        except Exception as ex:
+            print("❌ No se pudo abrir el instalador:", ex)
+            texto.value = f"No se pudo abrir el instalador: {ex}"
+            texto.color = "#f87171"
+            b_actualizar.disabled = False
+            estado_ui["trabajando"] = False
+            page.update()
+            return
+        await asyncio.sleep(2)
+        os._exit(0)  # libera los archivos para que el instalador los reemplace
+
+    async def cuenta_regresiva():
+        for faltan in range(ESPERA_OBLIGATORIA_SEG, 0, -1):
+            if estado_ui["trabajando"] or not dlg.open:
+                return
+            explicacion.value = f"Esta actualización es necesaria. Empieza sola en {faltan} s."
+            page.update()
+            await asyncio.sleep(1)
+        await actualizar()
+
+    b_actualizar = ft.FilledButton("Actualizar", icon=ft.Icons.SYSTEM_UPDATE_ALT, on_click=actualizar)
+    b_luego = None if obligatoria else ft.TextButton("Más tarde", on_click=luego)
+    acciones = [b for b in (b_luego, b_actualizar) if b]
+    notas = str(info.get("notas", "") or "").strip()
     dlg = ft.AlertDialog(
         modal=True, bgcolor="#111827",
         title=ft.Text("🔄 Hay una actualización", color="#22d3ee"),
         content=ft.Column([
-            ft.Text(f"Nueva versión {info.get('version', '')} (tienes la {VERSION}).", color="white"),
-            ft.Text(str(info.get("notas", "")), color="#94A3B8"),
-            ft.Text("Descárgala, ciérrame e instala la nueva versión.", color="#94A3B8", size=12),
-        ], tight=True, width=380),
+            ft.Text(f"Versión nueva {version} (esta es la {VERSION}).", color="white"),
+            ft.Text(notas, color="#cbd5e1", size=13, visible=bool(notas)),
+            explicacion, barra, texto,
+        ], tight=True, width=420, spacing=10),
         actions=acciones,
     )
     page.overlay.append(dlg)
     dlg.open = True
     page.update()
+    if obligatoria:
+        page.run_task(cuenta_regresiva)
 
 
 def ejecutar():
