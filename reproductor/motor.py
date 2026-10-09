@@ -201,27 +201,34 @@ class Motor:
             await asyncio.sleep(INTERVALO)
 
     async def tick(self):
-        async with self._lock:
-            await self._reintentar_marcas()
-            try:
-                snap = await asyncio.to_thread(self.backend.instantanea)
-            except Exception:
-                # Sin hoja (internet, cuota...): si no suena nada, seguir con la última
-                # lectura para no quedarse en silencio. Los cambios se escriben después.
+        # Lo que va por internet se hace SIN el candado: si el servidor tarda, el cambio
+        # de canción (al_terminar) no queda esperando y la música nunca se detiene.
+        await self._reintentar_marcas()
+        try:
+            snap = await asyncio.to_thread(self.backend.instantanea)
+        except Exception:
+            # Sin servidor (internet...): si no suena nada, seguir con la última
+            # lectura para no quedarse en silencio. Los cambios se escriben después.
+            async with self._lock:
                 if self.actual is None and not self.ocupado and self.snap is not None:
                     await self._decidir(self.snap)
-                    await self._ui_lista(self.snap)
-                raise
+            if self.snap is not None:
+                await self._ui_lista(self.snap)
+            raise
+        async with self._lock:
             self.snap = snap
             if await self._comandos(snap):
                 # el comando cambió el estado: la lectura quedó vieja, se relee
-                snap = await asyncio.to_thread(self.backend.instantanea)
-                self.snap = snap
+                try:
+                    snap = await asyncio.to_thread(self.backend.instantanea)
+                    self.snap = snap
+                except Exception:
+                    pass
             await self._decidir(snap)
             self._precargar(snap)
             await self._anticipar(snap)
-            await self._publicar(snap)
-            await self._ui_lista(snap)
+        await self._publicar(snap)
+        await self._ui_lista(snap)
 
     # ----------------------------------------------------------- decisiones
     def _filas_pendientes(self):
@@ -485,12 +492,16 @@ class Motor:
         t.add_done_callback(self._marcas.discard)
 
     async def _reintentar_marcas(self):
-        pend, self._pend = self._pend, []
-        for fila, e2, est in pend:
+        # las pendientes siguen anotadas mientras se reintenta (así _decidir las respeta)
+        for marca in list(self._pend):
             try:
-                await asyncio.to_thread(self.backend.marcar, fila, e2, est)
+                await asyncio.to_thread(self.backend.marcar, *marca)
             except Exception:
-                self._pend.append((fila, e2, est))
+                break  # sigue sin servidor: se reintenta en el próximo ciclo
+            try:
+                self._pend.remove(marca)
+            except ValueError:
+                pass
 
     # ------------------------------------------------------------ descargas
     async def _descargar(self, video_id):

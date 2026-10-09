@@ -148,6 +148,9 @@ class Pantalla:
         self._terminado_token = -1
         self.completa = False
         self._arrastrando = False
+        self.tiempo = None
+        self._ult_mouse = time.time()   # al abrir se ve la barra unos segundos
+        self._mouse_dentro = False
         self.barra = ft.Slider(
             value=0, min=0, max=1, expand=True, active_color=CYAN,
             inactive_color="#334155", thumb_color="white",
@@ -264,9 +267,43 @@ class Pantalla:
         except Exception:
             pass
 
+    # ------------------------------- barra de tiempo: se muestra con el mouse
+    OCULTAR_BARRA_SEG = 3
+
+    def _mostrar_barra(self, visible):
+        if self.tiempo is None or (self.tiempo.opacity == 1) == visible:
+            return
+        self.tiempo.opacity = 1 if visible else 0
+        try:
+            self.tiempo.update()
+        except Exception:
+            pass
+
+    def _mouse_movido(self, e=None):
+        self._ult_mouse = time.time()
+        self._mouse_dentro = True
+        self._mostrar_barra(True)
+
+    def _mouse_fuera(self, e=None):
+        self._mouse_dentro = False
+        self._ult_mouse = time.time() - self.OCULTAR_BARRA_SEG + 1  # se va en ~1 s
+
+    async def vigilar_barra(self):
+        """Oculta la barra si el mouse lleva 3 s quieto (o se fue), salvo en pausa o
+        mientras se arrastra para adelantar."""
+        while True:
+            await asyncio.sleep(0.5)
+            try:
+                quieta = time.time() - self._ult_mouse > self.OCULTAR_BARRA_SEG
+                pausado = bool(self.motor and self.motor.pausado)
+                self._mostrar_barra(not quieta or pausado or self._arrastrando)
+            except Exception as ex:
+                print("⚠️ barra:", ex)
+
     # ------------------------------------------- barra de tiempo (adelantar)
     def _barra_inicio(self, e):
         self._arrastrando = True
+        self._ult_mouse = time.time()
 
     def _barra_mueve(self, e):
         if self.dur > 0:
@@ -626,8 +663,11 @@ class Pantalla:
             ],
             alignment=ft.MainAxisAlignment.CENTER,
         )
-        tiempo = ft.Container(
-            padding=ft.Padding.symmetric(horizontal=16, vertical=10), bgcolor="#000000",
+        # Barra de tiempo ENCIMA del video: aparece al mover el mouse y se oculta sola.
+        self.tiempo = ft.Container(
+            left=0, right=0, bottom=0,
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10), bgcolor="#000000B3",
+            opacity=1, animate_opacity=300,
             content=ft.Row([self.t_pos, self.barra, self.t_dur], spacing=12,
                            vertical_alignment=ft.CrossAxisAlignment.CENTER),
         )
@@ -638,6 +678,7 @@ class Pantalla:
                     expand=True, on_double_tap=lambda e: self.pantalla_completa(),
                     content=ft.Container(content=self.video, expand=True, bgcolor="#000000"),
                 ),
+                self.tiempo,
                 self._crear_cabecera(
                     left=0, right=0, top=0, padding=ft.Padding.symmetric(horizontal=16, vertical=10),
                     bgcolor="#000000B3",
@@ -649,7 +690,12 @@ class Pantalla:
                 ),
             ],
         )
-        izquierda = ft.Column([video, tiempo], expand=True, spacing=0)
+        zona_video = ft.GestureDetector(
+            expand=True, content=video, hover_interval=250,
+            on_hover=self._mouse_movido, on_enter=self._mouse_movido,
+            on_exit=self._mouse_fuera,
+        )
+        izquierda = ft.Column([zona_video], expand=True, spacing=0)
         self.logo_lista = ft.Container(
             padding=16,
             content=ft.Row([
@@ -798,6 +844,7 @@ async def main(page: ft.Page):
 
     page.run_task(_vigilar_actualizaciones, page)
     page.run_task(pantalla.vigilar_final)
+    page.run_task(pantalla.vigilar_barra)
     print(f"🎬 Reproductor PlayBar GO para el cliente {cfg['cliente']}")
     await motor.correr()
 

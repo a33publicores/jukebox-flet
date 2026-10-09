@@ -5,6 +5,7 @@ Una canción se descarga UNA vez; las repeticiones salen del disco y no tocan
 YouTube. Las canciones siguientes en cola se precargan mientras suena la actual.
 No usa la API ni los tokens de YouTube (esos quedan solo para buscar).
 """
+import json
 import os
 import re
 import shutil
@@ -28,7 +29,9 @@ class Descargador:
         self.cookies = cookies if cookies and os.path.exists(cookies) else None
         self.max_bytes = int(max_gb * 1024 ** 3)
         self.altura = altura_max
-        self._revisados = {}   # ruta -> (tamaño, fecha) de archivos con audio comprobado
+        self._archivo_revisadas = self.carpeta / "revisadas.json"
+        self._lock_rev = threading.Lock()
+        self._revisados = self._leer_revisadas()  # nombre -> tamaño de canciones comprobadas
         threading.Thread(target=self.revisar_cache, daemon=True).start()
 
     # -- caché ---------------------------------------------------------
@@ -44,35 +47,75 @@ class Descargador:
         return None
 
     # -- sonido ----------------------------------------------------------
-    def tiene_audio(self, ruta):
-        """True si el archivo trae pista de sonido. Si no hay ffmpeg para revisar, True."""
+    def archivo_sano(self, ruta):
+        """True si la canción trae VIDEO y AUDIO y se puede reproducir hasta el final
+        (no quedó cortada). Cada archivo se revisa una sola vez (queda anotado en
+        revisadas.json). Si no hay ffmpeg para revisar, se da por buena."""
+        ruta = str(ruta)
+        nombre = os.path.basename(ruta)
         try:
-            st = os.stat(ruta)
+            tam = os.stat(ruta).st_size
         except OSError:
             return False
-        firma = (st.st_size, int(st.st_mtime))
-        if self._revisados.get(str(ruta)) == firma:
+        if self._revisados.get(nombre) == tam:
             return True
         ffmpeg = self._ffmpeg() or shutil.which("ffmpeg")
         if not ffmpeg:
             return True
         try:
-            r = subprocess.run([ffmpeg, "-hide_banner", "-i", str(ruta)], capture_output=True,
+            r = subprocess.run([ffmpeg, "-hide_banner", "-i", ruta], capture_output=True,
                                text=True, errors="ignore", timeout=30, creationflags=_SIN_VENTANA)
         except Exception as ex:
-            print(f"ℹ️ No se pudo revisar el sonido de {ruta}: {ex}")
+            print(f"ℹ️ No se pudo revisar {nombre}: {ex}")
             return True
         info = r.stderr or ""
         if "Stream #" not in info:
-            return True  # no se pudo leer: no se descarta por las dudas
-        ok = re.search(r"Stream #\S+.*: Audio:", info) is not None
-        if ok:
-            self._revisados[str(ruta)] = firma
-        return ok
+            if re.search(r"moov atom not found|Invalid data found|End of file", info):
+                print(f"✂️ {nombre}: archivo incompleto o dañado")
+                return False
+            return True  # otro problema al leer: no se descarta por las dudas
+        if not re.search(r"Stream #\S+.*: Video:", info):
+            print(f"🎞️ {nombre}: no tiene video")
+            return False
+        if not re.search(r"Stream #\S+.*: Audio:", info):
+            print(f"🔇 {nombre}: no tiene sonido")
+            return False
+        m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", info)
+        dur = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else 0
+        if dur > 10:  # que el final se pueda reproducir (archivo no cortado)
+            try:
+                r = subprocess.run([ffmpeg, "-hide_banner", "-ss", f"{dur - 5:.1f}", "-i", ruta,
+                                    "-map", "0:v:0", "-t", "2", "-f", "null", "-"],
+                                   capture_output=True, text=True, errors="ignore", timeout=60,
+                                   creationflags=_SIN_VENTANA)
+                cuadros = re.findall(r"frame=\s*(\d+)", r.stderr or "")
+                if not cuadros or int(cuadros[-1]) == 0:
+                    print(f"✂️ {nombre}: el archivo está cortado (no llega al final)")
+                    return False
+            except Exception as ex:
+                print(f"ℹ️ No se pudo revisar el final de {nombre}: {ex}")
+        self._anotar_revisada(nombre, tam)
+        return True
+
+    tiene_audio = archivo_sano  # nombre anterior
+
+    def _leer_revisadas(self):
+        try:
+            return {k: int(v) for k, v in json.loads(self._archivo_revisadas.read_text("utf-8")).items()}
+        except Exception:
+            return {}
+
+    def _anotar_revisada(self, nombre, tam):
+        with self._lock_rev:
+            self._revisados[nombre] = tam
+            try:
+                self._archivo_revisadas.write_text(json.dumps(self._revisados), "utf-8")
+            except Exception:
+                pass
 
     def revisar_cache(self):
-        """Al abrir: borra pedazos viejos de descargas cortadas y las canciones sin sonido
-        (se vuelven a bajar bien cuando toque)."""
+        """Al abrir: borra pedazos viejos de descargas cortadas y las canciones dañadas
+        (sin video, sin sonido o cortadas). Se vuelven a bajar bien cuando toque."""
         ahora = time.time()
         try:
             archivos = list(self.carpeta.iterdir())
@@ -91,15 +134,16 @@ class Descargador:
                         print(f"🧹 Pedazo de descarga incompleta borrado: {nombre}")
                     continue
                 if p.suffix.lower() in _EXT_VIDEO and ahora - p.stat().st_mtime > 60 \
-                        and not self.tiene_audio(p):
+                        and not self.archivo_sano(p):
                     p.unlink()
-                    print(f"🔇 Canción sin sonido borrada (se bajará de nuevo): {nombre}")
+                    print(f"🗑️ Canción dañada borrada (se bajará de nuevo): {nombre}")
             except OSError as ex:
                 print(f"ℹ️ No se pudo revisar {p.name}: {ex}")
 
     def limpiar(self, conservar=()):
         """Borra lo más antiguo si la caché supera el límite."""
-        archivos = [p for p in self.carpeta.iterdir() if p.is_file()]
+        archivos = [p for p in self.carpeta.iterdir()
+                    if p.is_file() and p.suffix.lower() in _EXT_VIDEO]
         total = sum(p.stat().st_size for p in archivos)
         if total <= self.max_bytes:
             return
@@ -134,16 +178,16 @@ class Descargador:
             if self.tiene_audio(ya):
                 os.utime(ya, None)
                 return ya
-            print(f"🔇 {video_id} estaba sin sonido: se vuelve a descargar")
+            print(f"🔁 {video_id} estaba dañada: se vuelve a descargar")
             self._borrar(video_id)
         ruta = self._bajar(video_id, combinado=False)
         if not self.tiene_audio(ruta):
-            print(f"🔇 {video_id} bajó sin sonido: pruebo con el formato ya combinado")
+            print(f"🔁 {video_id} bajó dañada: pruebo con el formato ya combinado")
             self._borrar(video_id)
             ruta = self._bajar(video_id, combinado=True)
             if not self.tiene_audio(ruta):
                 self._borrar(video_id)
-                raise RuntimeError(f"{video_id} no tiene sonido en YouTube")
+                raise RuntimeError(f"{video_id} viene dañada desde YouTube")
         try:
             self.limpiar(conservar=(video_id,))
         except Exception:
@@ -156,7 +200,8 @@ class Descargador:
                 p.unlink()
             except OSError:
                 pass
-        self._revisados = {k: v for k, v in self._revisados.items() if video_id not in k}
+        with self._lock_rev:
+            self._revisados = {k: v for k, v in self._revisados.items() if not k.startswith(video_id + ".")}
 
     def _bajar(self, video_id, combinado=False):
 

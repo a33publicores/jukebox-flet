@@ -206,12 +206,21 @@ def buscar(query, page_token=None):
 # ---------------------------------------------------------------------------
 # Pedidos
 # ---------------------------------------------------------------------------
+_candados = {}
+
+
+def _candado_de(codigo):
+    with _lock:
+        return _candados.setdefault(codigo, threading.Lock())
+
+
 def agregar_cancion(cliente, telefono, titulo, canal, video_id):
     from services import db
     if not _cliente(cliente):
         return {"ok": False, "error": "CLIENTE_INVALIDO"}
     try:
-        with _lock:
+        # candado por negocio (evita duplicados por doble toque) sin frenar a los demás bares
+        with _candado_de(str(cliente)):
             r = db.agregar_pedido(str(cliente), str(telefono), html.unescape(str(titulo)),
                                   html.unescape(str(canal)), str(video_id))
         if r.get("duplicado"):

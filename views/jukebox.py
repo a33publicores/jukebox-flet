@@ -1,3 +1,4 @@
+import asyncio
 import threading
 
 import flet as ft
@@ -202,7 +203,8 @@ def jukebox_view(
         titulo = item["snippet"]["title"]
         canal = item["snippet"]["channelTitle"]
         miniaturas = item["snippet"]["thumbnails"]
-        thumbnail = (miniaturas.get("high") or miniaturas.get("medium") or miniaturas.get("default"))["url"]
+        # "medium" (320x180) pesa ~4 veces menos que "high": 50 resultados cargan rápido
+        thumbnail = (miniaturas.get("medium") or miniaturas.get("high") or miniaturas.get("default"))["url"]
         ancho = ancho_tarjeta()
 
         return ft.Container(
@@ -320,100 +322,31 @@ def jukebox_view(
     )
 
     # ------------------------------------------------------------------
-    # Avisos con botón Aceptar
+    # Agregar canción: UN solo diálogo que cambia de estado
+    #   ¿Deseas agregar?  ->  Agregando…  ->  ✅ Agregada / ℹ️ Ya está / ❌ Error
+    # (antes se cerraba uno y se abría otro al mismo tiempo, y en el celular la
+    #  pantalla quedaba oscura y bloqueada en "Aceptar")
     # ------------------------------------------------------------------
-    def mostrar_aviso(titulo, mensaje, color):
-        def cerrar(ev):
-            # Cierra el letrero con el mecanismo propio de Flet para diálogos.
-            aviso.open = False
-            try:
-                aviso.update()
-            except Exception:
-                pass
-            page.update()
+    dialogo_abierto = {"valor": False}
 
-        boton_ok, _ = _boton("Aceptar", cerrar, ancho=140)
-        aviso = ft.AlertDialog(
-            modal=True,
-            bgcolor="#111827",
-            title=ft.Text(titulo, color=color),
-            content=ft.Text(mensaje, color="white"),
-            actions=[boton_ok],
-            actions_alignment=ft.MainAxisAlignment.CENTER,
-        )
+    def _cerrar_dialogo(dlg):
+        dialogo_abierto["valor"] = False
         try:
-            page.show_dialog(aviso)
+            page.pop_dialog()
         except Exception:
-            page.overlay.append(aviso)
-            aviso.open = True
+            dlg.open = False
             page.update()
-
-    def confirmar(item, ventana, aviso_progreso):
-        """Envía la canción; el diálogo queda abierto mostrando 'Agregando…'."""
-        titulo_cancion = item["snippet"]["title"]
-
-        def enviar_cancion():
-            try:
-                resultado = agregar_cancion(
-                    cliente=codigo,
-                    telefono=telefono,
-                    titulo=titulo_cancion,
-                    canal=item["snippet"]["channelTitle"],
-                    video_id=item["id"]["videoId"]
-                )
-            except Exception as ex:
-                resultado = {"ok": False, "error": str(ex)}
-
-            ventana.open = False
-            page.update()
-
-            if resultado.get("ok") and resultado.get("duplicado"):
-                mostrar_aviso(
-                    "ℹ️ Ya está en la cola",
-                    titulo_cancion + "\n\nYa la pidieron y está esperando su turno.",
-                    "#facc15",
-                )
-            elif resultado.get("ok"):
-                ultima_cancion_text.value = titulo_cancion
-                ultima_cancion.visible = True
-                mostrar_aviso("✅ Canción agregada", titulo_cancion, "#22d3ee")
-            else:
-                print("❌ No se pudo agregar:", resultado)
-                mostrar_aviso(
-                    "❌ No se pudo agregar",
-                    "Intenta de nuevo en unos segundos.",
-                    "#f87171",
-                )
-
-        threading.Thread(target=enviar_cancion, daemon=True).start()
 
     def abrir_confirmacion(item):
-        # Evita que varios clics rápidos abran varios diálogos a la vez.
-        page.overlay.clear()
+        if dialogo_abierto["valor"]:  # varios toques rápidos: un solo diálogo
+            return
+        dialogo_abierto["valor"] = True
+        titulo_cancion = item["snippet"]["title"]
+        estado = {"enviando": False}
 
-        procesando = {"valor": False}
-
-        def cancelar_dialogo(ev):
-            if procesando["valor"]:
-                return
-            confirmacion.open = False
-            page.update()
-
-        def aceptar_dialogo(ev):
-            # Bloqueo inmediato: el primer clic desactiva Aceptar, así un
-            # doble clic no puede disparar dos solicitudes.
-            if procesando["valor"]:
-                return
-            procesando["valor"] = True
-            boton_aceptar_btn.disabled = True
-            boton_cancelar_btn.disabled = True
-            progreso.visible = True
-            page.update()
-            confirmar(item, confirmacion, progreso)
-
-        boton_aceptar, boton_aceptar_btn = _boton("Aceptar", aceptar_dialogo)
-        boton_cancelar, boton_cancelar_btn = _boton("Cancelar", cancelar_dialogo)
-
+        texto_titulo = ft.Text("¿Deseas agregar esta canción?", color="white")
+        texto_cancion = ft.Text(titulo_cancion, color="#22d3ee")
+        texto_detalle = ft.Text("", color="white", visible=False)
         progreso = ft.Row(
             visible=False,
             alignment=ft.MainAxisAlignment.CENTER,
@@ -424,17 +357,62 @@ def jukebox_view(
             ],
         )
 
+        def cancelar(ev):
+            if not estado["enviando"]:
+                _cerrar_dialogo(confirmacion)
+
+        def listo(ev):
+            _cerrar_dialogo(confirmacion)
+
+        async def aceptar(ev):
+            if estado["enviando"]:  # doble toque: una sola solicitud
+                return
+            estado["enviando"] = True
+            boton_aceptar_btn.disabled = True
+            boton_cancelar_btn.disabled = True
+            progreso.visible = True
+            page.update()
+            try:
+                resultado = await asyncio.wait_for(asyncio.to_thread(
+                    agregar_cancion,
+                    cliente=codigo,
+                    telefono=telefono,
+                    titulo=titulo_cancion,
+                    canal=item["snippet"]["channelTitle"],
+                    video_id=item["id"]["videoId"],
+                ), timeout=25)
+            except asyncio.TimeoutError:
+                resultado = {"ok": False, "error": "tiempo agotado"}
+            except Exception as ex:
+                resultado = {"ok": False, "error": str(ex)}
+
+            progreso.visible = False
+            texto_detalle.visible = True
+            if resultado.get("ok") and resultado.get("duplicado"):
+                texto_titulo.value, texto_titulo.color = "ℹ️ Ya está en la cola", "#facc15"
+                texto_detalle.value = "Ya la pidieron y está esperando su turno."
+            elif resultado.get("ok"):
+                texto_titulo.value, texto_titulo.color = "✅ Canción agregada", "#22d3ee"
+                texto_detalle.value = "Sonará cuando llegue su turno."
+                ultima_cancion_text.value = titulo_cancion
+                ultima_cancion.visible = True
+            else:
+                print("❌ No se pudo agregar:", resultado)
+                texto_titulo.value, texto_titulo.color = "❌ No se pudo agregar", "#f87171"
+                texto_detalle.value = "Revisa tu internet e intenta de nuevo en unos segundos."
+            # el mismo diálogo queda con un solo botón para cerrar
+            confirmacion.actions = [ft.Row([boton_listo], alignment=ft.MainAxisAlignment.CENTER)]
+            page.update()
+
+        boton_aceptar, boton_aceptar_btn = _boton("Aceptar", aceptar)
+        boton_cancelar, boton_cancelar_btn = _boton("Cancelar", cancelar)
+        boton_listo, _ = _boton("Aceptar", listo, ancho=140)
+
         confirmacion = ft.AlertDialog(
             modal=True,
             bgcolor="#111827",
-            title=ft.Text("¿Deseas agregar esta canción?", color="white"),
-            content=ft.Column(
-                tight=True,
-                controls=[
-                    ft.Text(item["snippet"]["title"], color="#22d3ee"),
-                    progreso,
-                ],
-            ),
+            title=texto_titulo,
+            content=ft.Column(tight=True, controls=[texto_cancion, texto_detalle, progreso]),
             actions=[
                 ft.Row(
                     controls=[boton_cancelar, boton_aceptar],
@@ -444,11 +422,9 @@ def jukebox_view(
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 )
             ],
+            on_dismiss=lambda e: dialogo_abierto.update(valor=False),
         )
-
-        page.overlay.append(confirmacion)
-        confirmacion.open = True
-        page.update()
+        page.show_dialog(confirmacion)
 
     # ------------------------------------------------------------------
     # Pantalla
