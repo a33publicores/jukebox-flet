@@ -389,15 +389,36 @@ def pedidos_desde(codigo, desde):
     )
 
 
+# Un bar con menos de estas canciones propias recibe también el repertorio compartido
+# (lo que ha sonado en TODOS los bares), para que el aleatorio nunca quede vacío.
+ALEATORIO_MIN_PROPIO = int(os.getenv("ALEATORIO_MIN_PROPIO", "60"))
+ALEATORIO_COMPARTIDO = int(os.getenv("ALEATORIO_COMPARTIDO", "400"))
+
+
 def aleatorio(codigo, antes_de, limite=3000):
-    """Repertorio para cuando nadie pide: canciones de fechas anteriores, sin repetir."""
-    return consultar(
+    """Repertorio para cuando nadie pide, sin repetir:
+    1) lo que pidieron en ESE bar en fechas anteriores;
+    2) si todavía tiene poco (bar nuevo), se completa con lo más pedido en todos los bares
+       (solo canciones que de verdad sonaron bien). A medida que el bar arma su propio
+       historial, lo compartido deja de usarse solo."""
+    propio = consultar(
         """SELECT video_id, MAX(titulo) AS titulo, MAX(canal) AS canal, MAX(ts) AS ts
            FROM pedidos WHERE codigo = %s AND ts < %s AND estado <> 'Error'
              AND estado2 NOT IN ('Eliminado', 'Error')
            GROUP BY video_id ORDER BY MAX(ts) DESC LIMIT %s""",
         (str(codigo), float(antes_de), int(limite)),
     )
+    if len(propio) >= ALEATORIO_MIN_PROPIO:
+        return propio
+    ya = {f["video_id"] for f in propio}
+    compartido = consultar(
+        """SELECT video_id, MAX(titulo) AS titulo, MAX(canal) AS canal, MAX(ts) AS ts
+           FROM pedidos WHERE codigo <> %s AND estado <> 'Error' AND estado2 = 'Reproducido'
+           GROUP BY video_id
+           ORDER BY COUNT(DISTINCT codigo) DESC, COUNT(*) DESC, MAX(ts) DESC LIMIT %s""",
+        (str(codigo), ALEATORIO_COMPARTIDO),
+    )
+    return propio + [f for f in compartido if f["video_id"] not in ya]
 
 
 def marcar(codigo, id_pedido, estado2=None, estado=None):
