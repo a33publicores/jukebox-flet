@@ -50,6 +50,16 @@ def seleccionar_modo_view(page, codigo, nombre, logo):
             ),
         )
 
+    def cambiar_codigo(e):
+        """¿Se equivocó de lugar? Vuelve a la pantalla del código sin entrar a nada."""
+        try:
+            from services.session_manager import cerrar_sesion
+            cerrar_sesion(page)
+        except Exception as ex:
+            print("ℹ️ cambiar código:", ex)
+        from views.codigo import codigo_view
+        codigo_view(page)
+
     def abrir_admin(e):
         from views.admin import admin_view, pedir_pin
         from services.session_manager import guardar_sesion
@@ -73,5 +83,8 @@ def seleccionar_modo_view(page, codigo, nombre, logo):
         ft.Container(height=25),
         ft.TextButton("🔧 Administrador", on_click=abrir_admin,
                       style=ft.ButtonStyle(color="#64748b")),
+        ft.Container(height=10),
+        ft.TextButton(f"← Cambiar código del lugar ({codigo})", on_click=cambiar_codigo,
+                      style=ft.ButtonStyle(color="#94A3B8")),
     )
     page.update()

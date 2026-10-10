@@ -71,6 +71,10 @@ def login_view(page, codigo, cliente, logo_url, modo="musica"):
         ),
     )
 
+    def volver(e):
+        from views.seleccionar_modo import seleccionar_modo_view
+        seleccionar_modo_view(page, codigo, cliente, logo_url)
+
     page.add(
         ft.Image(src=logo_url, width=250),
         ft.Text(titulo, size=32, weight=ft.FontWeight.BOLD, color="#22d3ee"),
@@ -79,5 +83,7 @@ def login_view(page, codigo, cliente, logo_url, modo="musica"):
         telefono,
         ft.Container(height=40),
         btn,
+        ft.Container(height=16),
+        ft.TextButton("← Volver", on_click=volver, style=ft.ButtonStyle(color="#94A3B8")),
     )
     page.update()
