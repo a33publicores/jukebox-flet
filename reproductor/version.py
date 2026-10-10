@@ -6,7 +6,7 @@ que cambia este número, crea el instalador y abre GitHub para subirlo.
 """
 import os
 
-VERSION = "1.1.6"
+VERSION = "1.1.7"
 
 # Repositorio público donde se publican las versiones (pestaña "Releases").
 REPO = os.environ.get("PLAYBAR_REPO", "a33publicores/jukebox-flet")

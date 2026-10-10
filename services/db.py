@@ -88,6 +88,40 @@ ESQUEMA = [
         codigo TEXT NOT NULL,
         expira DOUBLE PRECISION NOT NULL
     )""",
+    # --- Suscripción (prueba gratis + planes pagos con Wompi) ---------------------
+    # Los negocios que ya existían quedan en "cortesia" (sin cobro); los nuevos empiezan
+    # en "prueba" con 30 canciones. El super admin cambia todo desde /super.
+    "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plan_estado TEXT",
+    "UPDATE clientes SET plan_estado = 'cortesia' WHERE plan_estado IS NULL",
+    "ALTER TABLE clientes ALTER COLUMN plan_estado SET DEFAULT 'prueba'",
+    "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS prueba_limite INTEGER NOT NULL DEFAULT 30",
+    "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS prueba_desde DOUBLE PRECISION NOT NULL DEFAULT 0",
+    "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plan_vence DOUBLE PRECISION NOT NULL DEFAULT 0",
+    "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plan_nombre TEXT NOT NULL DEFAULT ''",
+    """CREATE TABLE IF NOT EXISTS planes (
+        id        SERIAL PRIMARY KEY,
+        nombre    TEXT NOT NULL,
+        precio    INTEGER NOT NULL,
+        dias      INTEGER NOT NULL DEFAULT 30,
+        activo    BOOLEAN NOT NULL DEFAULT TRUE,
+        solo_para TEXT NOT NULL DEFAULT '',
+        orden     INTEGER NOT NULL DEFAULT 0,
+        clave     TEXT UNIQUE
+    )""",
+    """CREATE TABLE IF NOT EXISTS pagos (
+        referencia     TEXT PRIMARY KEY,
+        codigo         TEXT NOT NULL,
+        plan_id        INTEGER,
+        plan_nombre    TEXT NOT NULL DEFAULT '',
+        monto          INTEGER NOT NULL,
+        dias           INTEGER NOT NULL DEFAULT 30,
+        moneda         TEXT NOT NULL DEFAULT 'COP',
+        estado         TEXT NOT NULL DEFAULT 'PENDIENTE',
+        id_transaccion TEXT NOT NULL DEFAULT '',
+        creado         DOUBLE PRECISION NOT NULL,
+        pagado         DOUBLE PRECISION NOT NULL DEFAULT 0
+    )""",
+    "CREATE INDEX IF NOT EXISTS pagos_codigo ON pagos (codigo, creado)",
 ]
 
 
@@ -166,6 +200,11 @@ def asegurar():
             motor["ejecutar"](sql, ())
         _listo = True
         print("✅ Base de datos lista")
+    try:  # planes de suscripción y bar de ejemplo (solo si faltan)
+        from services import suscripcion
+        suscripcion.sembrar()
+    except Exception as ex:
+        print("⚠️ No se pudieron crear los planes:", ex)
 
 
 def consultar(sql, params=()):
@@ -226,13 +265,14 @@ def guardar_cliente(codigo, nombre, logo="", playlist="", activo=True):
     """Crea o actualiza un negocio. Si es nuevo, le genera su llave."""
     codigo = str(codigo).strip()
     return uno(
-        """INSERT INTO clientes (codigo, nombre, logo, playlist, activo, llave, creado)
-           VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """INSERT INTO clientes (codigo, nombre, logo, playlist, activo, llave, creado,
+                                 plan_estado, prueba_desde)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, 'prueba', %s)
            ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre,
                logo = EXCLUDED.logo, playlist = EXCLUDED.playlist, activo = EXCLUDED.activo
            RETURNING *""",
         (codigo, str(nombre).strip(), str(logo or "").strip(), str(playlist or "").strip(),
-         bool(activo), nueva_llave(), time.time()),
+         bool(activo), nueva_llave(), time.time(), time.time()),
     )
 
 

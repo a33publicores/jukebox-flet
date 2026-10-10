@@ -9,6 +9,7 @@ Arranque en Railway:   python -m api.servidor      (usa la variable PORT)
 """
 import os
 import time
+from contextlib import asynccontextmanager
 
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
@@ -16,8 +17,10 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from api import pagos
 from services import cola, db, exportar
 from services import playbar_service as ps
+from services import suscripcion as sus
 
 _cache_llaves = {}  # llave -> (cliente, hora)
 
@@ -120,6 +123,14 @@ def reordenar(request, cli, cuerpo):
 
 
 @_protegido
+def suscripcion(request, cli, cuerpo):
+    """El reproductor pregunta cada minuto si puede seguir sonando."""
+    e = sus.estado(cli["codigo"], db.cliente(cli["codigo"]))
+    e["url_pago"] = f"{pagos.base_publica(request)}/pago/elegir?t={sus.token_pago(cli)}"
+    return JSONResponse({"ok": True, **e})
+
+
+@_protegido
 def tabla(request, cli, cuerpo):
     dias = float(request.query_params.get("dias", "0") or 0)
     limite = min(int(request.query_params.get("limite", "1000") or 1000), 5000)
@@ -144,6 +155,12 @@ def _excel(request):
                     headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
 
 
+@asynccontextmanager
+async def _vida(app):
+    pagos.iniciar_revisor()  # confirma solos los pagos pendientes de Wompi
+    yield
+
+
 app = Starlette(routes=[
     Route("/", salud),
     Route("/api/salud", salud),
@@ -155,7 +172,9 @@ app = Starlette(routes=[
     Route("/api/v1/reordenar", reordenar, methods=["POST"]),
     Route("/api/v1/tabla", tabla),
     Route("/api/v1/excel", descargar_excel),
-])
+    Route("/api/v1/suscripcion", suscripcion),
+    *pagos.RUTAS,
+], lifespan=_vida)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 

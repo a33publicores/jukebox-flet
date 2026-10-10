@@ -150,6 +150,7 @@ class Pantalla:
         self.completa = False
         self._arrastrando = False
         self.tiempo = None
+        self.capa_plan = self.aviso_plan = None
         self._ult_mouse = time.time()   # al abrir se ve la barra unos segundos
         self._mouse_dentro = False
         self.barra = ft.Slider(
@@ -281,6 +282,40 @@ class Pantalla:
             self.barra.update()
         except Exception:
             pass
+
+    # ------------------------------------------- prueba gratis / plan del bar
+    def _abrir_pago(self, e=None):
+        if self._url_pago:
+            import webbrowser
+            webbrowser.open(self._url_pago)
+
+    async def mostrar_plan(self, info, sonando=False):
+        """Lo llama el motor: bloquea con la capa de pago o muestra un aviso pequeño."""
+        info = info or {}
+        self._url_pago = info.get("url_pago") or self._url_pago
+        permitido = info.get("permitido", True)
+        titulo, msg = info.get("titulo", ""), info.get("mensaje", "")
+        try:
+            if not permitido and not sonando:
+                self.t_plan_titulo.value = "🔒 " + (titulo or "Plan no activo")
+                self.t_plan_msg.value = msg
+                self.capa_plan.visible = True
+                self.aviso_plan.visible = False
+            else:
+                self.capa_plan.visible = False
+                if not permitido:  # termina la canción que ya sonaba y se detiene
+                    self.t_aviso_plan.value = f"🔒 {titulo}: esta es la última canción. Toca para pagar."
+                    self.aviso_plan.bgcolor = "#7f1d1d"
+                    self.aviso_plan.visible = True
+                elif info.get("aviso"):
+                    self.t_aviso_plan.value = f"⏳ {titulo}: {msg} Toca para ver los planes."
+                    self.aviso_plan.bgcolor = "#713f12"
+                    self.aviso_plan.visible = True
+                else:
+                    self.aviso_plan.visible = False
+            self.page.update()
+        except Exception as ex:
+            print("⚠️ aviso del plan:", ex)
 
     # ------------------------------- barra de tiempo: se muestra con el mouse
     OCULTAR_BARRA_SEG = 3
@@ -688,6 +723,36 @@ class Pantalla:
             ],
             alignment=ft.MainAxisAlignment.CENTER,
         )
+        # Prueba gratis terminada / plan vencido: capa encima del video con el botón de pago.
+        self._url_pago = ""
+        self.t_plan_titulo = ft.Text("", size=34, color="white", weight=ft.FontWeight.BOLD,
+                                     text_align=ft.TextAlign.CENTER)
+        self.t_plan_msg = ft.Text("", size=18, color="#cbd5e1", text_align=ft.TextAlign.CENTER,
+                                  width=640)
+        self.capa_plan = ft.Container(
+            visible=False, left=0, right=0, top=0, bottom=0, bgcolor="#020617EE",
+            alignment=ft.Alignment.CENTER,
+            content=ft.Column([
+                ft.Image(src="/logo.png", height=90, fit=ft.BoxFit.CONTAIN),
+                self.t_plan_titulo, self.t_plan_msg,
+                ft.Container(
+                    width=340, height=60, border_radius=18,
+                    gradient=ft.LinearGradient(colors=[CYAN, VIOLETA]),
+                    content=ft.TextButton(
+                        content=ft.Text("💳 Adquirir plan", color="white", size=20,
+                                        weight=ft.FontWeight.BOLD),
+                        on_click=self._abrir_pago),
+                ),
+                ft.Text("Apenas se apruebe el pago, la música vuelve sola.", color="#64748b",
+                        size=14),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=18, tight=True),
+        )
+        self.t_aviso_plan = ft.Text("", color="white", size=13)
+        self.aviso_plan = ft.Container(
+            visible=False, padding=10, margin=ft.Margin.symmetric(horizontal=12, vertical=0),
+            border_radius=12, bgcolor="#713f12", on_click=self._abrir_pago,
+            content=self.t_aviso_plan,
+        )
         # Barra de tiempo ENCIMA del video: aparece al mover el mouse y se oculta sola.
         self.tiempo = ft.Container(
             left=0, right=0, bottom=0,
@@ -704,6 +769,7 @@ class Pantalla:
                     content=ft.Container(content=self.video, expand=True, bgcolor="#000000"),
                 ),
                 self.tiempo,
+                self.capa_plan,
                 self._crear_cabecera(
                     left=0, right=0, top=0, padding=ft.Padding.symmetric(horizontal=16, vertical=10),
                     bgcolor="#000000B3",
@@ -733,7 +799,7 @@ class Pantalla:
             border=ft.Border.only(left=ft.BorderSide(1, "#1e293b")),
             content=ft.Column(
                 spacing=0,
-                controls=[self.logo_lista, self.lista, self.zona_controles],
+                controls=[self.logo_lista, self.aviso_plan, self.lista, self.zona_controles],
             ),
         )
         return ft.Row([izquierda, derecha], expand=True, spacing=0)

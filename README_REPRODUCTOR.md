@@ -134,3 +134,17 @@ Antes, un video bloqueado (edad, país, derechos, borrado) o dañado se intentab
 marcaba "Error" y desaparecía de la lista. Ahora el reproductor busca en YouTube la misma canción
 (nombre y artista, sin gastar la API), descarta mezclas largas y canciones distintas, prueba hasta
 4 videos y suena con el primero que funcione. Se recuerda en `cache\alternativas.json`.
+
+## v29 – Prueba gratis y pagos con Wompi (igual que ALNOVIX)
+- Negocio nuevo: prueba gratis de 30 canciones (el super admin cambia el número, la reinicia,
+  activa días a mano, pone cortesía o suspende: /super → Plan). Los negocios que ya existían
+  quedaron en "cortesía" (sin cobro).
+- Al terminar la prueba (o vencer el plan): la app no deja pedir, el panel del bar muestra
+  "Tu prueba gratis terminó" → 💳 Mi plan, y el reproductor termina la canción que sonaba,
+  se detiene y muestra "Adquirir plan". Al aprobarse el pago todo vuelve solo.
+- Planes (/super → 💳 Planes): Plan mensual $60.000 (todos) y Prueba de pago $3.000 (solo el
+  bar demo 9999). Pagos (/super → 🧾 Pagos).
+- Variables en Railway, servicio playbar-api (las mismas de ALNOVIX):
+  WOMPI_PUBLIC_KEY, WOMPI_PRIVATE_KEY, WOMPI_INTEGRITY_SECRET, WOMPI_EVENTS_SECRET y
+  (opcional) WOMPI_ENVIRONMENT. Con la llave privada los pagos se confirman solos cada
+  minuto, aunque el webhook de la cuenta Wompi apunte a ALNOVIX.

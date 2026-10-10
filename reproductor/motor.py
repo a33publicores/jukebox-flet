@@ -59,6 +59,14 @@ class BackendApi:
     def reordenar(self, filas):
         self.api.reordenar(filas)
 
+    def suscripcion(self):
+        try:
+            return self.api.suscripcion()
+        except Exception as ex:
+            if "404" in str(ex):  # servidor viejo sin planes: se sigue como siempre
+                return {"permitido": True}
+            raise
+
     def marcar(self, fila, estado2=None, estado=None):
         self.api.marcar(fila, estado2=estado2, estado=estado)
 
@@ -133,6 +141,8 @@ class BackendApi:
 
 
 AVISAR_SIN_RED_SEG = 45
+PLAN_CADA_SEG = 60
+PLAN_BLOQUEADO_SEG = 15
 
 
 def _explicar(ex):
@@ -170,6 +180,9 @@ class Motor:
         self._marcas = set()      # escrituras a la API en segundo plano
         self._preparando_relleno = False
         self._ultimo_cid = None
+        self.plan = None          # prueba gratis / plan del negocio (lo dice la API)
+        self.bloqueado = False    # prueba terminada o plan vencido: no suena nada nuevo
+        self._t_plan = 0.0
         self._ack = None
         self._pub = None
         self._t_pub = 0.0
@@ -200,9 +213,34 @@ class Motor:
                         await self._ui_lista(self.snap)
             await asyncio.sleep(INTERVALO)
 
+    async def _revisar_plan(self):
+        """Cada minuto (cada 15 s si está bloqueado): ¿el negocio puede seguir sonando?
+        Si la API no responde se conserva lo último (un corte de internet no bloquea)."""
+        if not hasattr(self.backend, "suscripcion"):
+            return
+        cada = PLAN_BLOQUEADO_SEG if self.bloqueado else PLAN_CADA_SEG
+        if self.ahora() - self._t_plan < cada:
+            return
+        self._t_plan = self.ahora()
+        try:
+            info = await asyncio.to_thread(self.backend.suscripcion)
+        except Exception as ex:
+            print(f"ℹ️ No se pudo revisar el plan: {ex}")
+            return
+        self.plan = info
+        bloquear = not info.get("permitido", True)
+        if bloquear != self.bloqueado:
+            self.bloqueado = bloquear
+            print(("🔒 " if bloquear else "🔓 ") + str(info.get("titulo", "")))
+            if bloquear and hasattr(self.ui, "preparar_siguiente"):
+                await self.ui.preparar_siguiente(None)  # no dejar lista otra canción
+        if hasattr(self.ui, "mostrar_plan"):
+            await self.ui.mostrar_plan(info, self.actual is not None)
+
     async def tick(self):
         # Lo que va por internet se hace SIN el candado: si el servidor tarda, el cambio
         # de canción (al_terminar) no queda esperando y la música nunca se detiene.
+        await self._revisar_plan()
         await self._reintentar_marcas()
         try:
             snap = await asyncio.to_thread(self.backend.instantanea)
@@ -235,6 +273,8 @@ class Motor:
         return {f for f, _, _ in self._pend}
 
     async def _decidir(self, snap):
+        if self.bloqueado and self.actual is None:
+            return  # prueba terminada / plan vencido: la canción que sonaba terminó y se para
         omitir = self._filas_pendientes() | self._hechas
         marcada = snap.actual
         if marcada and marcada.fila in omitir:
@@ -361,6 +401,13 @@ class Motor:
                 await self._decidir(self.snap)
         except Exception as ex:
             print(f"⚠️ Siguiente canción se decidirá en el próximo ciclo: {ex}")
+        if self.bloqueado and self.actual is None:
+            try:
+                await self.ui.pausar()  # que no siga sonando la que entró sola
+            except Exception:
+                pass
+            if hasattr(self.ui, "mostrar_plan"):
+                await self.ui.mostrar_plan(self.plan or {}, False)
 
     async def al_terminar(self, token):
         """La UI avisa que el video llegó al final."""
@@ -573,6 +620,9 @@ class Motor:
         """Deja la próxima canción (si ya está descargada) lista en el reproductor, para
         que entre sola al terminar la actual: sin pausa y aunque la ventana esté minimizada."""
         if not hasattr(self.ui, "preparar_siguiente") or self.actual is None:
+            return
+        if self.bloqueado:
+            await self.ui.preparar_siguiente(None)
             return
         it = self._proxima(snap if snap is not None else self.snap)
         ruta = self.desc.ruta(it.video_id) if it is not None else None

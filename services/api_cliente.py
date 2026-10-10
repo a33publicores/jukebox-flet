@@ -74,6 +74,10 @@ class ApiCliente:
         return [C.Item(None, i["titulo"], i["canal"], i["video_id"])
                 for i in self._get("/api/v1/aleatorio").get("items", [])]
 
+    def suscripcion(self):
+        """Prueba gratis / plan del negocio: {"permitido", "titulo", "mensaje", "url_pago"...}"""
+        return self._get("/api/v1/suscripcion")
+
     def tabla(self, dias=0, limite=1000):
         return self._get("/api/v1/tabla", dias=dias, limite=limite)
 

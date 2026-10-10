@@ -207,6 +207,32 @@ def admin_view(page, codigo, nombre, logo):
         from views.jukebox import jukebox_view
         jukebox_view(page, codigo, nombre, "ADMIN", logo, es_admin=True)
 
+    def mi_plan(e):
+        vivo["v"] = False
+        from views.plan import plan_view
+        plan_view(page, codigo, nombre, logo)
+
+    # Aviso del plan (prueba gratis que se acaba, plan vencido...)
+    banner = ft.Container(visible=False)
+    try:
+        from services import suscripcion
+        est = suscripcion.estado(codigo)
+        if est["aviso"] or not est["permitido"]:
+            banner = ft.Container(
+                width=380, padding=14, border_radius=14,
+                bgcolor="#7f1d1d" if not est["permitido"] else "#713f12",
+                on_click=mi_plan,
+                content=ft.Column([
+                    ft.Text(("🔒 " if not est["permitido"] else "⏳ ") + est["titulo"],
+                            color="white", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text(est["mensaje"], color="#fde68a", size=13),
+                    ft.Text("Toca aquí para adquirir tu plan →", color="white", size=13,
+                            weight=ft.FontWeight.BOLD),
+                ], spacing=4),
+            )
+    except Exception as ex:
+        print("⚠️ estado del plan:", ex)
+
     def salir(e):
         vivo["v"] = False
         from services.session_manager import cerrar_sesion
@@ -226,6 +252,7 @@ def admin_view(page, codigo, nombre, logo):
                 ft.Text(f"Administrador · {nombre}", size=22, color="white",
                         weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                 ft.Row([punto, estado_txt], alignment=ft.MainAxisAlignment.CENTER),
+                banner,
                 ft.Container(height=6),
                 ft.Text("▶ EN REPRODUCCIÓN", color="#22d3ee", size=13, weight=ft.FontWeight.BOLD),
                 actual_txt,
@@ -247,6 +274,7 @@ def admin_view(page, codigo, nombre, logo):
                         on_click=colocar_musica,
                     ),
                 ),
+                ft.OutlinedButton("💳 Mi plan", on_click=mi_plan, width=260),
                 ft.TextButton("← Salir del modo administrador", on_click=salir),
             ],
         ),

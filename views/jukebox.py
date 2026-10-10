@@ -396,6 +396,11 @@ def jukebox_view(
                 texto_detalle.value = "Sonará cuando llegue su turno."
                 ultima_cancion_text.value = titulo_cancion
                 ultima_cancion.visible = True
+            elif resultado.get("error") == "PLAN":
+                texto_titulo.value, texto_titulo.color = "🔒 Música en pausa", "#facc15"
+                texto_detalle.value = (
+                    "La prueba gratis de este lugar terminó. Entra al panel de administrador "
+                    "y abre 💳 Mi plan para activarlo." if es_admin else resultado.get("mensaje", ""))
             else:
                 print("❌ No se pudo agregar:", resultado)
                 texto_titulo.value, texto_titulo.color = "❌ No se pudo agregar", "#f87171"

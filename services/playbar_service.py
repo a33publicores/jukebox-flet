@@ -218,6 +218,10 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
     from services import db
     if not _cliente(cliente):
         return {"ok": False, "error": "CLIENTE_INVALIDO"}
+    from services import suscripcion
+    permitido, mensaje = suscripcion.puede_pedir(cliente)
+    if not permitido:  # prueba gratis terminada o plan vencido
+        return {"ok": False, "error": "PLAN", "mensaje": mensaje}
     try:
         # candado por negocio (evita duplicados por doble toque) sin frenar a los demás bares
         with _candado_de(str(cliente)):

@@ -19,6 +19,7 @@ import flet as ft
 
 from services import db
 from services import playbar_service as ps
+from services import suscripcion as sus
 from services.exportar import fecha_local
 
 CYAN = "#00D4FF"
@@ -188,6 +189,7 @@ def super_inicio(page):
                         ft.Text(c["nombre"], size=18, color="white", weight=ft.FontWeight.BOLD),
                         ft.Text(f"Código {c['codigo']}" + (" · playlist ✔" if c["playlist"] else ""),
                                 color="#94A3B8", size=13),
+                        _linea_plan(c),
                     ], spacing=2, expand=True),
                     ft.Switch(value=bool(c["activo"]), active_color=CYAN, on_change=cambiar_activo,
                               label="Activo"),
@@ -201,6 +203,8 @@ def super_inicio(page):
                                       on_click=lambda e: admins_view(page, c)),
                     ft.OutlinedButton("Pedidos", icon=ft.Icons.TABLE_CHART,
                                       on_click=lambda e: pedidos_view(page, c)),
+                    ft.OutlinedButton("Plan", icon=ft.Icons.CREDIT_CARD,
+                                      on_click=lambda e: _form_plan_negocio(page, c)),
                 ], wrap=True, spacing=8, run_spacing=8),
             ], spacing=10),
         )
@@ -210,6 +214,8 @@ def super_inicio(page):
         ft.Row([
             _boton("➕ Nuevo negocio", lambda e: _form_negocio(page)),
             _boton("👥 Super admins", lambda e: admins_view(page, None), apagado=True),
+            _boton("💳 Planes", lambda e: planes_view(page), apagado=True),
+            _boton("🧾 Pagos", lambda e: pagos_view(page), apagado=True),
             _boton("Salir", salir, apagado=True),
         ], wrap=True, spacing=8, run_spacing=8),
         ft.Text(f"{len(negocios)} negocios", color="#94A3B8"),
@@ -436,6 +442,149 @@ def pedidos_view(page, c, dias=1):
         ft.Row([ft.Text(f"{len(filas)} en este filtro · {total} en total", color="#94A3B8"),
                 ft.OutlinedButton("Descargar Excel (todo)", icon=ft.Icons.DOWNLOAD,
                                   on_click=excel)], wrap=True, spacing=12),
+        ft.Row([tabla], scroll=ft.ScrollMode.AUTO),
+    ], spacing=12)))
+    page.update()
+
+
+# ---------------------------------------------------------------------------
+# Suscripción: prueba gratis, planes y pagos
+# ---------------------------------------------------------------------------
+NOMBRES_ESTADO = {"prueba": "Prueba gratis", "activo": "Plan activo", "vencido": "Vencido / suspendido",
+                  "cortesia": "Cortesía (sin cobro)"}
+
+
+def _pesos(n):
+    return "$" + f"{int(n):,}".replace(",", ".")
+
+
+def _linea_plan(c):
+    try:
+        e = sus.estado(c["codigo"], c)
+    except Exception:
+        return ft.Text("")
+    color = "#22c55e" if e["permitido"] and not e["aviso"] else ("#facc15" if e["permitido"] else "#f87171")
+    txt = e["titulo"]
+    if e["estado"] == "prueba":
+        txt += f" · {e['usadas']}/{e['limite']} canciones"
+    elif e["estado"] in ("activo", "vencido") and e["vence"]:
+        txt += f" · vence {sus.fecha_txt(e['vence'])}"
+    return ft.Text(txt, color=color, size=13)
+
+
+def _form_plan_negocio(page, c):
+    c = db.cliente(c["codigo"]) or c
+    e = sus.estado(c["codigo"], c)
+    estado = ft.Dropdown(label="Estado", width=340, value=c.get("plan_estado") or "prueba",
+                         options=[ft.DropdownOption(key=k, text=v) for k, v in NOMBRES_ESTADO.items()])
+    limite = _campo("Canciones de la prueba gratis", c.get("prueba_limite", 30), numeros=True)
+    dias = _campo("Días a activar (si eliges Plan activo)", "30", numeros=True)
+    reiniciar = ft.Checkbox(label="Reiniciar el conteo de la prueba (vuelve a 0)", value=False)
+    error = ft.Text("", color="#f87171")
+
+    def guardar(ev):
+        try:
+            sus.poner_estado(
+                c["codigo"], estado.value,
+                dias=int(dias.value or 0) if estado.value == "activo" else None,
+                limite=int(limite.value or 0), reiniciar_prueba=bool(reiniciar.value))
+        except Exception as ex:
+            error.value = str(ex)
+            page.update()
+            return
+        _cerrar_dialogo(page)
+        super_inicio(page)
+        _aviso(page, f"Plan de {c['nombre']} actualizado")
+
+    _dialogo(page, f"💳 Plan de {c['nombre']}", [
+        ft.Text(f"{e['titulo']}: {e['mensaje']}", color="white", size=13),
+        estado, limite, dias, reiniciar,
+        ft.Text("Plan activo + días: suma esos días desde hoy (o desde el vencimiento si aún "
+                "está vigente). Vencido corta la música hasta que paguen.", color="#64748b", size=12),
+        error,
+    ], [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
+        ft.FilledButton("Guardar", on_click=guardar)])
+
+
+def planes_view(page):
+    if not _es_super(page):
+        return super_login_view(page)
+    _preparar(page)
+
+    def editar(p=None):
+        nombre = _campo("Nombre del plan", p["nombre"] if p else "")
+        precio = _campo("Precio en pesos (ej. 60000)", p["precio"] if p else "", numeros=True)
+        dias_ = _campo("Días que dura", p["dias"] if p else 30, numeros=True)
+        solo = _campo("Solo para estos códigos (vacío = todos)", p["solo_para"] if p else "")
+        orden = _campo("Orden en la lista", p["orden"] if p else 1, numeros=True)
+        activo = ft.Switch(label="Activo (se puede comprar)", value=bool(p["activo"]) if p else True,
+                           active_color=CYAN)
+        error = ft.Text("", color="#f87171")
+
+        def guardar(ev):
+            try:
+                if int(precio.value or 0) < 1500:
+                    raise ValueError("Wompi no acepta pagos menores a $1.500")
+                sus.guardar_plan(p["id"] if p else None, nombre.value, int(precio.value),
+                                 int(dias_.value or 30), activo.value, solo.value,
+                                 int(orden.value or 0))
+            except Exception as ex:
+                error.value = str(ex)
+                page.update()
+                return
+            _cerrar_dialogo(page)
+            planes_view(page)
+
+        _dialogo(page, "Editar plan" if p else "Nuevo plan",
+                 [nombre, precio, dias_, solo, orden, activo, error],
+                 [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
+                  ft.FilledButton("Guardar", on_click=guardar)])
+
+    tarjetas = [ft.Container(
+        width=520, padding=14, border_radius=16, bgcolor=PANEL, border=ft.Border.all(1, "#1e293b"),
+        content=ft.Row([
+            ft.Column([
+                ft.Text(f"{p['nombre']} · {_pesos(p['precio'])} · {p['dias']} días", color="white",
+                        size=16, weight=ft.FontWeight.BOLD),
+                ft.Text(("Activo" if p["activo"] else "Inactivo") + " · " +
+                        (f"solo para {p['solo_para']}" if p["solo_para"] else "para todos"),
+                        color="#94A3B8", size=13),
+            ], expand=True, spacing=2),
+            ft.OutlinedButton("Editar", icon=ft.Icons.EDIT, on_click=lambda ev, p=p: editar(p)),
+        ]),
+    ) for p in sus.planes(todos=True)]
+    page.add(ft.Container(width=560, padding=16, content=ft.Column([
+        _encabezado(page, "💳 Planes", volver=super_inicio),
+        _boton("➕ Nuevo plan", lambda ev: editar(None)),
+        *tarjetas,
+    ], spacing=14)))
+    page.update()
+
+
+def pagos_view(page):
+    if not _es_super(page):
+        return super_login_view(page)
+    _preparar(page)
+    filas = sus.pagos(None, 300)
+    color = {"APROBADO": "#22c55e", "PENDIENTE": "#facc15"}
+    tabla = ft.DataTable(
+        columns=[ft.DataColumn(label=ft.Text(t, color="white", weight=ft.FontWeight.BOLD))
+                 for t in ("Fecha", "Negocio", "Plan", "Valor", "Estado", "Referencia")],
+        rows=[ft.DataRow(cells=[
+            ft.DataCell(content=ft.Text(fecha_local(o["creado"])[:16], size=12, color="#cbd5e1")),
+            ft.DataCell(content=ft.Text(o["codigo"], size=12, color="#cbd5e1")),
+            ft.DataCell(content=ft.Text(o["plan_nombre"], size=12, color="white")),
+            ft.DataCell(content=ft.Text(_pesos(o["monto"]), size=12, color="white")),
+            ft.DataCell(content=ft.Text(o["estado"], size=12, color=color.get(o["estado"], "#f87171"))),
+            ft.DataCell(content=ft.Text(o["referencia"], size=11, color="#64748b", selectable=True)),
+        ]) for o in filas],
+        heading_row_color="#0b1220", column_spacing=14, data_row_min_height=32,
+        horizontal_lines=ft.BorderSide(1, "#1e293b"),
+    )
+    aprobados = sum(int(o["monto"]) for o in filas if o["estado"] == "APROBADO")
+    page.add(ft.Container(padding=16, content=ft.Column([
+        _encabezado(page, "🧾 Pagos", volver=super_inicio),
+        ft.Text(f"{len(filas)} pagos · aprobados {_pesos(aprobados)}", color="#94A3B8"),
         ft.Row([tabla], scroll=ft.ScrollMode.AUTO),
     ], spacing=12)))
     page.update()
