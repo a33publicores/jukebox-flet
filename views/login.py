@@ -1,5 +1,6 @@
 import flet as ft
 
+from services.playbar_service import imagen_logo
 from services.session_manager import guardar_sesion
 
 
@@ -76,7 +77,8 @@ def login_view(page, codigo, cliente, logo_url, modo="musica"):
         seleccionar_modo_view(page, codigo, cliente, logo_url)
 
     page.add(
-        ft.Image(src=logo_url, width=250),
+        ft.Image(src=imagen_logo(logo_url, codigo), width=250, height=200,
+                 fit=ft.BoxFit.CONTAIN),
         ft.Text(titulo, size=32, weight=ft.FontWeight.BOLD, color="#22d3ee"),
         ft.Text(subtitulo, size=18, color="#94a3b8"),
         ft.Container(height=30),

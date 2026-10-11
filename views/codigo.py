@@ -4,6 +4,11 @@ from services.playbar_service import validar_cliente
 from views.seleccionar_modo import seleccionar_modo_view
 import time
 
+URL_REPRODUCTOR = os.getenv(
+    "URL_REPRODUCTOR",
+    "https://github.com/a33publicores/jukebox-flet/releases/latest/download/"
+    "PlayBarGO_Reproductor_Setup.exe")
+
 def codigo_view(page: ft.Page):
 
     page.clean()
@@ -143,7 +148,24 @@ def codigo_view(page: ft.Page):
 
     logo_toque = ft.GestureDetector(content=logo, on_tap=toque_logo)
 
+    # Arriba: descarga del reproductor para el PC del bar (siempre la última versión)
+    async def descargar_reproductor(e):
+        await ft.UrlLauncher().launch_url(URL_REPRODUCTOR)
+
+    boton_descarga = ft.Container(
+        padding=ft.Padding.symmetric(horizontal=14, vertical=6), border_radius=20,
+        border=ft.Border.all(1, "#334155"), bgcolor="#0b1220",
+        on_click=descargar_reproductor, tooltip="Instalador para el computador del bar",
+        content=ft.Row([
+            ft.Icon(ft.Icons.DOWNLOAD, color="#00D4FF", size=18),
+            ft.Text("Descargar reproductor para PC", color="white", size=13,
+                    weight=ft.FontWeight.BOLD),
+        ], tight=True, spacing=6),
+    )
+
     page.add(
+        boton_descarga,
+        ft.Container(height=10),
         logo_toque,
         ft.Container(height=20),
         titulo,

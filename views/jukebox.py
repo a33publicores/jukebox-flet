@@ -80,10 +80,8 @@ def jukebox_view(
         fit=ft.BoxFit.CONTAIN,
     )
 
-    logo_local = (
-        ft.Image(src=f"logos/{logo_url}", height=56, fit=ft.BoxFit.CONTAIN)
-        if logo_url else ft.Container(width=0)
-    )
+    from services.playbar_service import imagen_logo
+    logo_local = ft.Image(src=imagen_logo(logo_url, codigo), height=56, fit=ft.BoxFit.CONTAIN)
 
     encabezado = ft.Container(
         width=ancho_tarjeta() + 20,

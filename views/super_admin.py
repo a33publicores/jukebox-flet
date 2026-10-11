@@ -185,6 +185,8 @@ def super_inicio(page):
             border=ft.Border.all(1, "#1e293b"),
             content=ft.Column([
                 ft.Row([
+                    ft.Image(src=ps.imagen_logo(c["logo"], c["codigo"]), width=52, height=52,
+                             fit=ft.BoxFit.CONTAIN),
                     ft.Column([
                         ft.Text(c["nombre"], size=18, color="white", weight=ft.FontWeight.BOLD),
                         ft.Text(f"Código {c['codigo']}" + (" · playlist ✔" if c["playlist"] else ""),
@@ -224,17 +226,77 @@ def super_inicio(page):
     page.update()
 
 
+PLAYLIST_POR_DEFECTO_DE = os.getenv("PLAYLIST_POR_DEFECTO_DE", "8523")  # negocio "modelo"
+MAX_LOGO_MB = 2
+
+
+def _playlist_por_defecto():
+    """Los negocios nuevos arrancan con la playlist que ya tenemos (la del negocio modelo),
+    para que el aleatorio tenga música desde el primer día."""
+    env = os.getenv("PLAYLIST_POR_DEFECTO", "").strip()
+    if env:
+        return env
+    try:
+        modelo = db.cliente(PLAYLIST_POR_DEFECTO_DE)
+        if modelo and modelo.get("playlist"):
+            return modelo["playlist"]
+        for x in db.clientes():
+            if x.get("playlist"):
+                return x["playlist"]
+    except Exception:
+        pass
+    return ""
+
+
 def _form_negocio(page, c=None):
     nuevo = c is None
     codigo = _campo("Código del lugar (solo números)", "" if nuevo else c["codigo"],
                     numeros=True, disabled=not nuevo)
     nombre = _campo("Nombre del negocio", "" if nuevo else c["nombre"])
-    logo = _campo("Logo (dirección de imagen, opcional)", "" if nuevo else c["logo"])
     playlist = _campo("Playlist de YouTube para el aleatorio (enlace o ID)",
-                      "" if nuevo else c["playlist"])
+                      _playlist_por_defecto() if nuevo else c["playlist"])
     activo = ft.Switch(value=True if nuevo else bool(c["activo"]), label="Activo",
                        active_color=CYAN)
     error = ft.Text("", color="#f87171")
+
+    # Logo: se adjunta un PNG/JPG desde el computador o el celular (se guarda en la base)
+    logo_nuevo = {"bytes": None, "tipo": "", "quitar": False}
+    vista = ft.Image(src=ps.imagen_logo("" if nuevo else c["logo"], None if nuevo else c["codigo"]),
+                     width=120, height=90, fit=ft.BoxFit.CONTAIN)
+    nota_logo = ft.Text("Sin logo: se muestra el de PlayBar GO." if nuevo or not c["logo"] else "",
+                        color="#64748b", size=12)
+
+    async def adjuntar(e):
+        try:
+            archivos = await ft.FilePicker().pick_files(
+                dialog_title="Logo del negocio", file_type=ft.FilePickerFileType.CUSTOM,
+                allowed_extensions=["png", "jpg", "jpeg", "webp"], with_data=True)
+        except Exception as ex:
+            error.value = f"No se pudo abrir el selector: {ex}"
+            page.update()
+            return
+        if not archivos:
+            return
+        f = archivos[0]
+        datos = f.bytes or b""
+        if not datos:
+            error.value = "No se pudo leer la imagen. Intenta de nuevo."
+        elif len(datos) > MAX_LOGO_MB * 1024 * 1024:
+            error.value = f"La imagen pesa {len(datos) / 1048576:.1f} MB. Máximo {MAX_LOGO_MB} MB."
+        else:
+            ext = (f.name or "").rsplit(".", 1)[-1].lower()
+            logo_nuevo.update(bytes=datos, quitar=False,
+                              tipo="image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext or 'png'}")
+            vista.src = datos
+            nota_logo.value = f"✔ {f.name} listo (se guarda al tocar Guardar)"
+            error.value = ""
+        page.update()
+
+    def quitar(e):
+        logo_nuevo.update(bytes=None, quitar=True)
+        vista.src = ps.LOGO_PLAYBAR
+        nota_logo.value = "Se quitará el logo: se mostrará el de PlayBar GO."
+        page.update()
 
     def guardar(e):
         cod = (codigo.value or "").strip()
@@ -250,19 +312,40 @@ def _form_negocio(page, c=None):
             error.value = f"El código {cod} ya existe."
             page.update()
             return
-        fila = db.guardar_cliente(cod, nombre.value, logo.value, playlist.value, activo.value)
+        logo_actual = "" if nuevo else c["logo"]
+        fila = db.guardar_cliente(cod, nombre.value, logo_actual, playlist.value, activo.value)
+        try:
+            if logo_nuevo["bytes"]:
+                db.guardar_logo(cod, logo_nuevo["bytes"], logo_nuevo["tipo"])
+            elif logo_nuevo["quitar"]:
+                db.quitar_logo(cod)
+        except Exception as ex:
+            _aviso(page, f"El negocio se guardó, pero el logo no: {ex}", error=True)
         ps.olvidar_cliente(cod)
         _cerrar_dialogo(page)
         super_inicio(page)
         if nuevo:
-            _ver_llave(page, fila, recien=True)
+            _ver_llave(page, db.cliente(cod) or fila, recien=True)
         else:
             _aviso(page, "Negocio guardado")
 
-    _dialogo(page, "Nuevo negocio" if nuevo else f"Editar {c['nombre']}",
-             [codigo, nombre, logo, playlist, activo, error],
-             [ft.TextButton("Cancelar", on_click=lambda e: _cerrar_dialogo(page)),
-              ft.FilledButton("Guardar", on_click=guardar)])
+    _dialogo(page, "Nuevo negocio" if nuevo else f"Editar {c['nombre']}", [
+        codigo, nombre,
+        ft.Text("Logo del negocio", color="white", size=14, weight=ft.FontWeight.BOLD),
+        ft.Row([
+            ft.Container(content=vista, bgcolor="#0b1220", border_radius=10, padding=6),
+            ft.Column([
+                ft.OutlinedButton("📎 Adjuntar imagen", on_click=adjuntar),
+                ft.TextButton("Quitar logo", on_click=quitar),
+            ], spacing=4),
+        ], spacing=12),
+        nota_logo,
+        playlist,
+        ft.Text("Los negocios nuevos traen la playlist que ya tenemos, para que suene algo "
+                "desde el primer día. Puedes cambiarla.", color="#64748b", size=12),
+        activo, error,
+    ], [ft.TextButton("Cancelar", on_click=lambda e: _cerrar_dialogo(page)),
+        ft.FilledButton("Guardar", on_click=guardar)])
 
 
 def _ver_llave(page, c, recien=False):

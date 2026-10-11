@@ -248,7 +248,7 @@ def admin_view(page, codigo, nombre, logo):
         padding=16, content=ft.Column(
             horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10,
             controls=[
-                ft.Image(src="/logomundial.png", width=110),
+                ft.Image(src="/logohallowen.png", width=110),
                 ft.Text(f"Administrador · {nombre}", size=22, color="white",
                         weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                 ft.Row([punto, estado_txt], alignment=ft.MainAxisAlignment.CENTER),

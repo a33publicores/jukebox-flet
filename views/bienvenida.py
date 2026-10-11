@@ -8,7 +8,7 @@ def bienvenida_view(page, codigo, nombre, logo):
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
 
     logo_local = ft.Image(
-        src=f"logos/{logo}",
+        src=__import__("services.playbar_service", fromlist=["x"]).imagen_logo(logo, codigo),
         width=220,
         height=220,
     )

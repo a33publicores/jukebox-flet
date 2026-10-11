@@ -22,35 +22,27 @@ ESTADOS = ("prueba", "activo", "vencido", "cortesia")
 NO_CUENTAN = ("Eliminado", "Error")  # pedidos que no gastan la prueba
 AVISAR_DIAS = 3  # avisar que el plan está por vencer
 
-# Bar de ejemplo para probar los pagos (lo pidió el dueño de PlayBar GO).
+# Lo de la PRUEBA de pagos (bar 9999 "Bar Demo Pagos" y plan de $3.000) ya se usó y se
+# borra solo al arrancar. Los registros de pagos se conservan como historial.
 DEMO_CODIGO = "9999"
-DEMO_USUARIO = "demo"
-# Clave cifrada (la clave en texto NO está en el código: se la dio Claude al dueño).
-DEMO_CLAVE_CIFRADA = "pbkdf2$527c1dd253e407ea$6ef40847b46c637513f32ff5d6e87a17f901bd7c00b6488eb37639a701cca673"
+DEMO_NOMBRE = "Bar Demo Pagos"
 
 
 # ---------------------------------------------------------------------------
-# Semillas: planes y bar de ejemplo (solo si no existen; se pueden editar en /super)
+# Semillas: plan mensual (solo si no existe; se edita en /super) y limpieza de la prueba
 # ---------------------------------------------------------------------------
 def sembrar():
     db.ejecutar(
         """INSERT INTO planes (clave, nombre, precio, dias, activo, solo_para, orden)
            VALUES ('mensual', 'Plan mensual', 60000, 30, TRUE, '', 1)
            ON CONFLICT (clave) DO NOTHING""")
-    db.ejecutar(
-        """INSERT INTO planes (clave, nombre, precio, dias, activo, solo_para, orden)
-           VALUES ('prueba_pago', 'Prueba de pago', 3000, 1, TRUE, %s, 9)
-           ON CONFLICT (clave) DO NOTHING""", (DEMO_CODIGO,))
-    if not db.cliente(DEMO_CODIGO):
-        db.guardar_cliente(DEMO_CODIGO, "Bar Demo Pagos")
-        db.ejecutar("UPDATE clientes SET prueba_limite = 3 WHERE codigo = %s", (DEMO_CODIGO,))
-        print(f"🧪 Bar de ejemplo {DEMO_CODIGO} creado (prueba de 3 canciones)")
-    if DEMO_CLAVE_CIFRADA and not db.uno(
-            "SELECT id FROM admins WHERE codigo = %s AND lower(usuario) = %s",
-            (DEMO_CODIGO, DEMO_USUARIO)):
-        db.ejecutar("INSERT INTO admins (codigo, usuario, clave, rol, nota) "
-                    "VALUES (%s, %s, %s, 'admin', 'Usuario de ejemplo para probar pagos')",
-                    (DEMO_CODIGO, DEMO_USUARIO, DEMO_CLAVE_CIFRADA))
+    db.ejecutar("DELETE FROM planes WHERE clave = 'prueba_pago'")
+    demo = db.cliente(DEMO_CODIGO)
+    if demo and demo.get("nombre") == DEMO_NOMBRE:  # solo el de prueba, nunca uno real
+        for tabla in ("admins", "pedidos", "control", "logos"):
+            db.ejecutar(f"DELETE FROM {tabla} WHERE codigo = %s", (DEMO_CODIGO,))
+        db.ejecutar("DELETE FROM clientes WHERE codigo = %s", (DEMO_CODIGO,))
+        print(f"🧹 Bar de prueba {DEMO_CODIGO} eliminado")
 
 
 # ---------------------------------------------------------------------------

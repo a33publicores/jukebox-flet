@@ -122,6 +122,14 @@ ESQUEMA = [
         pagado         DOUBLE PRECISION NOT NULL DEFAULT 0
     )""",
     "CREATE INDEX IF NOT EXISTS pagos_codigo ON pagos (codigo, creado)",
+    # Logo del negocio subido desde /super (PNG/JPG guardado en la base, no se pierde
+    # cuando Railway reinicia). clientes.logo queda como "db:<versión>".
+    """CREATE TABLE IF NOT EXISTS logos (
+        codigo     TEXT PRIMARY KEY,
+        datos      TEXT NOT NULL,
+        tipo       TEXT NOT NULL DEFAULT 'image/png',
+        actualizado DOUBLE PRECISION NOT NULL
+    )""",
 ]
 
 
@@ -274,6 +282,29 @@ def guardar_cliente(codigo, nombre, logo="", playlist="", activo=True):
         (codigo, str(nombre).strip(), str(logo or "").strip(), str(playlist or "").strip(),
          bool(activo), nueva_llave(), time.time(), time.time()),
     )
+
+
+def guardar_logo(codigo, contenido, tipo="image/png"):
+    """Guarda la imagen del logo y deja el negocio apuntando a ella."""
+    import base64
+    ahora = time.time()
+    ejecutar(
+        """INSERT INTO logos (codigo, datos, tipo, actualizado) VALUES (%s, %s, %s, %s)
+           ON CONFLICT (codigo) DO UPDATE SET datos = EXCLUDED.datos, tipo = EXCLUDED.tipo,
+               actualizado = EXCLUDED.actualizado""",
+        (str(codigo), base64.b64encode(contenido).decode(), tipo, ahora))
+    ejecutar("UPDATE clientes SET logo = %s WHERE codigo = %s", (f"db:{int(ahora)}", str(codigo)))
+
+
+def logo_bytes(codigo):
+    import base64
+    f = uno("SELECT datos FROM logos WHERE codigo = %s", (str(codigo),))
+    return base64.b64decode(f["datos"]) if f else None
+
+
+def quitar_logo(codigo):
+    ejecutar("DELETE FROM logos WHERE codigo = %s", (str(codigo),))
+    ejecutar("UPDATE clientes SET logo = '' WHERE codigo = %s", (str(codigo),))
 
 
 def regenerar_llave(codigo):

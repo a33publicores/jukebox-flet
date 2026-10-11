@@ -92,6 +92,35 @@ def obtener_config_cliente(codigo):
             "logo": c["logo"], "activo": c["activo"]}
 
 
+LOGO_PLAYBAR = "/logo.png"  # los negocios sin logo muestran el de PlayBar GO
+_ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+_logos_db = {}
+
+
+def imagen_logo(logo, codigo=None):
+    """Lo que va en ft.Image(src=...) para el logo de un negocio:
+    imagen subida en /super (bytes), dirección web, archivo de assets, o PlayBar GO."""
+    logo = str(logo or "").strip()
+    if not logo:
+        return LOGO_PLAYBAR
+    if logo.startswith("db:"):
+        clave = (str(codigo), logo)
+        if clave not in _logos_db:
+            try:
+                from services import db
+                _logos_db[clave] = db.logo_bytes(codigo)
+            except Exception as ex:
+                print("⚠️ logo:", ex)
+                return LOGO_PLAYBAR
+        return _logos_db[clave] or LOGO_PLAYBAR
+    if logo.startswith(("http://", "https://", "/")):
+        return logo
+    for carpeta in ("logos", ""):  # nombres viejos como "logoa33.png"
+        if os.path.isfile(os.path.join(_ASSETS, carpeta, logo)):
+            return f"/{carpeta}/{logo}" if carpeta else f"/{logo}"
+    return LOGO_PLAYBAR
+
+
 def validar_cliente(codigo):
     try:
         c = _cliente(codigo)

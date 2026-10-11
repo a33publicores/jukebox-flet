@@ -4,6 +4,7 @@ from services.karaoke_scanner import KaraokeScanner
 from services.karaoke_search import KaraokeSearch
 from services.karaoke_queue import KaraokeQueue
 from components.karaoke_card import karaoke_card
+from services.playbar_service import imagen_logo
 from services.session_manager import cerrar_sesion as eliminar_sesion
 
 
@@ -95,7 +96,8 @@ def karaoke_view(page, codigo, cliente, telefono, logo_url):
 
     page.add(
         ft.Container(height=20),
-        ft.Image(src=logo_url, width=180),
+        ft.Image(src=imagen_logo(logo_url, codigo), width=180, height=150,
+                 fit=ft.BoxFit.CONTAIN),
         ft.Text("🎤 PLAYBAR GO KARAOKE", size=30, weight=ft.FontWeight.BOLD, color="white"),
         ft.Text(cliente, color="#22d3ee", size=18),
         ft.Text(f"📱 {telefono}", color="white70"),
