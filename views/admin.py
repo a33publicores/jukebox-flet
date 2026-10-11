@@ -144,7 +144,35 @@ def admin_view(page, codigo, nombre, logo):
             refrescar()
         threading.Thread(target=_run, daemon=True).start()
 
+    cola_vista = {"filas": [], "pausa_hasta": 0.0}
+
+    def mover(desde, hasta):
+        """Cambia el orden de la playlist (el reproductor usa el mismo orden)."""
+        filas = list(cola_vista["filas"])
+        if not (0 <= desde < len(filas)) or not (0 <= hasta < len(filas)) or desde == hasta:
+            return
+        filas.insert(hasta, filas.pop(desde))
+        cola_vista["filas"] = filas
+        cola_vista["pausa_hasta"] = time.time() + 2  # que el refresco no deshaga el cambio
+
+        def _run():
+            try:
+                cola.reordenar(codigo, filas)
+                aviso.value = "Orden cambiado ✔ (el reproductor lo toma en segundos)"
+            except Exception as ex:
+                print("❌ reordenar:", ex)
+                aviso.value = "No se pudo cambiar el orden"
+            refrescar()
+        threading.Thread(target=_run, daemon=True).start()
+
+    def flecha(icono, tip, on_click, apagado):
+        return ft.IconButton(icon=icono, icon_size=22, tooltip=tip, disabled=apagado,
+                             icon_color="#334155" if apagado else "#00D4FF",
+                             on_click=on_click, width=34, height=34)
+
     def refrescar():
+        if time.time() < cola_vista["pausa_hasta"]:
+            return
         try:
             st = cola.estado_reproductor(codigo)
         except Exception as ex:
@@ -162,6 +190,9 @@ def admin_view(page, codigo, nombre, logo):
         actual_txt.value = st["actual"] or "—"
         sigue_txt.value = st["siguiente"] or "No hay más canciones en cola"
         btn_pausa.icon = ft.Icons.PLAY_CIRCLE if st["estado"] == "pausado" else ft.Icons.PAUSE_CIRCLE
+        visibles = st["cola"][:30]
+        cola_vista["filas"] = [it.fila for it in st["cola"]]
+        ultimo_i = len(visibles) - 1
         lista.controls = [
             ft.Container(
                 padding=10, border_radius=12, bgcolor="#111827", width=380,
@@ -172,12 +203,25 @@ def admin_view(page, codigo, nombre, logo):
                                 overflow=ft.TextOverflow.ELLIPSIS),
                         ft.Text(it.canal, color="#94a3b8", size=11),
                     ], spacing=2, expand=True),
-                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="#94a3b8",
-                                  tooltip="Quitar de la cola",
-                                  on_click=lambda e, f=it.fila: quitar(f)),
+                    ft.Column([
+                        ft.Row([
+                            flecha(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, "Poner de primera",
+                                   lambda e, i=n - 1: mover(i, 0), n == 1),
+                            flecha(ft.Icons.ARROW_UPWARD, "Subir",
+                                   lambda e, i=n - 1: mover(i, i - 1), n == 1),
+                        ], spacing=0, tight=True),
+                        ft.Row([
+                            flecha(ft.Icons.ARROW_DOWNWARD, "Bajar",
+                                   lambda e, i=n - 1: mover(i, i + 1), n - 1 == ultimo_i),
+                            ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="#94a3b8",
+                                          tooltip="Quitar de la cola", icon_size=22,
+                                          width=34, height=34,
+                                          on_click=lambda e, f=it.fila: quitar(f)),
+                        ], spacing=0, tight=True),
+                    ], spacing=0, tight=True),
                 ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
             )
-            for n, it in enumerate(st["cola"][:30], start=1)
+            for n, it in enumerate(visibles, start=1)
         ]
         if st["comando_pendiente"]:
             aviso.value = "Esperando al reproductor…"
@@ -262,7 +306,8 @@ def admin_view(page, codigo, nombre, logo):
                         boton(ft.Icons.SKIP_NEXT, "Siguiente", "siguiente")],
                        alignment=ft.MainAxisAlignment.CENTER),
                 aviso,
-                ft.Text("PLAYLIST", color="#94A3B8", size=13, weight=ft.FontWeight.BOLD),
+                ft.Text("PLAYLIST · ⏫ de primera · ⬆⬇ mover · 🗑 quitar", color="#94A3B8",
+                        size=13, weight=ft.FontWeight.BOLD),
                 lista,
                 ft.Container(height=10),
                 ft.Container(
