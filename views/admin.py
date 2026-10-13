@@ -277,6 +277,76 @@ def admin_view(page, codigo, nombre, logo):
     except Exception as ex:
         print("⚠️ estado del plan:", ex)
 
+    # --- Géneros del relleno (lo que suena cuando nadie pide) -------------------------
+    from services import generos as G
+    elegidos = set()
+    try:
+        from services import db as _db
+        elegidos = G.lista((_db.control(codigo) or {}).get("generos", ""))
+    except Exception as ex:
+        print("⚠️ géneros:", ex)
+    cuantos = {}
+    fila_generos = ft.Row(wrap=True, spacing=6, run_spacing=6, width=380,
+                          alignment=ft.MainAxisAlignment.CENTER)
+    nota_generos = ft.Text("", color="#94A3B8", size=12, text_align=ft.TextAlign.CENTER,
+                           width=380)
+
+    def pintar_generos():
+        def chip(clave, nombre):
+            activo = (clave in elegidos) if clave else not elegidos
+            n = cuantos.get(clave) if clave else sum(cuantos.values())
+            return ft.Container(
+                padding=ft.Padding.symmetric(horizontal=12, vertical=7), border_radius=16,
+                bgcolor="#00D4FF" if activo else "#1e293b",
+                on_click=lambda e, k=clave: tocar_genero(k),
+                content=ft.Text(nombre + (f" ({n})" if n else ""), size=13,
+                                color="#020617" if activo else "white",
+                                weight=ft.FontWeight.BOLD if activo else None),
+            )
+        fila_generos.controls = [chip("", "🎵 Todos")] + [
+            chip(k, nombre) for k, nombre in G.GENEROS if cuantos.get(k) or k in elegidos]
+        nota_generos.value = ("Suena de todo cuando nadie pide." if not elegidos else
+                              "Cuando nadie pide solo suena: " +
+                              ", ".join(G.NOMBRES[k] for k in sorted(elegidos)) +
+                              ". Lo que pidan los clientes suena siempre.")
+
+    def tocar_genero(clave):
+        if not clave:
+            elegidos.clear()
+        elif clave in elegidos:
+            elegidos.discard(clave)
+        else:
+            elegidos.add(clave)
+        pintar_generos()
+        page.update()
+
+        def _guardar():
+            try:
+                from services import db as _db
+                _db.poner_generos(codigo, elegidos)
+                aviso.value = "Géneros del relleno guardados ✔ (el reproductor los toma en segundos)"
+            except Exception as ex:
+                print("❌ géneros:", ex)
+                aviso.value = "No se pudieron guardar los géneros"
+            page.update()
+        threading.Thread(target=_guardar, daemon=True).start()
+
+    def contar_generos():
+        """Cuántas canciones del historial hay de cada género (para mostrar en los botones)."""
+        try:
+            from services import db as _db
+            from services.playbar_service import inicio_jornada
+            cuantos.clear()
+            for f in _db.aleatorio(codigo, inicio_jornada()):
+                g = G.clasificar(f["titulo"], f["canal"])
+                cuantos[g] = cuantos.get(g, 0) + 1
+            pintar_generos()
+            page.update()
+        except Exception as ex:
+            print("⚠️ contar géneros:", ex)
+
+    pintar_generos()
+
     def salir(e):
         vivo["v"] = False
         from services.session_manager import cerrar_sesion
@@ -309,6 +379,11 @@ def admin_view(page, codigo, nombre, logo):
                 ft.Text("PLAYLIST · ⏫ de primera · ⬆⬇ mover · 🗑 quitar", color="#94A3B8",
                         size=13, weight=ft.FontWeight.BOLD),
                 lista,
+                ft.Container(height=6),
+                ft.Text("🎚️ MÚSICA DE RELLENO (cuando nadie pide)", color="#94A3B8", size=13,
+                        weight=ft.FontWeight.BOLD),
+                fila_generos,
+                nota_generos,
                 ft.Container(height=10),
                 ft.Container(
                     width=260, height=52, border_radius=16,
@@ -326,3 +401,4 @@ def admin_view(page, codigo, nombre, logo):
     ))
     page.update()
     threading.Thread(target=bucle, daemon=True).start()
+    threading.Thread(target=contar_generos, daemon=True).start()

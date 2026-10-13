@@ -122,6 +122,8 @@ ESQUEMA = [
         pagado         DOUBLE PRECISION NOT NULL DEFAULT 0
     )""",
     "CREATE INDEX IF NOT EXISTS pagos_codigo ON pagos (codigo, creado)",
+    # Géneros del relleno que escoge el admin del bar ('' = todos). Ver services/generos.py
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS generos TEXT NOT NULL DEFAULT ''",
     # Logo del negocio subido desde /super (PNG/JPG guardado en la base, no se pierde
     # cuando Railway reinicia). clientes.logo queda como "db:<versión>".
     """CREATE TABLE IF NOT EXISTS logos (
@@ -525,6 +527,13 @@ def control(codigo):
 def _asegurar_control(codigo):
     ejecutar("INSERT INTO control (codigo) VALUES (%s) ON CONFLICT (codigo) DO NOTHING",
              (str(codigo),))
+
+
+def poner_generos(codigo, claves):
+    """Géneros del relleno del bar (lista de claves; vacía = todos)."""
+    _asegurar_control(codigo)
+    ejecutar("UPDATE control SET generos = %s WHERE codigo = %s",
+             (",".join(sorted(set(claves))), str(codigo)))
 
 
 def enviar_comando(codigo, comando, param=""):

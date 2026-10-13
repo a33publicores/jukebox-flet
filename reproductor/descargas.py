@@ -21,6 +21,56 @@ _EXT_VIDEO = (".mp4", ".webm", ".mkv", ".m4v", ".mov")
 # ID.mp4. Esos pedazos NO son la canción: el de video no tiene sonido.
 _SIN_VENTANA = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
 
+LIBRE_AVISO = 3 * 1024 ** 3      # por debajo de esto el reproductor avisa "queda poco espacio"
+LIBRE_CRITICO = 400 * 1024 ** 2  # por debajo de esto no se intenta descargar (sin borrar nada)
+
+
+class DiscoLleno(RuntimeError):
+    """El disco del PC no tiene espacio: NO es culpa del video (no se busca otro ni se
+    marca como dañado)."""
+
+
+def es_disco_lleno(ex):
+    t = str(ex)
+    return isinstance(ex, DiscoLleno) or "No space left" in t or "Errno 28" in t \
+        or "espacio en disco" in t.lower()
+
+
+# --- yt-dlp al día (YouTube cambia seguido y la versión vieja da "403 Forbidden") ------
+YTDLP_ZIP_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+YTDLP_CADA_DIAS = 2
+
+
+def activar_ytdlp_actualizado(carpeta):
+    """Si hay un yt-dlp más nuevo descargado en PlayBarGo, se usa ese (antes de importarlo)."""
+    zip_ = Path(carpeta) / "yt-dlp.zip"
+    if zip_.is_file() and str(zip_) not in sys.path:
+        sys.path.insert(0, str(zip_))
+
+
+def actualizar_ytdlp(carpeta):
+    """Baja la última versión de yt-dlp (un solo archivo) y la deja lista para el próximo
+    arranque. Se valida antes de reemplazar la anterior. Nunca lanza errores."""
+    import zipfile
+    zip_ = Path(carpeta) / "yt-dlp.zip"
+    try:
+        if zip_.is_file() and time.time() - zip_.stat().st_mtime < YTDLP_CADA_DIAS * 86400:
+            return
+        import requests
+        nuevo = zip_.with_suffix(".nuevo")
+        with requests.get(YTDLP_ZIP_URL, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            with open(nuevo, "wb") as f:
+                for trozo in r.iter_content(256 * 1024):
+                    f.write(trozo)
+        with zipfile.ZipFile(nuevo) as z:  # el archivo trae un zip con el paquete yt_dlp
+            if "yt_dlp/__init__.py" not in z.namelist():
+                raise ValueError("no es yt-dlp")
+        os.replace(nuevo, zip_)
+        print("⬆️ yt-dlp actualizado (se usa desde el próximo arranque)")
+    except Exception as ex:
+        print(f"ℹ️ No se pudo actualizar yt-dlp: {ex}")
+
 
 class Descargador:
     def __init__(self, carpeta, cookies=None, max_gb=5.0, altura_max=720):
@@ -153,24 +203,32 @@ class Descargador:
             except OSError as ex:
                 print(f"ℹ️ No se pudo revisar {p.name}: {ex}")
 
-    def limpiar(self, conservar=()):
-        """Borra lo más antiguo si la caché supera el límite."""
-        archivos = [p for p in self.carpeta.iterdir()
-                    if p.is_file() and p.suffix.lower() in _EXT_VIDEO]
-        total = sum(p.stat().st_size for p in archivos)
-        if total <= self.max_bytes:
+    def espacio_libre(self):
+        try:
+            return shutil.disk_usage(self.carpeta).free
+        except Exception:
+            return 10 ** 12
+
+    def asegurar_espacio(self, conservar=()):
+        """Antes de descargar. Las canciones guardadas NUNCA se borran (la biblioteca del bar
+        solo crece). Solo se borran pedazos de descargas que quedaron a medias. Si el disco
+        está casi lleno se avisa (DiscoLleno) para que alguien libere espacio."""
+        if self.espacio_libre() >= LIBRE_CRITICO:
             return
-        conservar = set(conservar)
-        for p in sorted(archivos, key=lambda x: x.stat().st_mtime):
-            if p.stem in conservar:
-                continue
-            total -= p.stat().st_size
-            try:
-                p.unlink()
-            except OSError:
-                pass
-            if total <= self.max_bytes * 0.9:
-                break
+        for p in list(self.carpeta.iterdir()):  # pedazos (ID.f136.mp4.part…), no canciones
+            if p.is_file() and ("." in p.stem or p.suffix.lower() in _EXT_TEMP):
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+        libre = self.espacio_libre()
+        if libre < LIBRE_CRITICO:
+            raise DiscoLleno(f"El disco del computador está lleno (quedan {libre / 1048576:.0f} MB). "
+                             "Libera espacio en el disco C: para que las canciones puedan descargarse.")
+
+    def limpiar(self, conservar=()):
+        """Ya no borra canciones: la biblioteca del bar se conserva completa."""
+        return
 
     # -- descarga ------------------------------------------------------
     def _ffmpeg(self):
@@ -187,9 +245,13 @@ class Descargador:
         """Descarga (si hace falta) y devuelve la ruta del archivo. Bloqueante.
         Si ese video no se puede usar (bloqueado, borrado, sin sonido...) y se conoce el
         nombre, busca en YouTube la MISMA canción (nombre y artista) y usa otro video."""
+        if not self._ruta_directa(video_id):
+            self.asegurar_espacio(conservar=(video_id,))
         try:
             return self._obtener_directo(video_id)
         except Exception as ex:
+            if es_disco_lleno(ex):
+                raise DiscoLleno(str(ex)) from ex
             if not titulo:
                 raise
             print(f"⚠️ El video {video_id} no sirve ({str(ex)[:120]}): busco otro de «{titulo}»")
@@ -201,6 +263,8 @@ class Descargador:
             try:
                 ruta = self._obtener_directo(alt)
             except Exception as ex:
+                if es_disco_lleno(ex):
+                    raise DiscoLleno(str(ex)) from ex
                 print(f"   ✗ {alt} tampoco sirve: {str(ex)[:80]}")
                 continue
             self._alt[video_id] = alt
@@ -273,10 +337,6 @@ class Descargador:
             if not self.tiene_audio(ruta):
                 self._borrar(video_id)
                 raise RuntimeError(f"{video_id} viene dañada desde YouTube")
-        try:
-            self.limpiar(conservar=(video_id,))
-        except Exception:
-            pass
         return ruta
 
     def _borrar(self, video_id):

@@ -125,14 +125,22 @@ class BackendApi:
         self._playlist, self._t_playlist = lista, time.time()
         return lista
 
-    def elegir_relleno(self, excluir):
+    def elegir_relleno(self, excluir, generos=None):
         """Canción al azar: playlist del negocio + lo pedido en fechas anteriores,
-        evitando las que sonaron hace poco."""
+        evitando las que sonaron hace poco. Si el admin escogió géneros, solo de esos
+        (si no hay ninguna de esos géneros, se usa todo para no quedarse en silencio)."""
         excluir = set(excluir)
         pool = list(self.aleatorio())
         ya = {i.video_id for i in pool}
         pool += [C.Item(None, p["t"], p["c"], p["id"]) for p in self.canciones_playlist()
                  if p["id"] not in ya]
+        if generos:
+            from services.generos import clasificar
+            del_genero = [i for i in pool if clasificar(i.titulo, i.canal) in generos]
+            if del_genero:
+                pool = del_genero
+            else:
+                print(f"ℹ️ No hay canciones de {', '.join(sorted(generos))}: uso todas")
         candidatas = [i for i in pool if i.video_id not in excluir] or pool
         if not candidatas:
             return None
@@ -152,6 +160,11 @@ def _explicar(ex):
     if "Connection" in texto or "Max retries" in texto or "NameResolution" in texto:
         return "Sin internet o sin conexión con el servidor."
     return texto[:120]
+
+
+def _disco_lleno(ex):
+    t = str(ex)
+    return type(ex).__name__ == "DiscoLleno" or "No space left" in t or "Errno 28" in t
 
 
 class Motor:
@@ -180,6 +193,7 @@ class Motor:
         self._marcas = set()      # escrituras a la API en segundo plano
         self._preparando_relleno = False
         self._ultimo_cid = None
+        self.alerta = ""          # aviso que se queda hasta que se arregle (ej. disco lleno)
         self.plan = None          # prueba gratis / plan del negocio (lo dice la API)
         self.bloqueado = False    # prueba terminada o plan vencido: no suena nada nuevo
         self._t_plan = 0.0
@@ -237,10 +251,37 @@ class Motor:
         if hasattr(self.ui, "mostrar_plan"):
             await self.ui.mostrar_plan(info, self.actual is not None)
 
+    async def _revisar_disco(self):
+        """Cada minuto: si queda poco espacio en el disco, avisa en pantalla (no borra nada)."""
+        if not hasattr(self.desc, "espacio_libre") or self.ahora() - getattr(self, "_t_disco", 0) < 60:
+            return
+        self._t_disco = self.ahora()
+        from reproductor.descargas import LIBRE_AVISO, LIBRE_CRITICO
+        libre = await asyncio.to_thread(self.desc.espacio_libre)
+        gb = libre / 1024 ** 3
+        if libre < LIBRE_CRITICO:
+            await self._avisar_disco(f"quedan {gb:.1f} GB")
+        elif libre < LIBRE_AVISO:
+            texto = (f"💾 Queda poco espacio en el disco C: ({gb:.1f} GB). Libera espacio pronto "
+                     "para que las canciones nuevas se puedan seguir descargando.")
+            if self.alerta != texto:
+                print(f"💾 Poco espacio: {gb:.1f} GB libres")
+                self.alerta = texto
+                if self.snap is not None:
+                    await self._ui_lista(self.snap)
+        elif self.alerta.startswith("💾"):
+            self.alerta = ""  # ya liberaron espacio
+            if self.snap is not None:
+                await self._ui_lista(self.snap)
+
     async def tick(self):
         # Lo que va por internet se hace SIN el candado: si el servidor tarda, el cambio
         # de canción (al_terminar) no queda esperando y la música nunca se detiene.
         await self._revisar_plan()
+        try:
+            await self._revisar_disco()
+        except Exception as ex:
+            print("ℹ️ revisar disco:", ex)
         await self._reintentar_marcas()
         try:
             snap = await asyncio.to_thread(self.backend.instantanea)
@@ -255,6 +296,7 @@ class Motor:
             raise
         async with self._lock:
             self.snap = snap
+            self._revisar_generos()
             if await self._comandos(snap):
                 # el comando cambió el estado: la lectura quedó vieja, se relee
                 try:
@@ -318,7 +360,11 @@ class Motor:
             await self._ui_estado(f"Preparando: {item.titulo}")
             try:
                 ruta = await self._descargar(item.video_id, item)
+                self.alerta = ""
             except Exception as ex:
+                if _disco_lleno(ex):  # culpa del PC, no del video: no se marca ni se quita
+                    await self._avisar_disco(ex)
+                    return
                 n = self._fallos.get(item.video_id, 0) + 1
                 self._fallos[item.video_id] = n
                 print(f"❌ No se pudo descargar {item.video_id} (intento {n}): {ex}")
@@ -334,8 +380,35 @@ class Motor:
         finally:
             self.ocupado = False
 
+    async def _avisar_disco(self, ex):
+        texto = ("💾 Disco del computador lleno: libera espacio en el disco C: (borra archivos "
+                 "o desinstala programas que no uses). Las canciones guardadas siguen sonando; "
+                 "las nuevas se descargan cuando haya espacio.")
+        if self.alerta != texto:
+            print(f"💾 DISCO LLENO: {ex}")
+        self.alerta = texto
+        if self.snap is not None:
+            await self._ui_lista(self.snap)
+
+    def _generos(self):
+        from services.generos import lista
+        return lista(((self.snap.control if self.snap else {}) or {}).get("generos", ""))
+
     async def _elegir_relleno(self):
-        return await asyncio.to_thread(self.backend.elegir_relleno, list(self.recientes))
+        gen = self._generos()
+        try:
+            return await asyncio.to_thread(self.backend.elegir_relleno, list(self.recientes), gen)
+        except TypeError:  # respaldo para un backend sin filtro de géneros
+            return await asyncio.to_thread(self.backend.elegir_relleno, list(self.recientes))
+
+    def _revisar_generos(self):
+        """Si el admin cambió los géneros, la próxima aleatoria ya escogida se descarta."""
+        gen = self._generos()
+        if gen != getattr(self, "_gen_previos", None):
+            if getattr(self, "_gen_previos", None) is not None:
+                print(f"🎚️ Géneros del relleno: {', '.join(sorted(gen)) or 'todos'}")
+                self._relleno_sig = None
+            self._gen_previos = gen
 
     async def _preparar_relleno(self):
         """Mientras suena una canción, deja elegida y descargada la próxima aleatoria."""
@@ -363,7 +436,11 @@ class Motor:
                     return
                 try:
                     ruta = await self._descargar(item.video_id, item)
+                    self.alerta = ""
                 except Exception as ex:
+                    if _disco_lleno(ex):
+                        await self._avisar_disco(ex)
+                        return
                     print(f"❌ Relleno {item.video_id}: {ex}")
                     self.recientes.append(item.video_id)
                     continue
@@ -660,7 +737,7 @@ class Motor:
             cola=[i for i in snap.cola if i.fila not in omitir],
             relleno=self.relleno,
             pausado=self.pausado,
-            error=self.error,
+            error=self.error or self.alerta,
         )
 
     async def _ui_estado(self, texto=""):

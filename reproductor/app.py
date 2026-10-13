@@ -539,7 +539,8 @@ class Pantalla:
         if error:
             filas.append(ft.Container(
                 padding=10, border_radius=10, bgcolor="#7f1d1d",
-                content=ft.Text(f"⚠️ {error[:120]}\nLa música sigue sonando; los pedidos nuevos "
+                content=ft.Text(error if error.startswith("💾") else
+                                f"⚠️ {error[:120]}\nLa música sigue sonando; los pedidos nuevos "
                                 "llegan solos cuando vuelva la conexión.",
                                 size=12, color="white"),
             ))
@@ -1233,5 +1234,10 @@ def ejecutar():
     os.chdir(RAIZ)  # para encontrar credenciales.json junto al programa
     CARPETA.mkdir(parents=True, exist_ok=True)
     _activar_registro()
+    # yt-dlp al día: usa el más nuevo ya bajado y busca otro en segundo plano
+    from reproductor import descargas as _d
+    _d.activar_ytdlp_actualizado(CARPETA)
+    import threading
+    threading.Thread(target=_d.actualizar_ytdlp, args=(CARPETA,), daemon=True).start()
     _cerrar_ventanas_viejas()
     ft.run(main, assets_dir=str(ASSETS))
