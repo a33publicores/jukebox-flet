@@ -286,35 +286,65 @@ def admin_view(page, codigo, nombre, logo):
     except Exception as ex:
         print("⚠️ géneros:", ex)
     cuantos = {}
-    # Lista desplegable (ocupa una sola línea): "Todos" o un género.
-    lista_generos = ft.Dropdown(
-        width=320, dense=True, text_size=14, color="white", border_color="#334155",
-        bgcolor="#1e293b", filled=True, fill_color="#0f172a", border_radius=12,
-        menu_height=420,
-        value=(sorted(elegidos)[0] if elegidos else "todos"),
-        on_select=lambda e: elegir_genero(e.control.value),
-    )
+    # Lista desplegable con selección múltiple: cerrada ocupa una línea; al tocarla se
+    # abre debajo con casillas (texto blanco sobre fondo oscuro, que se lea bien).
+    abierta = {"v": False}
+    resumen_generos = ft.Text("", color="white", size=14, expand=True,
+                              overflow=ft.TextOverflow.ELLIPSIS, max_lines=1)
+    flecha_generos = ft.Icon(ft.Icons.ARROW_DROP_DOWN, color="white")
+    opciones_generos = ft.Column(spacing=0, tight=True)
+    panel_generos = ft.Container(
+        visible=False, width=320, bgcolor="#1e293b", border_radius=12,
+        border=ft.Border.all(1, "#334155"), padding=ft.Padding.symmetric(vertical=4),
+        content=opciones_generos)
+    lista_generos = ft.Column(spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                              controls=[
+        ft.Container(
+            width=320, bgcolor="#0f172a", border_radius=12, border=ft.Border.all(1, "#334155"),
+            padding=ft.Padding.symmetric(horizontal=14, vertical=10), ink=True,
+            on_click=lambda e: abrir_generos(),
+            content=ft.Row([resumen_generos, flecha_generos], spacing=6)),
+        panel_generos,
+    ])
     nota_generos = ft.Text("", color="#94A3B8", size=12, text_align=ft.TextAlign.CENTER,
                            width=380)
 
-    def pintar_generos():
-        def txt(nombre, n):
-            return nombre + (f" ({n})" if n else "")
-        opciones = [ft.DropdownOption(key="todos", text=txt("🎵 Todos los géneros",
-                                                            sum(cuantos.values())))]
-        opciones += [ft.DropdownOption(key=k, text=txt(nombre, cuantos.get(k)))
-                     for k, nombre in G.GENEROS if cuantos.get(k) or k in elegidos]
-        lista_generos.options = opciones
-        lista_generos.value = sorted(elegidos)[0] if len(elegidos) == 1 else (
-            lista_generos.value if elegidos else "todos")
-        nota_generos.value = ("Suena de todo cuando nadie pide." if not elegidos else
-                              "Cuando nadie pide solo suena: " +
-                              ", ".join(G.NOMBRES[k] for k in sorted(elegidos)) +
-                              ". Lo que pidan los clientes suena siempre.")
+    def abrir_generos():
+        abierta["v"] = not abierta["v"]
+        pintar_generos()
+        page.update()
 
-    def elegir_genero(clave):
-        elegidos.clear()
-        if clave and clave != "todos":
+    def pintar_generos():
+        def fila(clave, nombre):
+            activo = (clave in elegidos) if clave else not elegidos
+            n = cuantos.get(clave) if clave else sum(cuantos.values())
+            return ft.Container(
+                padding=ft.Padding.symmetric(horizontal=12, vertical=8), ink=True,
+                bgcolor="#0e7490" if activo else None,
+                on_click=lambda e, k=clave: tocar_genero(k),
+                content=ft.Row(spacing=10, controls=[
+                    ft.Icon(ft.Icons.CHECK_BOX if activo else ft.Icons.CHECK_BOX_OUTLINE_BLANK,
+                            color="#00D4FF" if not activo else "white", size=20),
+                    ft.Text(nombre, color="white", size=14, expand=True,
+                            weight=ft.FontWeight.BOLD if activo else None),
+                    ft.Text(str(n) if n else "", color="#CBD5E1", size=13),
+                ]))
+        opciones_generos.controls = [fila("", "🎵 Todos los géneros")] + [
+            fila(k, nombre) for k, nombre in G.GENEROS if cuantos.get(k) or k in elegidos]
+        panel_generos.visible = abierta["v"]
+        flecha_generos.icon = ft.Icons.ARROW_DROP_UP if abierta["v"] else ft.Icons.ARROW_DROP_DOWN
+        resumen_generos.value = ("🎵 Todos los géneros" if not elegidos else
+                                 ", ".join(G.NOMBRES[k] for k, _ in G.GENEROS if k in elegidos))
+        nota_generos.value = ("Suena de todo cuando nadie pide." if not elegidos else
+                              "Cuando nadie pide solo suena lo marcado. "
+                              "Lo que pidan los clientes suena siempre.")
+
+    def tocar_genero(clave):
+        if not clave:
+            elegidos.clear()
+        elif clave in elegidos:
+            elegidos.discard(clave)
+        else:
             elegidos.add(clave)
         pintar_generos()
         page.update()
@@ -323,10 +353,10 @@ def admin_view(page, codigo, nombre, logo):
             try:
                 from services import db as _db
                 _db.poner_generos(codigo, elegidos)
-                aviso.value = "Género del relleno guardado ✔ (el reproductor lo toma en segundos)"
+                aviso.value = "Géneros del relleno guardados ✔ (el reproductor los toma en segundos)"
             except Exception as ex:
                 print("❌ géneros:", ex)
-                aviso.value = "No se pudo guardar el género"
+                aviso.value = "No se pudieron guardar los géneros"
             page.update()
         threading.Thread(target=_guardar, daemon=True).start()
 
