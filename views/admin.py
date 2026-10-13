@@ -288,15 +288,38 @@ def admin_view(page, codigo, nombre, logo):
     cuantos = {}
     # Lista desplegable con selección múltiple: cerrada ocupa una línea; al tocarla se
     # abre debajo con casillas (texto blanco sobre fondo oscuro, que se lea bien).
+    # Lo que se marca queda en "borrador" hasta tocar ✔ Aplicar (ahí se guarda y se cierra).
     abierta = {"v": False}
+    borrador = set(elegidos)
     resumen_generos = ft.Text("", color="white", size=14, expand=True,
                               overflow=ft.TextOverflow.ELLIPSIS, max_lines=1)
     flecha_generos = ft.Icon(ft.Icons.ARROW_DROP_DOWN, color="white")
     opciones_generos = ft.Column(spacing=0, tight=True)
+    def _aplicar(e=None):
+        elegidos.clear()
+        elegidos.update(borrador)
+        abierta["v"] = False
+        pintar_generos()
+        page.update()
+        guardar_generos()
+
     panel_generos = ft.Container(
         visible=False, width=320, bgcolor="#1e293b", border_radius=12,
-        border=ft.Border.all(1, "#334155"), padding=ft.Padding.symmetric(vertical=4),
-        content=opciones_generos)
+        border=ft.Border.all(1, "#334155"), padding=ft.Padding.symmetric(vertical=6),
+        content=ft.Column(spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+            opciones_generos,
+            ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=10, controls=[
+                ft.TextButton(content=ft.Text("Cancelar", color="#CBD5E1", size=14),
+                              on_click=lambda e: abrir_generos()),
+                ft.Container(
+                    width=150, height=40, border_radius=12,
+                    gradient=ft.LinearGradient(colors=["#00D4FF", "#B44CFF"]),
+                    content=ft.TextButton(
+                        content=ft.Text("✔ Aplicar", color="white", size=15,
+                                        weight=ft.FontWeight.BOLD),
+                        on_click=_aplicar)),
+            ]),
+        ]))
     lista_generos = ft.Column(spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                               controls=[
         ft.Container(
@@ -310,13 +333,16 @@ def admin_view(page, codigo, nombre, logo):
                            width=380)
 
     def abrir_generos():
+        """Abre o cierra la lista. Cerrar sin Aplicar deja todo como estaba."""
         abierta["v"] = not abierta["v"]
+        borrador.clear()
+        borrador.update(elegidos)
         pintar_generos()
         page.update()
 
     def pintar_generos():
         def fila(clave, nombre):
-            activo = (clave in elegidos) if clave else not elegidos
+            activo = (clave in borrador) if clave else not borrador
             n = cuantos.get(clave) if clave else sum(cuantos.values())
             return ft.Container(
                 padding=ft.Padding.symmetric(horizontal=12, vertical=8), ink=True,
@@ -330,7 +356,8 @@ def admin_view(page, codigo, nombre, logo):
                     ft.Text(str(n) if n else "", color="#CBD5E1", size=13),
                 ]))
         opciones_generos.controls = [fila("", "🎵 Todos los géneros")] + [
-            fila(k, nombre) for k, nombre in G.GENEROS if cuantos.get(k) or k in elegidos]
+            fila(k, nombre) for k, nombre in G.GENEROS
+            if cuantos.get(k) or k in elegidos or k in borrador]
         panel_generos.visible = abierta["v"]
         flecha_generos.icon = ft.Icons.ARROW_DROP_UP if abierta["v"] else ft.Icons.ARROW_DROP_DOWN
         resumen_generos.value = ("🎵 Todos los géneros" if not elegidos else
@@ -340,15 +367,17 @@ def admin_view(page, codigo, nombre, logo):
                               "Lo que pidan los clientes suena siempre.")
 
     def tocar_genero(clave):
+        """Marca/desmarca en el borrador (todavía no se guarda)."""
         if not clave:
-            elegidos.clear()
-        elif clave in elegidos:
-            elegidos.discard(clave)
+            borrador.clear()
+        elif clave in borrador:
+            borrador.discard(clave)
         else:
-            elegidos.add(clave)
+            borrador.add(clave)
         pintar_generos()
         page.update()
 
+    def guardar_generos():
         def _guardar():
             try:
                 from services import db as _db
