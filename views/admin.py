@@ -286,36 +286,35 @@ def admin_view(page, codigo, nombre, logo):
     except Exception as ex:
         print("⚠️ géneros:", ex)
     cuantos = {}
-    fila_generos = ft.Row(wrap=True, spacing=6, run_spacing=6, width=380,
-                          alignment=ft.MainAxisAlignment.CENTER)
+    # Lista desplegable (ocupa una sola línea): "Todos" o un género.
+    lista_generos = ft.Dropdown(
+        width=320, dense=True, text_size=14, color="white", border_color="#334155",
+        bgcolor="#1e293b", filled=True, fill_color="#0f172a", border_radius=12,
+        menu_height=420,
+        value=(sorted(elegidos)[0] if elegidos else "todos"),
+        on_select=lambda e: elegir_genero(e.control.value),
+    )
     nota_generos = ft.Text("", color="#94A3B8", size=12, text_align=ft.TextAlign.CENTER,
                            width=380)
 
     def pintar_generos():
-        def chip(clave, nombre):
-            activo = (clave in elegidos) if clave else not elegidos
-            n = cuantos.get(clave) if clave else sum(cuantos.values())
-            return ft.Container(
-                padding=ft.Padding.symmetric(horizontal=12, vertical=7), border_radius=16,
-                bgcolor="#00D4FF" if activo else "#1e293b",
-                on_click=lambda e, k=clave: tocar_genero(k),
-                content=ft.Text(nombre + (f" ({n})" if n else ""), size=13,
-                                color="#020617" if activo else "white",
-                                weight=ft.FontWeight.BOLD if activo else None),
-            )
-        fila_generos.controls = [chip("", "🎵 Todos")] + [
-            chip(k, nombre) for k, nombre in G.GENEROS if cuantos.get(k) or k in elegidos]
+        def txt(nombre, n):
+            return nombre + (f" ({n})" if n else "")
+        opciones = [ft.DropdownOption(key="todos", text=txt("🎵 Todos los géneros",
+                                                            sum(cuantos.values())))]
+        opciones += [ft.DropdownOption(key=k, text=txt(nombre, cuantos.get(k)))
+                     for k, nombre in G.GENEROS if cuantos.get(k) or k in elegidos]
+        lista_generos.options = opciones
+        lista_generos.value = sorted(elegidos)[0] if len(elegidos) == 1 else (
+            lista_generos.value if elegidos else "todos")
         nota_generos.value = ("Suena de todo cuando nadie pide." if not elegidos else
                               "Cuando nadie pide solo suena: " +
                               ", ".join(G.NOMBRES[k] for k in sorted(elegidos)) +
                               ". Lo que pidan los clientes suena siempre.")
 
-    def tocar_genero(clave):
-        if not clave:
-            elegidos.clear()
-        elif clave in elegidos:
-            elegidos.discard(clave)
-        else:
+    def elegir_genero(clave):
+        elegidos.clear()
+        if clave and clave != "todos":
             elegidos.add(clave)
         pintar_generos()
         page.update()
@@ -324,15 +323,15 @@ def admin_view(page, codigo, nombre, logo):
             try:
                 from services import db as _db
                 _db.poner_generos(codigo, elegidos)
-                aviso.value = "Géneros del relleno guardados ✔ (el reproductor los toma en segundos)"
+                aviso.value = "Género del relleno guardado ✔ (el reproductor lo toma en segundos)"
             except Exception as ex:
                 print("❌ géneros:", ex)
-                aviso.value = "No se pudieron guardar los géneros"
+                aviso.value = "No se pudo guardar el género"
             page.update()
         threading.Thread(target=_guardar, daemon=True).start()
 
     def contar_generos():
-        """Cuántas canciones del historial hay de cada género (para mostrar en los botones)."""
+        """Cuántas canciones del historial hay de cada género (se ve en la lista)."""
         try:
             from services import db as _db
             from services.playbar_service import inicio_jornada
@@ -382,7 +381,7 @@ def admin_view(page, codigo, nombre, logo):
                 ft.Container(height=6),
                 ft.Text("🎚️ MÚSICA DE RELLENO (cuando nadie pide)", color="#94A3B8", size=13,
                         weight=ft.FontWeight.BOLD),
-                fila_generos,
+                lista_generos,
                 nota_generos,
                 ft.Container(height=10),
                 ft.Container(
