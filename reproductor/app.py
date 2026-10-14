@@ -396,7 +396,7 @@ class Pantalla:
         self.t_pos.value, self.t_dur.value, self.barra.value = "0:00", "0:00", 0
 
     def pantalla_completa(self, valor=None):
-        """Modo pantalla completa: solo el video (con nombre y tiempo) y la playlist."""
+        """Modo pantalla completa: el video (con nombre y tiempo), el logo y la playlist."""
         self.completa = (not self.completa) if valor is None else bool(valor)
         self.page.window.title_bar_hidden = self.completa
         self.page.window.full_screen = self.completa
@@ -404,8 +404,7 @@ class Pantalla:
             self.cabecera.visible = not self.completa
         if self.zona_controles is not None:
             self.zona_controles.visible = not self.completa
-        if self.logo_lista is not None:
-            self.logo_lista.visible = not self.completa
+        # El logo de PlayBar GO encima de la playlist se queda visible también en pantalla completa.
         self.page.update()
 
     async def _on_error(self, e):
