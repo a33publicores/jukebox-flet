@@ -1,0 +1,8 @@
+# Reproductor de TV: no subir compilados ni el Python de compilación
+.venv_tv/
+build/
+salida_apk/
+__pycache__/
+*.pyc
+probar_en_pc.log
+construir_apk.log

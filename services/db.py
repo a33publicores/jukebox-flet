@@ -250,8 +250,35 @@ def clave_correcta(clave, guardada):
     return bool(guardada) and hmac.compare_digest(str(clave).encode(), guardada.encode())
 
 
+# Llave del reproductor: 8 caracteres fáciles de escribir con el control del TV, mostrados
+# como K7M4-X9P2. Sin 0/O ni 1/I/L para que no se confundan. ~850.000 millones de
+# combinaciones. Las llaves viejas "pbg_..." (largas) siguen sirviendo tal cual.
+_ALFABETO_LLAVE = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+LARGO_LLAVE = 8
+
+
+def normalizar_llave(llave):
+    """Como la escriban (minúsculas, con espacios o guion), queda como se guarda."""
+    s = str(llave or "").strip()
+    if s.lower().startswith("pbg_"):
+        return s  # llave vieja: se compara exacta
+    return "".join(c for c in s.upper() if c.isalnum())
+
+
+def formato_llave(llave):
+    """Para mostrarla: K7M4X9P2 -> K7M4-X9P2 (las viejas se muestran igual)."""
+    s = str(llave or "")
+    if len(s) == LARGO_LLAVE and not s.lower().startswith("pbg_"):
+        return f"{s[:4]}-{s[4:]}"
+    return s
+
+
 def nueva_llave():
-    return "pbg_" + secrets.token_urlsafe(24)
+    for _ in range(50):
+        llave = "".join(secrets.choice(_ALFABETO_LLAVE) for _ in range(LARGO_LLAVE))
+        if not uno("SELECT 1 AS x FROM clientes WHERE llave = %s", (llave,)):
+            return llave
+    raise RuntimeError("No se pudo generar una llave única")
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +295,7 @@ def clientes():
 def cliente_por_llave(llave):
     if not llave:
         return None
-    return uno("SELECT * FROM clientes WHERE llave = %s AND activo", (str(llave).strip(),))
+    return uno("SELECT * FROM clientes WHERE llave = %s AND activo", (normalizar_llave(llave),))
 
 
 def guardar_cliente(codigo, nombre, logo="", playlist="", activo=True):

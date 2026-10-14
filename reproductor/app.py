@@ -811,7 +811,7 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
     previo = _leer_config()
     campo = ft.TextField(label="Código del lugar (ej. 8523)", width=380, autofocus=True,
                          border_color=CYAN, color="white", value=previo.get("cliente", ""))
-    llave = ft.TextField(label="Llave del bar (pbg_...)", width=380, border_color=CYAN,
+    llave = ft.TextField(label="Llave del bar (ej. K7M4-X9P2)", width=380, border_color=CYAN,
                          color="white", password=True, can_reveal_password=True,
                          value=previo.get("llave", ""))
     servidor = ft.TextField(label="Servidor de PlayBar GO", width=380, border_color="#334155",

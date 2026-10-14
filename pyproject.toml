@@ -21,6 +21,10 @@ org = "com.a33"
 bundle_id = "com.a33.daleplay"
 build_number = 10
 
+[tool.flet.app]
+# El reproductor de TV es otro proyecto (tiene su propio pyproject.toml)
+exclude = ["reproductor_tv"]
+
 [tool.flet.android]
 adaptive_icon_background = "#020617"
 

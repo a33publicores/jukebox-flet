@@ -1,0 +1,58 @@
+# Reproductor PlayBar GO para TV (Android TV / Google TV / Fire TV / TV Box).
+# Es un proyecto aparte de la app web (../pyproject.toml): otro paquete, otra versión.
+[project]
+name = "playbar_go_tv"
+version = "0.1.0"
+description = "PlayBar GO TV - Reproductor para televisores Android"
+requires-python = ">=3.13,<3.14"   # mismo Python que la app Android que ya publicas
+dependencies = [
+    "flet==1.0.3",
+    "flet-video",
+    "yt-dlp",
+    "requests",
+]
+
+[tool.flet]
+product = "PlayBar GO TV"
+org = "com.a33"
+bundle_id = "com.a33.playbargo.tv"   # distinto al de la app de pedidos (com.a33.daleplay)
+build_number = 1
+
+[tool.flet.app]
+# Lo que NO va dentro del .apk (herramientas de compilación del PC)
+exclude = [".venv_tv", "salida_apk", "construir_apk.py", "CONSTRUIR_APK.bat",
+           "PROBAR_EN_PC.bat", "README_TV.md",
+           "probar_en_pc.py", "probar_en_pc.log", "publicar_tv.py",
+           "construir_apk.log"]
+
+[tool.flet.android]
+adaptive_icon_background = "#020617"
+min_sdk_version = 24          # Android 7: cubre casi todos los TV Box y Chromecast
+split_per_abi = false         # un solo .apk que sirve en todos los TV (32 y 64 bits)
+
+[tool.flet.android.splash]
+color = "#020617"
+dark_color = "#020617"
+icon_fit = "contain"
+
+# En un TV no hay pantalla táctil y es un equipo "leanback" (Android TV).
+[tool.flet.android.feature]
+"android.hardware.touchscreen" = false
+"android.software.leanback" = false
+
+[tool.flet.android.permission]
+"android.permission.INTERNET" = true
+"android.permission.WAKE_LOCK" = true
+
+# El ícono grande del menú de Android TV (banner) y la categoría LEANBACK_LAUNCHER no se
+# pueden poner aquí: los agrega construir_apk.py después de "flet build apk".
+
+[tool.flet.boot_screen]
+name = "flet"
+
+[tool.flet.boot_screen.flet]
+theme_mode = "dark"
+bgcolor_dark = "#020617"
+spinner_color_dark = "#00D4FF"
+startup_message = "Abriendo PlayBar GO TV…"
+prepare_message = "Preparando por primera vez (puede tardar un minuto)…"

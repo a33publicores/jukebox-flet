@@ -350,7 +350,8 @@ def _form_negocio(page, c=None):
 
 def _ver_llave(page, c, recien=False):
     c = db.cliente(c["codigo"]) or c
-    texto = ft.Text(c["llave"], selectable=True, color="white", size=15, weight=ft.FontWeight.BOLD)
+    texto = ft.Text(db.formato_llave(c["llave"]), selectable=True, color="white", size=30,
+                    weight=ft.FontWeight.BOLD, font_family="monospace")
 
     async def copiar(e):
         try:
@@ -361,7 +362,7 @@ def _ver_llave(page, c, recien=False):
 
     def regenerar(e):
         fila = db.regenerar_llave(c["codigo"])
-        texto.value = fila["llave"]
+        texto.value = db.formato_llave(fila["llave"])
         aviso.value = "Llave nueva creada: la anterior YA NO sirve. Escríbela en el reproductor del bar."
         aviso.color = "#facc15"
         page.update()
@@ -375,7 +376,10 @@ def _ver_llave(page, c, recien=False):
         ft.Text(f"Código del lugar: {c['codigo']}", color="white"),
         ft.Container(padding=12, border_radius=10, bgcolor="#0b1220", content=texto),
         aviso,
-        ft.Text("Si un PC se pierde o alguien más tiene la llave, usa Regenerar.",
+        ft.Text("No importan mayúsculas ni el guion. Si la llave todavía es larga (pbg_...), "
+                "usa Regenerar para tener una corta (la larga deja de servir).",
+                color="#64748b", size=12),
+        ft.Text("Si un PC o TV se pierde o alguien más tiene la llave, usa Regenerar.",
                 color="#64748b", size=12),
     ], [
         ft.TextButton("Regenerar", on_click=regenerar),
