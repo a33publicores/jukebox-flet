@@ -30,6 +30,7 @@ CARPETA_DATOS = Path(os.environ.get("PLAYBAR_HOME", Path.home() / "PlayBarGo"))
 INTERVALO = 4.0        # segundos entre lecturas de la hoja (cuota: 60 lecturas/min)
 LATIDO = 15.0          # segundos entre latidos al panel admin
 PRECARGA = 3           # canciones pedidas por delante que se descargan
+RELLENO_LISTOS = 3     # aleatorias ya descargadas por adelantado (cambiar seguido sin esperar)
 RECIENTES = 15         # relleno: no repetir las últimas N
 COMANDO_MAX_EDAD = 120  # ignorar comandos más viejos (p. ej. de antes de reiniciar)
 # False (por defecto): la canción pedida queda de SIGUIENTE y espera a que termine la
@@ -189,7 +190,7 @@ class Motor:
         self._fallos = {}        # video_id -> descargas fallidas
         self._pend = []          # marcas que no se pudieron escribir [(fila, estado2, estado)]
         self._hechas = set()     # filas que ya sonaron en esta sesión (aunque la hoja no lo sepa)
-        self._relleno_sig = None  # próxima canción aleatoria, elegida y descargada por adelantado
+        self._rellenos = []  # próximas aleatorias, elegidas y descargadas por adelantado (en orden)
         self._marcas = set()      # escrituras a la API en segundo plano
         self._preparando_relleno = False
         self._ultimo_cid = None
@@ -397,37 +398,63 @@ class Motor:
     async def _elegir_relleno(self):
         gen = self._generos()
         try:
-            return await asyncio.to_thread(self.backend.elegir_relleno, list(self.recientes), gen)
+            return await asyncio.to_thread(self.backend.elegir_relleno, self._evitar(), gen)
         except TypeError:  # respaldo para un backend sin filtro de géneros
-            return await asyncio.to_thread(self.backend.elegir_relleno, list(self.recientes))
+            return await asyncio.to_thread(self.backend.elegir_relleno, self._evitar())
+
+    def _evitar(self):
+        """Lo que no debe salir de nuevo: lo que sonó hace poco y lo que ya está en espera."""
+        return list(self.recientes) + [i.video_id for i in self._rellenos]
 
     def _revisar_generos(self):
-        """Si el admin cambió los géneros, la próxima aleatoria ya escogida se descarta."""
+        """Si el admin cambió los géneros, las aleatorias ya escogidas se descartan."""
         gen = self._generos()
         if gen != getattr(self, "_gen_previos", None):
             if getattr(self, "_gen_previos", None) is not None:
                 print(f"🎚️ Géneros del relleno: {', '.join(sorted(gen)) or 'todos'}")
-                self._relleno_sig = None
+                self._rellenos = []
             self._gen_previos = gen
 
     async def _preparar_relleno(self):
-        """Mientras suena una canción, deja elegida y descargada la próxima aleatoria."""
-        try:
-            if self._relleno_sig is None or self._relleno_sig.video_id in self.recientes:
-                self._relleno_sig = await self._elegir_relleno()
-            if self._relleno_sig is not None:
-                await self._descargar(self._relleno_sig.video_id, self._relleno_sig)
-        except Exception as ex:
-            print(f"⚠️ No se pudo preparar el próximo aleatorio: {ex}")
-            self._relleno_sig = None
+        """Mientras suena una canción, deja elegidas y descargadas las próximas aleatorias
+        (RELLENO_LISTOS): así se puede cambiar varias veces seguidas sin esperar descargas."""
+        intentos = 0
+        while len(self._rellenos) < RELLENO_LISTOS and intentos < RELLENO_LISTOS * 2:
+            intentos += 1
+            try:
+                item = await self._elegir_relleno()
+                if item is None:
+                    return
+                if item.video_id in self._evitar():
+                    continue  # el historial es corto: no hay más canciones distintas
+                await self._descargar(item.video_id, item)
+                self._rellenos.append(item)
+            except Exception as ex:
+                print(f"⚠️ No se pudo preparar un aleatorio: {ex}")
+
+    async def _relleno_guardado(self, intentos=15):
+        """Una aleatoria que YA está guardada en el equipo (para cuando cambian muy rápido)."""
+        for _ in range(intentos):
+            item = await self._elegir_relleno()
+            if item is None:
+                return None
+            if self.desc.ruta(item.video_id):
+                return item
+        return None
 
     async def _poner_relleno(self):
         self.ocupado = True
         try:
-            # 1) la que ya quedó lista mientras sonaba la anterior: entra al instante
-            sig, self._relleno_sig = self._relleno_sig, None
-            if sig is not None and self.desc.ruta(sig.video_id):
-                await self._reproducir(sig, self.desc.ruta(sig.video_id), relleno=True)
+            # 1) las que ya quedaron listas mientras sonaba la anterior: entran al instante
+            while self._rellenos:
+                sig = self._rellenos.pop(0)
+                if sig.video_id not in self.recientes and self.desc.ruta(sig.video_id):
+                    await self._reproducir(sig, self.desc.ruta(sig.video_id), relleno=True)
+                    return
+            # 2) cambiaron muy rápido y no queda ninguna lista: una ya guardada en el equipo
+            item = await self._relleno_guardado()
+            if item is not None:
+                await self._reproducir(item, self.desc.ruta(item.video_id), relleno=True)
                 return
             for _ in range(3):
                 item = await self._elegir_relleno()
@@ -458,6 +485,8 @@ class Motor:
         await self.ui.reproducir(ruta, item, self.token)
         print(f"▶️ {'(relleno) ' if relleno else ''}{item.titulo}")
         await self._anticipar()
+        if self.snap is not None:
+            self._precargar(self.snap)  # prepara ya las próximas, sin esperar la próxima revisión
 
     async def _terminar(self, motivo):
         """Cierra la canción actual y pasa a la siguiente."""
@@ -665,7 +694,8 @@ class Motor:
             if not self.desc.ruta(it.video_id) and it.video_id not in self._en_curso:
                 self._lanzar_descarga(it.video_id, it)
         # si no hay pedidos esperando, deja lista la próxima aleatoria
-        if not pendientes and self.actual is not None and not self._preparando_relleno:
+        if (not pendientes and self.actual is not None and not self._preparando_relleno
+                and len(self._rellenos) < RELLENO_LISTOS):
             self._preparando_relleno = True
 
             async def _prep():
@@ -691,7 +721,7 @@ class Motor:
         cola = [i for i in snap.cola if i.fila not in omitir]
         if cola:
             return cola[0]
-        return self._relleno_sig
+        return self._rellenos[0] if self._rellenos else None
 
     async def _anticipar(self, snap=None):
         """Deja la próxima canción (si ya está descargada) lista en el reproductor, para
