@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
@@ -31,14 +32,64 @@ FLET = VENV / ("Scripts/flet.exe" if WIN else "bin/flet")
 SALIDA = AQUI / "salida_apk"
 FLUTTER_PROY = AQUI / "build" / "flutter"
 
+# Llave de firma propia (FUERA del repo). Siempre la misma: si cambia, los TV no dejan
+# actualizar. La contraseña va en el .txt de al lado o en FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD.
+LLAVE = Path(os.environ.get("PLAYBARGO_TV_LLAVE", AQUI.parent.parent / "llaves" / "playbargo_tv.jks"))
+LLAVE_CLAVE = LLAVE.with_name(LLAVE.stem + "_password.txt")
+
+
+LOG = AQUI / "construir_apk.log"
+
+
+def log(texto):
+    print(texto, flush=True)
+    with open(LOG, "a", encoding="utf-8") as f:
+        f.write(texto + "\n")
+
 
 def paso(texto):
-    print("\n" + "=" * 64 + f"\n{texto}\n" + "=" * 64, flush=True)
+    log("\n" + "=" * 64 + f"\n{time.strftime('%H:%M:%S')}  {texto}\n" + "=" * 64)
+
+
+_CLAVES = ("error", "fail", "exception", "warning", "✅", "✓", "⚠", "❌", "build ",
+           "running gradle", "packaged", "installing", "generated", "built ", ".apk")
+
+
+def _importante(linea):
+    t = linea.strip()
+    if not t or "VERBOSE:" in t:
+        return False
+    if t[:1] == "[" and t[3:4] == ":" and t[6:7] == ":":  # [HH:MM:SS] pasos de Flet
+        return True
+    bajo = t.lower()
+    return any(c in bajo for c in _CLAVES)
 
 
 def correr(cmd, **kw):
-    print(">", " ".join(str(c) for c in cmd), flush=True)
-    subprocess.run([str(c) for c in cmd], check=True, **kw)
+    """Ejecuta y guarda TODA la salida en construir_apk.log. En pantalla muestra solo lo
+    importante (la terminal de VS Code se cae con miles de líneas por segundo) y un punto
+    cada 300 líneas para que se vea que sigue avanzando."""
+    log("> " + " ".join(str(c) for c in cmd))
+    env = dict(kw.pop("env", None) or os.environ, PYTHONUNBUFFERED="1")
+    p = subprocess.Popen([str(c) for c in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, encoding="utf-8", errors="replace", env=env, **kw)
+    ocultas = 0
+    with open(LOG, "a", encoding="utf-8") as f:
+        for linea in p.stdout:
+            linea = linea.rstrip()
+            f.write(linea + "\n")
+            if _importante(linea):
+                if ocultas >= 300:
+                    print(flush=True)
+                print(linea[:200], flush=True)
+                ocultas = 0
+            else:
+                ocultas += 1
+                if ocultas % 300 == 0:
+                    print(".", end="", flush=True)
+    print(flush=True)
+    if p.wait() != 0:
+        raise subprocess.CalledProcessError(p.returncode, cmd)
 
 
 def preparar_python():
@@ -51,10 +102,35 @@ def preparar_python():
             "flet-desktop==1.0.3", "flet-video", "yt-dlp", "requests"])
 
 
-def flet_build():
+def regenerar_proyecto_android():
+    """Hace que Flet vuelva a generar el proyecto de Android desde cero (sin borrar nada:
+    solo invalida sus "huellas"). Así aplica lo de pyproject.toml (jni_flutter 1.0.3) y
+    agrega él mismo las extensiones (flet_video) al pubspec.yaml. Las librerías de Python
+    ya instaladas se conservan."""
+    for nombre in ("template-1", "template-2"):
+        huella = AQUI / "build" / ".hash" / nombre
+        if huella.is_file():
+            huella.write_text("regenerar", "utf-8")
+    log("✓ El proyecto de Android se generará de nuevo (con jni_flutter 1.0.3)")
+
+
+def flet_build(regenerar=False):
+    if regenerar:
+        regenerar_proyecto_android()
     paso("flet build apk (la primera vez descarga Flutter y Android: paciencia)")
-    env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
-    correr([FLET, "build", "apk", "--yes", "-v"], cwd=AQUI, env=env)
+    env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8", **variables_firma())
+    correr([FLET, "build", "apk", "--yes", "-vv"], cwd=AQUI, env=env)
+
+
+def variables_firma():
+    """Firma con la llave propia (por variables de entorno: la contraseña no queda en el log)."""
+    if not LLAVE.is_file():
+        sys.exit(f"No encontré la llave de firma {LLAVE}. Sin ella los TV no podrán actualizar.")
+    clave = os.environ.get("FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD") or LLAVE_CLAVE.read_text("utf-8").strip()
+    return {"FLET_ANDROID_SIGNING_KEY_STORE": str(LLAVE),
+            "FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD": clave,
+            "FLET_ANDROID_SIGNING_KEY_PASSWORD": clave,
+            "FLET_ANDROID_SIGNING_KEY_ALIAS": "playbargo_tv"}
 
 
 def buscar_apks(carpeta):
@@ -85,9 +161,10 @@ def ajustar_para_tv():
 
 def main():
     os.chdir(AQUI)
+    LOG.write_text("", encoding="utf-8")
     preparar_python()
     paso("2. Primera compilación")
-    flet_build()
+    flet_build(regenerar=True)
     apk_flet = buscar_apks(AQUI / "build" / "apk")
     if not apk_flet:
         sys.exit("No se generó ningún .apk (mira los mensajes de arriba).")
@@ -127,4 +204,6 @@ if __name__ == "__main__":
     try:
         main()
     except subprocess.CalledProcessError as ex:
-        sys.exit(f"\n❌ Falló un paso: {ex}")
+        log(f"\n❌ Falló un paso: {ex}")
+        log("   Todo el detalle quedó en construir_apk.log")
+        sys.exit(1)

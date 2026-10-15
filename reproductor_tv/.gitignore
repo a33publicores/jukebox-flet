@@ -6,3 +6,9 @@ __pycache__/
 *.pyc
 probar_en_pc.log
 construir_apk.log
+
+# Llaves de firma: nunca a git (la llave vive en D:\Python\Musica\llaves)
+*.jks
+*.keystore
+*_password.txt
+key.properties

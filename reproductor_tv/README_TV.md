@@ -49,9 +49,11 @@ Android y Java (tarda bastante). Resultado:
 reproductor_tv\salida_apk\PlayBarGO_TV.apk
 ```
 
-Es un solo .apk que sirve en todos los TV (32 y 64 bits). Va firmado con la llave de
-pruebas de este PC: **crea siempre las versiones nuevas desde este mismo PC**; si no,
-el TV no deja actualizar y toca desinstalar primero.
+Es un solo .apk que sirve en todos los TV (32 y 64 bits). Va firmado con la llave
+propia `D:\Python\Musica\llaves\playbargo_tv.jks` (contraseña en el
+`playbargo_tv_password.txt` de al lado, o en la variable `FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD`;
+otra ruta con `PLAYBARGO_TV_LLAVE`). Esa carpeta NO va a git: **guarda una copia**. Si la
+llave se pierde o cambia, los TV no dejan instalar el .apk nuevo encima y toca desinstalar.
 
 ## 3. Instalar en el TV
 
@@ -61,9 +63,9 @@ No va en Google Play (Google no acepta apps que descarguen de YouTube). Se insta
    activa *Fuentes desconocidas* (o *Apps de origen desconocido*) para la app que usarás.
    En Google TV primero toca 7 veces *Ajustes → Sistema → Acerca de → Compilación del SO*.
 2. Instala la app **Downloader** (de AFTVnews) desde la tienda del TV.
-3. Sube `PlayBarGO_TV.apk` a una URL (por ejemplo, como archivo de un Release de GitHub)
-   y escribe esa URL en Downloader. También sirve una memoria USB con un explorador
-   de archivos.
+3. En Downloader escribe el enlace fijo del .apk (siempre baja el más nuevo):
+   `https://github.com/a33publicores/jukebox-flet/releases/download/tv-apk/PlayBarGO_TV.apk`
+   También sirve una memoria USB con un explorador de archivos.
 4. Abre **PlayBar GO TV**, escribe el código del lugar y la llave del bar (la misma del
    reproductor .exe).
 
@@ -113,3 +115,27 @@ Si la versión nueva no carga, o la app se cierra 3 veces seguidas antes de func
 
 **Esto actualiza solo la carpeta `tv/`.** Si cambias `main.py`, `arranque.py`,
 `pyproject.toml`, `assets/` o agregas librerías, hay que crear e instalar un .apk nuevo.
+
+## Próxima versión (resumen)
+
+**Cambio solo en `tv/`** (pantalla, control, cola, descargas…): los TV se actualizan solos.
+
+```
+git add . && git commit -m "..." && git push
+py -3.12 publicar_tv.py 0.1.1          (subir el número cada vez: 0.1.2, 0.1.3…)
+```
+
+**Cambio en `main.py`, `arranque.py`, `pyproject.toml`, `assets/` o librerías:** .apk nuevo.
+
+1. Sube `build_number` en `pyproject.toml` (2, 3…) y, si quieres, `version`.
+2. `CONSTRUIR_APK.bat` (firma sola con la llave propia; sin la llave no compila).
+3. En GitHub, release **`tv-apk`** (pre-release): borra el `PlayBarGO_TV.apk` viejo y sube
+   el nuevo con el MISMO nombre. El enlace de Downloader no cambia.
+4. En cada TV se instala encima (USB o Downloader), sin desinstalar: conserva la llave del bar.
+
+Releases del TV en GitHub (todas pre-release, el reproductor del PC no las ve):
+
+| Release | Qué tiene | Quién la usa |
+|---|---|---|
+| `tv-v0.1.0`, `tv-v0.1.1`… | `tv_codigo.zip` | los TV, para actualizarse solos |
+| `tv-apk` (fija) | `PlayBarGO_TV.apk` | Downloader / instalación nueva |
