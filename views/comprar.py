@@ -13,7 +13,7 @@ import urllib.parse
 
 import flet as ft
 
-from services import registro
+from services import bonos, registro
 from services import suscripcion as sus
 from views.acceso import CYAN, FONDO, VIOLETA, boton_degradado, campo, ir_a_portada
 from views.admin import URL_CLIENTES
@@ -88,6 +88,8 @@ def comprar_view(page, plan_id=None):
                     capitalization=ft.TextCapitalization.NONE)
     clave = campo("Contraseña", password=True, can_reveal_password=True)
     clave2 = campo("Repite la contraseña", password=True, can_reveal_password=True)
+    bono = campo("Código de bono (opcional)", capitalization=ft.TextCapitalization.CHARACTERS,
+                 autocorrect=False, enable_suggestions=False, hint_text="PBG-XXXXXX")
     error = ft.Text("", color="#f87171", size=13, width=320, text_align=ft.TextAlign.CENTER)
 
     elegido = str(plan_id) if plan_id and any(str(p["id"]) == str(plan_id) for p in planes) \
@@ -112,6 +114,8 @@ def comprar_view(page, plan_id=None):
             msg = "Elige un plan."
         if not msg and _registros.get(id(page), 0) >= MAX_REGISTROS_POR_VISITA:
             msg = "Ya creaste varios bares. Si necesitas otro, escríbenos por WhatsApp."
+        if not msg and bonos.normalizar(bono.value):
+            _, msg = bonos.revisar(bono.value)
         if msg:
             error.value = msg
             page.update()
@@ -127,9 +131,10 @@ def comprar_view(page, plan_id=None):
             error.value = "No se pudo crear el bar. Intenta de nuevo en un momento."
             page.update()
             return
-        pago_view(page, bar, usuario.value.strip(), int(grupo.value))
+        pago_view(page, bar, usuario.value.strip(), int(grupo.value), bono.value)
 
     clave2.on_submit = continuar
+    bono.on_submit = continuar
 
     _marco(page,
            *_encabezado("Compra PlayBar GO", "Crea tu cuenta de administrador y paga tu plan. "
@@ -143,6 +148,9 @@ def comprar_view(page, plan_id=None):
            usuario, clave, clave2,
            ft.Text("TU PLAN", color="#94A3B8", size=12, weight=ft.FontWeight.BOLD, width=320),
            grupo if planes else ft.Text("No hay planes disponibles por ahora.", color="#94A3B8"),
+           bono,
+           ft.Text(f"Con un código de bono de referido pagas {_pesos(bonos.DESCUENTO)} menos "
+                   "en este primer pago.", color="#64748b", size=12, width=320),
            error,
            boton_degradado("Continuar al pago", continuar),
            ft.Text("El código de tu bar lo genera el sistema. La llave del reproductor te la "
@@ -155,11 +163,27 @@ def comprar_view(page, plan_id=None):
 # ---------------------------------------------------------------------------
 # Paso 2: pago
 # ---------------------------------------------------------------------------
-def pago_view(page, bar, usuario, plan_id):
+def pago_view(page, bar, usuario, plan_id, bono_txt=""):
     codigo = bar["codigo"]
     p = sus.plan(plan_id)
     aviso = ft.Text("", color="#facc15", size=13, width=340, text_align=ft.TextAlign.CENTER)
-    estado = {"ref": None, "vivo": True, "desde": time.time()}
+    estado = {"ref": None, "vivo": True, "desde": time.time(), "bono": ""}
+    linea_bono = ft.Row([], visible=False)
+    total = ft.Text("", color="white", size=20, weight=ft.FontWeight.BOLD)
+
+    def pintar_precio(b=None):
+        """Precio a pagar (lo mismo que calcula el servidor al crear la orden)."""
+        precio = int(p["precio"]) if p else 0
+        monto, descuento = bonos.precio_con_bono(precio, b)
+        estado["bono"] = b["codigo"] if b and descuento else ""
+        linea_bono.visible = bool(estado["bono"])
+        linea_bono.controls = [
+            ft.Text(f"Bono {estado['bono']}", color="#4ade80", size=14, expand=True),
+            ft.Text(f"−{_pesos(descuento)}", color="#4ade80", size=15)] if estado["bono"] else []
+        total.value = _pesos(monto)
+
+    b_inicial, _ = bonos.revisar(bono_txt, codigo) if bonos.normalizar(bono_txt) else (None, "")
+    pintar_precio(b_inicial)
 
     def revisar():
         """Revisa la orden cada pocos segundos hasta que Wompi la apruebe o la rechace."""
@@ -189,9 +213,13 @@ def pago_view(page, bar, usuario, plan_id):
         aviso.value = "Preparando el pago seguro…"
         page.update()
         try:
-            o = await asyncio.to_thread(sus.crear_orden, codigo, plan_id)
+            o = await asyncio.to_thread(sus.crear_orden, codigo, plan_id, estado["bono"])
         except Exception as ex:
-            aviso.value = f"No se pudo crear el pago: {ex}"
+            if estado["bono"]:  # el bono se ocupó mientras tanto: se puede pagar sin él
+                pintar_precio(None)
+                aviso.value = f"{ex} Si tocas «Pagar» otra vez, pagas el precio sin bono."
+            else:
+                aviso.value = f"No se pudo crear el pago: {ex}"
             page.update()
             return
         estado["ref"] = o["referencia"]
@@ -222,8 +250,9 @@ def pago_view(page, bar, usuario, plan_id):
                     ft.Text(usuario, color="white", size=16, selectable=True)]),
             ft.Divider(color="#1e293b"),
             ft.Row([ft.Text(p["nombre"] if p else "Plan", color="white", size=15, expand=True),
-                    ft.Text(_pesos(p["precio"]) if p else "", color="white", size=20,
-                            weight=ft.FontWeight.BOLD)]),
+                    ft.Text(_pesos(p["precio"]) if p else "", color="#94A3B8", size=15)]),
+            linea_bono,
+            ft.Row([ft.Text("Total a pagar", color="white", size=15, expand=True), total]),
         ], spacing=8))
 
     _marco(page,

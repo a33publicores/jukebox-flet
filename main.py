@@ -44,6 +44,12 @@ async def _abrir_ruta(page, ruta, consulta, session):
             await asyncio.to_thread(seleccionar_modo_view, page, codigo_bar,
                                     datos["nombre"], datos["logo"])
             return True
+        if "error" not in datos:  # el bar no existe (o fue eliminado / está inactivo)
+            from views.codigo import codigo_view
+            await asyncio.to_thread(codigo_view, page)
+            page.show_dialog(ft.SnackBar(content=ft.Text(
+                f"No encontramos el bar {codigo_bar}. Revisa el código del lugar.")))
+            return True
     return False
 
 

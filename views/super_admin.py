@@ -170,6 +170,9 @@ def super_inicio(page):
                                       on_click=lambda e: pedidos_view(page, c)),
                     ft.OutlinedButton("Plan", icon=ft.Icons.CREDIT_CARD,
                                       on_click=lambda e: _form_plan_negocio(page, c)),
+                    ft.OutlinedButton("Eliminar", icon=ft.Icons.DELETE_FOREVER,
+                                      style=ft.ButtonStyle(color="#f87171"),
+                                      on_click=lambda e: _eliminar_negocio(page, c)),
                 ], wrap=True, spacing=8, run_spacing=8),
             ], spacing=10),
         )
@@ -180,6 +183,7 @@ def super_inicio(page):
             _boton("➕ Nuevo negocio", lambda e: _form_negocio(page)),
             _boton("👥 Super admins", lambda e: admins_view(page, None), apagado=True),
             _boton("💳 Planes", lambda e: planes_view(page), apagado=True),
+            _boton("🎁 Bonos", lambda e: bonos_view(page), apagado=True),
             _boton("🧾 Pagos", lambda e: pagos_view(page), apagado=True),
             _boton("Salir", salir, apagado=True),
         ], wrap=True, spacing=8, run_spacing=8),
@@ -191,6 +195,39 @@ def super_inicio(page):
 
 PLAYLIST_POR_DEFECTO_DE = os.getenv("PLAYLIST_POR_DEFECTO_DE", "8523")  # negocio "modelo"
 MAX_LOGO_MB = 2
+
+
+def _eliminar_negocio(page, c):
+    """Borra TODO el negocio de la base. Hay que escribir su código para confirmar."""
+    confirmar = _campo(f"Escribe el código del bar ({c['codigo']}) para confirmar", numeros=True)
+    error = ft.Text("", color="#f87171")
+
+    def borrar(ev):
+        if (confirmar.value or "").strip() != str(c["codigo"]):
+            error.value = "El código no coincide. No se borró nada."
+            page.update()
+            return
+        try:
+            r = db.eliminar_negocio(c["codigo"])
+        except Exception as ex:
+            error.value = f"No se pudo eliminar: {ex}"
+            page.update()
+            return
+        _cerrar_dialogo(page)
+        super_inicio(page)
+        _aviso(page, f"{c['nombre']} ({c['codigo']}) eliminado" if r else "Ese negocio ya no existía")
+
+    _dialogo(page, f"🗑️ Eliminar {c['nombre']}", [
+        ft.Text("Se borra para siempre todo lo de este bar: sus administradores, la llave del "
+                "reproductor (deja de funcionar en menos de un minuto), las canciones y el "
+                "historial, la configuración, el logo, los pagos y las sesiones abiertas. "
+                "El enlace /bar/" + str(c["codigo"]) + " dejará de existir.",
+                color="#fecaca", size=13),
+        ft.Text("Esto NO se puede deshacer.", color="#f87171", weight=ft.FontWeight.BOLD),
+        confirmar, error,
+    ], [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
+        ft.FilledButton("Eliminar para siempre", on_click=borrar,
+                        style=ft.ButtonStyle(bgcolor="#b91c1c", color="white"))])
 
 
 def _playlist_por_defecto():
@@ -611,6 +648,71 @@ def planes_view(page):
     page.update()
 
 
+def bonos_view(page):
+    """🎁 Bonos de referido: cada código descuenta bonos.DESCUENTO en un solo pago."""
+    from services import bonos
+
+    if not _es_super(page):
+        return super_login_view(page)
+    _preparar(page)
+    nota = _campo("Referido por (opcional): nombre o nota", ancho=340)
+
+    def generar(e):
+        b = bonos.crear(nota.value)
+
+        async def copiar(ev):
+            await ft.Clipboard().set(b["codigo"])
+            _aviso(page, "Código copiado")
+
+        _dialogo(page, "🎁 Bono creado", [
+            ft.Text(b["codigo"], selectable=True, color="white", size=30, weight=ft.FontWeight.BOLD),
+            ft.Text(f"Descuenta {_pesos(b['descuento'])} en un solo pago (compra o renovación)."
+                    + (f"\nReferido por: {b['nota']}" if b["nota"] else ""), color="#cbd5e1", size=13),
+        ], [ft.TextButton("Copiar", on_click=copiar),
+            ft.FilledButton("Listo", on_click=lambda ev: (_cerrar_dialogo(page), bonos_view(page)))])
+
+    def cambiar(b, activo):
+        bonos.poner_activo(b["codigo"], activo)
+        bonos_view(page)
+
+    color = {"sin usar": "#22c55e", "reservado": "#facc15", "usado": "#94A3B8",
+             "desactivado": "#f87171"}
+    filas = []
+    for b in bonos.lista():
+        est = bonos.estado_txt(b)
+        detalle = est.capitalize()
+        if est == "usado":
+            detalle += f" · bar {b['usado_bar']} · {fecha_local(b['usado_en'])[:16]}"
+        elif est == "reservado":
+            detalle += " · pago en curso"
+        acciones = []
+        if est in ("sin usar", "reservado"):
+            acciones.append(ft.TextButton("Desactivar", on_click=lambda e, b=b: cambiar(b, False)))
+        elif est == "desactivado":
+            acciones.append(ft.TextButton("Activar", on_click=lambda e, b=b: cambiar(b, True)))
+        filas.append(ft.Container(
+            width=520, padding=12, border_radius=14, bgcolor=PANEL, border=ft.Border.all(1, "#1e293b"),
+            content=ft.Row([
+                ft.Column([
+                    ft.Text(b["codigo"], color="white", size=16, weight=ft.FontWeight.BOLD,
+                            selectable=True),
+                    ft.Text(f"−{_pesos(b['descuento'])}" + (f" · {b['nota']}" if b["nota"] else "")
+                            + f" · creado {fecha_local(b['creado'])[:10]}", color="#94A3B8", size=12),
+                    ft.Text(detalle, color=color.get(est, "white"), size=13),
+                ], expand=True, spacing=2),
+                *acciones,
+            ])))
+    page.add(ft.Container(width=560, padding=16, content=ft.Column([
+        _encabezado(page, "🎁 Bonos de referido", volver=super_inicio),
+        ft.Text(f"Cada código sirve una sola vez y descuenta {_pesos(bonos.DESCUENTO)} de un pago "
+                "(la compra en la web o una renovación en «Mi plan»).", color="#94A3B8", size=13),
+        nota,
+        _boton("➕ Generar bono", generar),
+        *(filas or [ft.Text("Todavía no hay bonos.", color="#94A3B8")]),
+    ], spacing=12)))
+    page.update()
+
+
 def pagos_view(page):
     if not _es_super(page):
         return super_login_view(page)
@@ -623,7 +725,8 @@ def pagos_view(page):
         rows=[ft.DataRow(cells=[
             ft.DataCell(content=ft.Text(fecha_local(o["creado"])[:16], size=12, color="#cbd5e1")),
             ft.DataCell(content=ft.Text(o["codigo"], size=12, color="#cbd5e1")),
-            ft.DataCell(content=ft.Text(o["plan_nombre"], size=12, color="white")),
+            ft.DataCell(content=ft.Text(o["plan_nombre"] + (f" · bono {o['bono']}" if o.get("bono") else ""),
+                                        size=12, color="white")),
             ft.DataCell(content=ft.Text(_pesos(o["monto"]), size=12, color="white")),
             ft.DataCell(content=ft.Text(o["estado"], size=12, color=color.get(o["estado"], "#f87171"))),
             ft.DataCell(content=ft.Text(o["referencia"], size=11, color="#64748b", selectable=True)),

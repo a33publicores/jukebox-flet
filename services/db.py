@@ -132,6 +132,22 @@ ESQUEMA = [
         tipo       TEXT NOT NULL DEFAULT 'image/png',
         actualizado DOUBLE PRECISION NOT NULL
     )""",
+    # Bonos de referido (services/bonos.py): un descuento en UN pago. Mientras un pago
+    # está en curso el bono queda "reservado" a esa orden; al aprobarse queda "usado".
+    """CREATE TABLE IF NOT EXISTS bonos (
+        codigo          TEXT PRIMARY KEY,
+        nota            TEXT NOT NULL DEFAULT '',
+        descuento       INTEGER NOT NULL,
+        activo          BOOLEAN NOT NULL DEFAULT TRUE,
+        creado          DOUBLE PRECISION NOT NULL,
+        reservado_ref   TEXT NOT NULL DEFAULT '',
+        reservado_hasta DOUBLE PRECISION NOT NULL DEFAULT 0,
+        usado_ref       TEXT NOT NULL DEFAULT '',
+        usado_bar       TEXT NOT NULL DEFAULT '',
+        usado_en        DOUBLE PRECISION NOT NULL DEFAULT 0
+    )""",
+    "ALTER TABLE pagos ADD COLUMN IF NOT EXISTS bono TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE pagos ADD COLUMN IF NOT EXISTS descuento INTEGER NOT NULL DEFAULT 0",
 ]
 
 
@@ -311,6 +327,49 @@ def guardar_cliente(codigo, nombre, logo="", playlist="", activo=True):
         (codigo, str(nombre).strip(), str(logo or "").strip(), str(playlist or "").strip(),
          bool(activo), nueva_llave(), time.time(), time.time()),
     )
+
+
+def eliminar_negocio(codigo):
+    """Borra de verdad TODO lo del negocio, en una sola operación (todo o nada): el bar
+    (y con él su llave del reproductor), sus administradores, canciones e historial,
+    control y géneros, logo, pagos, descargas y sesiones abiertas. Los bonos que usó se
+    conservan marcados como usados (con el código del bar como texto). No se deshace.
+    Devuelve cuántas filas se borraron de cada tabla, o None si el negocio no existe."""
+    codigo = str(codigo).strip()
+    if not codigo or codigo == "*":
+        raise ValueError("Código de negocio no válido")
+    fila = uno(
+        """WITH reservas AS (UPDATE bonos SET reservado_ref = '', reservado_hasta = 0
+                             WHERE usado_ref = '' AND reservado_ref IN
+                                   (SELECT referencia FROM pagos WHERE codigo = %s) RETURNING 1),
+                admins_   AS (DELETE FROM admins    WHERE codigo = %s RETURNING 1),
+                pedidos_  AS (DELETE FROM pedidos   WHERE codigo = %s RETURNING 1),
+                control_  AS (DELETE FROM control   WHERE codigo = %s RETURNING 1),
+                logos_    AS (DELETE FROM logos     WHERE codigo = %s RETURNING 1),
+                pagos_    AS (DELETE FROM pagos     WHERE codigo = %s RETURNING 1),
+                descargas_ AS (DELETE FROM descargas WHERE codigo = %s RETURNING 1),
+                sesiones_ AS (DELETE FROM sesiones  WHERE datos LIKE %s RETURNING 1),
+                negocio   AS (DELETE FROM clientes  WHERE codigo = %s RETURNING 1)
+           SELECT (SELECT COUNT(*) FROM negocio) AS negocio,
+                  (SELECT COUNT(*) FROM admins_) AS admins,
+                  (SELECT COUNT(*) FROM pedidos_) AS pedidos,
+                  (SELECT COUNT(*) FROM control_) AS control,
+                  (SELECT COUNT(*) FROM logos_) AS logos,
+                  (SELECT COUNT(*) FROM pagos_) AS pagos,
+                  (SELECT COUNT(*) FROM descargas_) AS descargas,
+                  (SELECT COUNT(*) FROM sesiones_) AS sesiones,
+                  (SELECT COUNT(*) FROM reservas) AS bonos_liberados""",
+        (codigo, codigo, codigo, codigo, codigo, codigo, codigo,
+         "%" + json.dumps({"codigo": codigo})[1:-1] + "%", codigo))
+    if not fila or not fila["negocio"]:
+        return None
+    try:
+        from services.playbar_service import olvidar_cliente
+        olvidar_cliente(codigo)
+    except Exception:
+        pass
+    print(f"🗑️ Negocio {codigo} eliminado: {dict(fila)}")
+    return dict(fila)
 
 
 def guardar_logo(codigo, contenido, tipo="image/png"):

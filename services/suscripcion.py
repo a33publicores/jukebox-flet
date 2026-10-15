@@ -183,17 +183,34 @@ def poner_estado(codigo, nuevo, dias=None, limite=None, reiniciar_prueba=False):
 # ---------------------------------------------------------------------------
 # Pagos (órdenes)
 # ---------------------------------------------------------------------------
-def crear_orden(codigo, id_plan):
+def crear_orden(codigo, id_plan, bono=""):
+    """Orden PENDIENTE. Con `bono` (código de referido) el bono queda reservado a esta
+    orden y el monto baja; el precio lo calcula siempre el servidor."""
+    from services import bonos
+
     p = plan(id_plan)
     if not p or not p["activo"]:
         raise ValueError("Ese plan no está disponible.")
     if p not in planes_para(codigo):
         raise ValueError("Ese plan no está disponible para este negocio.")
     ref = f"PBG-{codigo}-{int(time.time())}-{secrets.token_hex(3).upper()}"
-    return db.uno(
-        """INSERT INTO pagos (referencia, codigo, plan_id, plan_nombre, monto, dias, creado)
-           VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *""",
-        (ref, str(codigo), p["id"], p["nombre"], int(p["precio"]), int(p["dias"]), time.time()))
+    b = None
+    if bonos.normalizar(bono):
+        _, msg = bonos.revisar(bono, codigo)
+        b = None if msg else bonos.reservar(bono, ref, codigo)
+        if not b:
+            raise ValueError(msg or "Ese código de bono ya no está disponible.")
+    monto, descuento = bonos.precio_con_bono(p["precio"], b)
+    try:
+        return db.uno(
+            """INSERT INTO pagos (referencia, codigo, plan_id, plan_nombre, monto, dias, creado,
+                                  bono, descuento)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *""",
+            (ref, str(codigo), p["id"], p["nombre"], monto, int(p["dias"]), time.time(),
+             b["codigo"] if b else "", descuento))
+    except Exception:
+        bonos.liberar(ref)
+        raise
 
 
 def orden(referencia):
@@ -228,6 +245,10 @@ def aplicar_aprobado(referencia, id_transaccion=""):
     db.ejecutar("UPDATE clientes SET plan_estado = 'activo', plan_vence = %s, plan_nombre = %s "
                 "WHERE codigo = %s", (base + int(o["dias"]) * 86400, o["plan_nombre"], o["codigo"]))
     print(f"💳 Pago APROBADO {o['referencia']}: {o['codigo']} +{o['dias']} días ({o['monto']} COP)")
+    if o.get("bono"):
+        from services import bonos
+        bonos.usar(o)
+        print(f"🎁 Bono {o['bono']} usado por {o['codigo']} (-{o.get('descuento', 0)} COP)")
     return o
 
 
@@ -235,6 +256,8 @@ def marcar_orden(referencia, estado_nuevo, id_transaccion=""):
     db.ejecutar("UPDATE pagos SET estado = %s, id_transaccion = %s "
                 "WHERE referencia = %s AND estado = 'PENDIENTE'",
                 (str(estado_nuevo), str(id_transaccion or ""), str(referencia)))
+    from services import bonos
+    bonos.liberar(referencia)  # pago rechazado/anulado: el bono vuelve a quedar libre
 
 
 # ---------------------------------------------------------------------------
