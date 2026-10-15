@@ -18,6 +18,32 @@ def _ruta(page):
     return "/" + partes.path.strip("/").lower(), urllib.parse.parse_qs(partes.query)
 
 
+RUTAS_ENTRADA = ("/admin", "/comprar")
+
+
+async def _abrir_ruta(page, ruta, consulta, session):
+    """Direcciones que abre la portada (play.alnovix.com): el panel del administrador,
+    la compra y el bar de un QR (/bar/1234). Devuelve True si mostró algo."""
+    if ruta == "/admin":
+        from views.acceso import abrir_desde_ruta
+        await abrir_desde_ruta(page, session)
+        return True
+    if ruta == "/comprar":
+        from views.comprar import comprar_view
+        await asyncio.to_thread(comprar_view, page, (consulta.get("plan") or [None])[0])
+        return True
+    if ruta.startswith("/bar/"):
+        codigo_bar = ruta[len("/bar/"):]
+        from services.playbar_service import validar_cliente
+        datos = await asyncio.to_thread(validar_cliente, codigo_bar)
+        if datos.get("ok"):
+            from views.seleccionar_modo import seleccionar_modo_view
+            await asyncio.to_thread(seleccionar_modo_view, page, codigo_bar,
+                                    datos["nombre"], datos["logo"])
+            return True
+    return False
+
+
 async def main(page: ft.Page):
     page.title = "PlayBar GO"
 
@@ -29,6 +55,30 @@ async def main(page: ft.Page):
     # cuando existe una sesión restaurable.
     # Entrada directa del super administrador:  https://<app>/super
     ruta, consulta = _ruta(page)
+
+    # Flet reconecta la MISMA sesión cuando la pestaña recarga o cambia de dirección
+    # (p. ej. de la portada a /comprar): main() no vuelve a correr, llega un cambio de
+    # ruta. Sin esto se quedaba la pantalla anterior ("Ingresa el código del lugar").
+    async def al_cambiar_ruta(e):
+        from services.session_manager import es_ruta_propia
+        if es_ruta_propia(page, e.route):
+            return
+        nueva, consulta_nueva = _ruta(page)
+        if not (nueva.endswith("/super") or nueva in RUTAS_ENTRADA or nueva.startswith("/bar/")):
+            return
+        try:
+            await splash_view(page)  # también retira la capa de carga del index.html
+        except Exception as ex:
+            print(f"⚠️ Error en splash visual: {ex}")
+        if nueva.endswith("/super"):
+            from views.super_admin import super_login_view
+            await asyncio.to_thread(super_login_view, page)
+        elif nueva in RUTAS_ENTRADA or nueva.startswith("/bar/"):
+            sesion = await cargar_sesion(page) if nueva == "/admin" else None
+            await _abrir_ruta(page, nueva, consulta_nueva, sesion)
+
+    page.on_route_change = al_cambiar_ruta
+
     if ruta.endswith("/super"):
         from views.super_admin import super_login_view
         await asyncio.to_thread(super_login_view, page)
@@ -45,27 +95,12 @@ async def main(page: ft.Page):
 
     session = await session_task
 
-    # Direcciones que abre la portada (play.alnovix.com): el panel del administrador,
-    # la compra y el bar de un QR (/bar/1234).
-    if ruta == "/admin":
-        from views.acceso import abrir_desde_ruta
-        await abrir_desde_ruta(page, session)
-        return
-    if ruta == "/comprar":
-        from views.comprar import comprar_view
-        await asyncio.to_thread(comprar_view, page, (consulta.get("plan") or [None])[0])
-        return
     codigo_bar = ruta[len("/bar/"):] if ruta.startswith("/bar/") else ""
     if codigo_bar and session and str(session.get("codigo")) != codigo_bar:
         session = None  # la sesión guardada es de otro bar: manda el QR que escaneó
-    if codigo_bar and not session:
-        from services.playbar_service import validar_cliente
-        datos = await asyncio.to_thread(validar_cliente, codigo_bar)
-        if datos.get("ok"):
-            from views.seleccionar_modo import seleccionar_modo_view
-            await asyncio.to_thread(seleccionar_modo_view, page, codigo_bar,
-                                    datos["nombre"], datos["logo"])
-            return
+    if (ruta in RUTAS_ENTRADA or (codigo_bar and not session)) and \
+            await _abrir_ruta(page, ruta, consulta, session):
+        return
 
     if session:
         page.title = "PlayBar GO"

@@ -148,24 +148,8 @@ def codigo_view(page: ft.Page):
 
     logo_toque = ft.GestureDetector(content=logo, on_tap=toque_logo)
 
-    # Arriba: descarga del reproductor para el PC del bar (siempre la última versión)
-    async def descargar_reproductor(e):
-        await ft.UrlLauncher().launch_url(URL_REPRODUCTOR)
-
-    boton_descarga = ft.Container(
-        padding=ft.Padding.symmetric(horizontal=14, vertical=6), border_radius=20,
-        border=ft.Border.all(1, "#334155"), bgcolor="#0b1220",
-        on_click=descargar_reproductor, tooltip="Instalador para el computador del bar",
-        content=ft.Row([
-            ft.Icon(ft.Icons.DOWNLOAD, color="#00D4FF", size=18),
-            ft.Text("Descargar reproductor para PC", color="white", size=13,
-                    weight=ft.FontWeight.BOLD),
-        ], tight=True, spacing=6),
-    )
-
+    # La descarga del reproductor (PC y TV) está en la portada, play.alnovix.com
     page.add(
-        boton_descarga,
-        ft.Container(height=10),
         logo_toque,
         ft.Container(height=20),
         titulo,

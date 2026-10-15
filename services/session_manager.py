@@ -83,7 +83,16 @@ def _en_segundo_plano(page, corrutina_fn, *args):
             print(f"⚠️ session_manager: {ex}")
 
 
+_rutas_propias = {}  # id(page) -> dirección que puso la app (no la persona)
+
+
+def es_ruta_propia(page, ruta):
+    """True si este cambio de dirección lo hizo la app misma (sesión, cerrar sesión)."""
+    return _rutas_propias.pop(id(page), None) == ruta
+
+
 async def _poner_ruta(page, ruta):
+    _rutas_propias[id(page)] = ruta
     try:
         await asyncio.wait_for(page.push_route(ruta), ESPERA_DISPOSITIVO)
     except Exception as ex:
