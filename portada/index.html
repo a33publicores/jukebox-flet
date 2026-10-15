@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PlayBar GO · La rockola de tu bar en el celular de cada cliente</title>
+<meta name="description" content="PlayBar GO es la rockola digital para bares, discotecas y karaokes: los clientes piden canciones desde el celular con el QR de la mesa y suenan en el TV o el PC del bar.">
+<meta name="theme-color" content="#0A1022">
+<meta property="og:title" content="PlayBar GO">
+<meta property="og:description" content="La rockola de tu bar, en el celular de cada cliente.">
+<meta property="og:image" content="https://play.alnovix.com/portada/logo.png">
+<link rel="icon" type="image/png" href="/pbgo_favicon_v8_32.png">
+<link rel="apple-touch-icon" href="/pbgo_favicon_v8_192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fondo: #0A1022;
+    --fondo-2: #0D1530;
+    --tarjeta: #121B36;
+    --borde: #24345C;
+    --texto: #E6ECF8;
+    --suave: #AEB9D6;
+    --tenue: #7C88A8;
+    --cian: #22D3EE;
+    --morado: #A855F7;
+    --verde: #4ADE80;
+    --letra: 'Sora', 'Segoe UI', system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font-family: var(--letra); -webkit-font-smoothing: antialiased; }
+  a { color: var(--cian); }
+  a:hover { color: #67E8F9; }
+  a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--cian); outline-offset: 3px; }
+  img, video { max-width: 100%; display: block; }
+  .ancho { max-width: 1180px; margin: 0 auto; padding-inline: 20px; }
+
+  /* Encabezado */
+  header { position: sticky; top: 0; z-index: 10; background: rgba(10,16,34,.86); backdrop-filter: blur(10px); border-bottom: 1px solid #16224A; }
+  .barra { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding-block: 12px; }
+  .marca { display: flex; align-items: center; gap: 10px; color: var(--texto); text-decoration: none; font-weight: 800; font-size: 21px; }
+  .marca img { width: 44px; height: 44px; object-fit: contain; }
+  .marca span { color: var(--cian); }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  nav .enlace { color: var(--suave); text-decoration: none; padding: 10px 10px; font-size: 15px; }
+  nav .enlace:hover { color: var(--texto); }
+  .boton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; font-weight: 700; border-radius: 12px; padding: 12px 20px; font-size: 15px; border: 1.5px solid transparent; cursor: pointer; font-family: inherit; }
+  .boton-borde { color: var(--texto); border-color: #2A3A63; }
+  .boton-borde:hover { color: var(--texto); border-color: var(--cian); }
+  .boton-cian { color: #06111F; background: var(--cian); }
+  .boton-cian:hover { color: #06111F; background: #67E8F9; }
+  .boton-verde { color: var(--texto); border-color: #2E7D4F; }
+  .boton-verde:hover { color: var(--texto); border-color: var(--verde); }
+
+  /* Portada */
+  .portada { position: relative; overflow: hidden; }
+  .portada::before { content: ""; position: absolute; inset: -40% -10% auto; height: 120%; background: radial-gradient(closest-side, rgba(34,211,238,.16), transparent 70%), radial-gradient(closest-side at 70% 40%, rgba(168,85,247,.14), transparent 70%); pointer-events: none; }
+  .titular { position: relative; max-width: 900px; margin: 0 auto; padding: 72px 20px 48px; text-align: center; }
+  .titular img { width: 190px; margin: 0 auto 18px; }
+  h1 { margin: 0; font-weight: 800; font-size: clamp(36px, 6vw, 60px); line-height: 1.08; text-wrap: balance; }
+  h1 span { color: var(--cian); }
+  .titular p { margin: 22px auto 0; max-width: 640px; font-size: clamp(16px, 2.2vw, 19px); line-height: 1.6; color: var(--suave); }
+
+  .accesos { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; padding-bottom: 80px; }
+  .acceso { text-decoration: none; color: var(--texto); background: var(--tarjeta); border: 1.5px solid var(--borde); border-radius: 22px; padding: 28px; display: flex; flex-direction: column; gap: 12px; transition: transform .2s ease, border-color .2s ease; }
+  .acceso:hover { color: var(--texto); transform: translateY(-4px); border-color: var(--cian); }
+  .acceso.compra { background: #1A1440; border-color: var(--morado); }
+  .acceso.compra:hover { border-color: #C084FC; }
+  .acceso svg { width: 40px; height: 40px; }
+  .acceso strong { font-size: 23px; font-weight: 800; }
+  .acceso .detalle { color: var(--suave); line-height: 1.55; }
+  .acceso.compra .detalle { color: #C4BDEB; }
+  .acceso .ir { margin-top: auto; padding-top: 6px; font-weight: 700; color: var(--cian); }
+  .acceso.compra .ir { color: #C084FC; }
+
+  /* Secciones */
+  section.bloque { padding-block: 80px; }
+  .etiqueta { margin: 0 0 10px; color: var(--cian); font-weight: 700; letter-spacing: .14em; font-size: 13px; text-transform: uppercase; }
+  h2 { margin: 0; font-size: clamp(28px, 4vw, 40px); font-weight: 800; line-height: 1.15; text-wrap: balance; }
+  .intro { margin: 14px 0 0; color: var(--suave); font-size: 17px; line-height: 1.6; max-width: 620px; }
+
+  /* Míralo funcionando */
+  .demo { background: var(--fondo-2); border-block: 1px solid #16224A; }
+  .vitrina { display: flex; flex-direction: column; gap: 72px; margin-top: 52px; }
+  .escena { display: flex; flex-wrap: wrap; gap: 40px; align-items: center; }
+  .escena.al-reves { flex-direction: row-reverse; }
+  .escena .medio { flex: 1 1 420px; min-width: 0; display: flex; justify-content: center; }
+  .escena .texto { flex: 1 1 340px; min-width: 0; }
+  .escena h3 { margin: 0; font-size: clamp(22px, 3vw, 30px); font-weight: 800; line-height: 1.2; }
+  .escena p { margin: 12px 0 0; color: var(--suave); line-height: 1.65; font-size: 16px; }
+  .escena ul { margin: 18px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .escena li { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; font-size: 15px; }
+  .escena li::before { content: ""; flex: 0 0 20px; height: 20px; margin-top: 1px; border-radius: 50%; background: var(--cian) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2306111F' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center / 14px no-repeat; }
+  .celular { width: 290px; max-width: 100%; border-radius: 40px; padding: 12px; background: #050913; border: 2px solid #26365F; box-shadow: 0 30px 80px rgba(34,211,238,.18); }
+  .celular video { width: 100%; aspect-ratio: 9 / 18; object-fit: cover; border-radius: 30px; background: #020617; }
+  .navegador { width: 100%; max-width: 640px; border-radius: 16px; overflow: hidden; background: #050913; border: 1.5px solid #26365F; box-shadow: 0 30px 80px rgba(168,85,247,.16); }
+  .navegador .puntos { display: flex; gap: 6px; padding: 10px 14px; background: #0B1328; }
+  .navegador .puntos i { width: 10px; height: 10px; border-radius: 50%; background: #2A3A63; display: block; }
+  .navegador video { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: #020617; }
+  .tele { width: 100%; max-width: 640px; }
+  .tele .pantalla { border-radius: 14px; padding: 10px; background: #050913; border: 2px solid #26365F; box-shadow: 0 30px 80px rgba(34,211,238,.14); }
+  .tele video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; background: #020617; }
+  .tele .pata { width: 34%; height: 14px; margin: 0 auto; background: #1A2547; border-radius: 0 0 10px 10px; }
+
+  /* Así empiezas + precio */
+  .empezar { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+  .empezar .pasos { flex: 1 1 460px; min-width: 0; }
+  .empezar ol { margin: 28px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 20px; }
+  .empezar li { display: flex; gap: 16px; align-items: flex-start; }
+  .empezar li b { flex: 0 0 42px; height: 42px; border-radius: 50%; background: var(--cian); color: #06111F; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .empezar li:last-child b { background: var(--morado); }
+  .empezar li div { padding-top: 2px; }
+  .empezar li strong { display: block; font-size: 18px; }
+  .empezar li span { display: block; margin-top: 4px; color: var(--suave); line-height: 1.5; }
+  .precios { flex: 1 1 400px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .plan { background: var(--tarjeta); border: 1.5px solid var(--borde); border-radius: 22px; padding: 28px; display: flex; flex-direction: column; gap: 6px; }
+  .plan.destacado { border-color: var(--morado); background: #1A1440; }
+  .plan p { margin: 0; }
+  .plan-nombre { color: var(--suave); font-weight: 600; }
+  .plan-precio { font-size: 46px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .plan-dias { color: var(--suave); margin-bottom: 14px !important; }
+  .plan .boton { width: 100%; padding-block: 15px; font-size: 17px; }
+  .llave { border: 1.5px dashed #2E7D4F; border-radius: 22px; padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+  .llave p { margin: 0; color: var(--suave); line-height: 1.55; }
+  .llave .numero { color: var(--texto); font-weight: 700; user-select: all; }
+
+  /* Clientes */
+  .cliente { border: 1.5px dashed #2A3A63; border-radius: 24px; padding: 30px; display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: space-between; }
+  .cliente h3 { margin: 0 0 6px; font-size: 22px; }
+  .cliente p { margin: 0; color: var(--suave); }
+  .cliente form { display: flex; flex-wrap: wrap; gap: 10px; }
+  .cliente label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .cliente input { font: inherit; font-size: 17px; width: 170px; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #2A3A63; background: #0B1328; color: var(--texto); letter-spacing: .1em; }
+
+  footer { border-top: 1px solid #1C2848; padding: 30px 20px calc(30px + env(safe-area-inset-bottom, 0px)); text-align: center; color: var(--tenue); font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
+
+  @media (max-width: 560px) {
+    nav .enlace { display: none; }
+    .titular { padding-top: 48px; }
+    section.bloque { padding-block: 60px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .acceso { transition: none; }
+    .acceso:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="ancho barra">
+    <a class="marca" href="/" aria-label="PlayBar GO, inicio"><img src="/pbgo_favicon_v8_192.png" alt="" width="44" height="44">PlayBar <span>GO</span></a>
+    <nav aria-label="Principal">
+      <a class="enlace" href="#demo">Cómo funciona</a>
+      <a class="enlace" href="#precios">Precios</a>
+      <a class="boton boton-borde" href="/admin">Iniciar sesión</a>
+      <a class="boton boton-cian" href="/comprar">Comprar</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="portada">
+  <div class="titular">
+    <img src="/portada/logo.png" alt="PlayBar GO" width="190" height="127">
+    <h1>La rockola de tu bar, <span>en el celular</span> de cada cliente</h1>
+    <p>Piden canciones o karaoke con el QR de la mesa. Tú manejas la cola desde el panel y el reproductor suena en tu TV o PC.</p>
+  </div>
+
+  <div class="ancho accesos">
+    <a class="acceso" href="/admin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#22D3EE" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg>
+      <strong>Soy administrador</strong>
+      <span class="detalle">Entra a tu panel con el código del bar, tu usuario y tu contraseña.</span>
+      <span class="ir">Iniciar sesión →</span>
+    </a>
+    <a class="acceso compra" href="/comprar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="1.8" aria-hidden="true"><path d="M3 5h2l2.5 11h11L21 8H7"></path><circle cx="9" cy="20" r="1.5"></circle><circle cx="18" cy="20" r="1.5"></circle></svg>
+      <strong>Quiero PlayBar GO</strong>
+      <span class="detalle">Compra tu plan, crea tu usuario y recibe el código de tu bar al instante.</span>
+      <span class="ir">Comprar →</span>
+    </a>
+    <a class="acceso" href="#pedir">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#22D3EE" stroke-width="1.8" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+      <strong>Pedir música</strong>
+      <span class="detalle">¿Estás en un bar? Escanea el QR de tu mesa o escribe el código del lugar.</span>
+      <span class="ir">Entrar como cliente →</span>
+    </a>
+  </div>
+</div>
+
+<section class="bloque demo" id="demo">
+  <div class="ancho">
+    <p class="etiqueta">Cómo se ve</p>
+    <h2>Míralo funcionando</h2>
+    <p class="intro">Videos cortos de PlayBar GO real: lo que ve el cliente en su celular, lo que ve el administrador y lo que suena en el televisor del bar.</p>
+
+    <div class="vitrina">
+      <div class="escena">
+        <div class="medio">
+          <div class="celular"><video src="/portada/videos/cliente.mp4" poster="/portada/videos/cliente.jpg" muted loop playsinline preload="none" aria-label="Video: un cliente busca y pide una canción desde el celular"></video></div>
+        </div>
+        <div class="texto">
+          <p class="etiqueta">El cliente</p>
+          <h3>Escanea el QR y pide su canción</h3>
+          <p>No descarga ninguna app. Abre el enlace del bar, escribe su celular, busca en YouTube y su canción entra a la cola.</p>
+          <ul><li>Música y karaoke</li><li>Ve en qué puesto va su canción</li><li>Funciona en cualquier celular</li></ul>
+        </div>
+      </div>
+
+      <div class="escena al-reves">
+        <div class="medio">
+          <div class="navegador"><div class="puntos"><i></i><i></i><i></i></div><video src="/portada/videos/admin.mp4" poster="/portada/videos/admin.jpg" muted loop playsinline preload="none" aria-label="Video: el administrador maneja la cola desde su panel"></video></div>
+        </div>
+        <div class="texto">
+          <p class="etiqueta">El administrador</p>
+          <h3>Tú decides qué suena y en qué orden</h3>
+          <p>Desde el panel pausas, saltas o subes canciones, quitas las que no van y eliges los géneros de relleno para cuando nadie pide.</p>
+          <ul><li>Cola en tiempo real</li><li>Relleno por géneros</li><li>Plan y pagos en «Mi plan»</li></ul>
+        </div>
+      </div>
+
+      <div class="escena">
+        <div class="medio">
+          <div class="tele"><div class="pantalla"><video src="/portada/videos/tv.mp4" poster="/portada/videos/tv.jpg" muted loop playsinline preload="none" aria-label="Video: el reproductor de PlayBar GO en el televisor del bar"></video></div><div class="pata"></div></div>
+        </div>
+        <div class="texto">
+          <p class="etiqueta">El reproductor</p>
+          <h3>Suena en el TV o en el PC del bar</h3>
+          <p>El reproductor pone los videos en pantalla completa, en orden, y muestra qué sigue. Funciona en Windows, Android TV, Google TV, Fire TV y TV Box.</p>
+          <ul><li>Se actualiza solo</li><li>Sigue sonando aunque falle el internet un rato</li><li>Se activa con la llave de tu bar</li></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="bloque" id="precios">
+  <div class="ancho empezar">
+    <div class="pasos">
+      <p class="etiqueta">Empieza hoy</p>
+      <h2>Así empiezas</h2>
+      <ol>
+        <li><b>1</b><div><strong>Compra el plan y paga con Wompi</strong><span>Tarjeta, PSE, Nequi o Bancolombia.</span></div></li>
+        <li><b>2</b><div><strong>Se crean tu usuario y el código de tu bar</strong><span>Con ellos entras a tu panel y armas el QR de las mesas.</span></div></li>
+        <li><b>3</b><div><strong>Pide por WhatsApp la llave del reproductor</strong><span>Te la asignamos para el computador o el televisor del bar.</span></div></li>
+      </ol>
+    </div>
+    <div class="precios">
+<!--PLANES-->
+      <div class="llave">
+        <p>La llave del reproductor te la asignamos por WhatsApp: <span class="numero">301 613 0044</span></p>
+        <a class="boton boton-verde" href="https://wa.me/573016130044?text=Hola%2C%20quiero%20informaci%C3%B3n%20de%20PlayBar%20GO" target="_blank" rel="noopener">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2" aria-hidden="true"><path d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.4L3 21z"></path></svg>
+          Escríbenos por WhatsApp</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="bloque" id="pedir" style="padding-top: 0;">
+  <div class="ancho">
+    <div class="cliente">
+      <div>
+        <h3>¿Estás en un bar y quieres poner música?</h3>
+        <p>Escanea el QR de tu mesa o escribe aquí el código del lugar. No necesitas cuenta.</p>
+      </div>
+      <form id="form-bar">
+        <label for="codigo-bar">Código del lugar</label>
+        <input id="codigo-bar" name="codigo" inputmode="numeric" pattern="[0-9]{3,8}" maxlength="8" placeholder="Código" required>
+        <button class="boton boton-cian" type="submit">Entrar</button>
+      </form>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <span>PlayBar GO · play.alnovix.com · Un producto ALNOVIX</span>
+  <span><a href="/admin">Panel del administrador</a> · <a href="/comprar">Comprar</a> · <a href="https://wa.me/573016130044" target="_blank" rel="noopener">WhatsApp 301 613 0044</a></span>
+</footer>
+
+<script>
+  // Código del lugar -> /bar/1234 (la app de los clientes)
+  document.getElementById('form-bar').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var codigo = (document.getElementById('codigo-bar').value || '').replace(/\D/g, '');
+    if (codigo) window.location.href = '/bar/' + codigo;
+  });
+
+  // Los videos se reproducen solos solo cuando se ven (y nunca si la persona pidió menos movimiento)
+  (function () {
+    var videos = Array.prototype.slice.call(document.querySelectorAll('.vitrina video'));
+    var quieto = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (quieto || !('IntersectionObserver' in window)) {
+      videos.forEach(function (v) { v.controls = true; v.preload = 'metadata'; });
+      return;
+    }
+    var obs = new IntersectionObserver(function (entradas) {
+      entradas.forEach(function (en) {
+        var v = en.target;
+        if (en.isIntersecting) { v.preload = 'auto'; var p = v.play(); if (p && p.catch) p.catch(function () { v.controls = true; }); }
+        else { v.pause(); }
+      });
+    }, { threshold: 0.35 });
+    videos.forEach(function (v) { obs.observe(v); });
+  })();
+</script>
+</body>
+</html>

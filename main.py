@@ -1,13 +1,21 @@
 import asyncio
+import urllib.parse
 
 import flet as ft
 
 from services.playbar_service import iniciar_procesador
 from services.session_manager import cargar_sesion, estado, preparar_prefs
+from servidor_web import iniciar
 from views.splash import splash_view
 from web_boot import preparar_index_web
 
-BUILD = "flet-musica-karaoke-v8-splash"
+BUILD = "flet-musica-karaoke-v9-portada"
+
+
+def _ruta(page):
+    """('/bar/1234', {'plan': ['3']}) a partir de page.route."""
+    partes = urllib.parse.urlsplit(str(getattr(page, "route", "") or "/"))
+    return "/" + partes.path.strip("/").lower(), urllib.parse.parse_qs(partes.query)
 
 
 async def main(page: ft.Page):
@@ -20,7 +28,8 @@ async def main(page: ft.Page):
     # Así el usuario siempre ve el arranque de PlayBar GO, incluso
     # cuando existe una sesión restaurable.
     # Entrada directa del super administrador:  https://<app>/super
-    if str(getattr(page, "route", "") or "").rstrip("/").endswith("/super"):
+    ruta, consulta = _ruta(page)
+    if ruta.endswith("/super"):
         from views.super_admin import super_login_view
         await asyncio.to_thread(super_login_view, page)
         return
@@ -35,6 +44,28 @@ async def main(page: ft.Page):
         print(f"⚠️ Error en splash visual: {ex}")
 
     session = await session_task
+
+    # Direcciones que abre la portada (play.alnovix.com): el panel del administrador,
+    # la compra y el bar de un QR (/bar/1234).
+    if ruta == "/admin":
+        from views.acceso import abrir_desde_ruta
+        await abrir_desde_ruta(page, session)
+        return
+    if ruta == "/comprar":
+        from views.comprar import comprar_view
+        await asyncio.to_thread(comprar_view, page, (consulta.get("plan") or [None])[0])
+        return
+    codigo_bar = ruta[len("/bar/"):] if ruta.startswith("/bar/") else ""
+    if codigo_bar and session and str(session.get("codigo")) != codigo_bar:
+        session = None  # la sesión guardada es de otro bar: manda el QR que escaneó
+    if codigo_bar and not session:
+        from services.playbar_service import validar_cliente
+        datos = await asyncio.to_thread(validar_cliente, codigo_bar)
+        if datos.get("ok"):
+            from views.seleccionar_modo import seleccionar_modo_view
+            await asyncio.to_thread(seleccionar_modo_view, page, codigo_bar,
+                                    datos["nombre"], datos["logo"])
+            return
 
     if session:
         page.title = "PlayBar GO"
@@ -96,4 +127,6 @@ async def main(page: ft.Page):
 # Genera assets/index.html con el splash/favicon de PlayBar GO (solo web).
 preparar_index_web()
 
-ft.run(main, assets_dir="assets")
+# Como ft.run(main, assets_dir="assets"); en el servidor web le suma la portada
+# de play.alnovix.com (ver servidor_web.py).
+iniciar(main)

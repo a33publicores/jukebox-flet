@@ -17,6 +17,7 @@ import flet as ft
 
 from services import cola
 
+URL_CLIENTES = os.getenv("URL_CLIENTES", "https://play.alnovix.com/bar/")
 REFRESCO_SEG = 6
 MAX_HORAS_PANEL = 3  # el panel deja de consultar solo después de esto
 _intentos = {"n": 0, "hasta": 0.0}
@@ -408,9 +409,9 @@ def admin_view(page, codigo, nombre, logo):
     def salir(e):
         vivo["v"] = False
         from services.session_manager import cerrar_sesion
-        cerrar_sesion(page)
-        from views.seleccionar_modo import seleccionar_modo_view
-        seleccionar_modo_view(page, codigo, nombre, logo)
+        cerrar_sesion(page, ruta="/admin")
+        from views.acceso import acceso_admin_view
+        acceso_admin_view(page, codigo)
 
     def boton(icono, tooltip, cmd):
         return ft.IconButton(icon=icono, icon_size=44, icon_color="white", tooltip=tooltip,
@@ -453,7 +454,9 @@ def admin_view(page, codigo, nombre, logo):
                     ),
                 ),
                 ft.OutlinedButton("💳 Mi plan", on_click=mi_plan, width=260),
-                ft.TextButton("← Salir del modo administrador", on_click=salir),
+                ft.Text(f"Enlace para tus clientes: {URL_CLIENTES}{codigo}", color="#94A3B8",
+                        size=13, selectable=True, text_align=ft.TextAlign.CENTER),
+                ft.TextButton("Cerrar sesión", on_click=salir),
             ],
         ),
     ))

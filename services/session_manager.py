@@ -174,8 +174,8 @@ def guardar_sesion(page, session, rol="usuario"):
     return token
 
 
-def cerrar_sesion(page):
-    """Borra la sesión (botón 'Cerrar sesión' / 'Salir')."""
+def cerrar_sesion(page, ruta="/"):
+    """Borra la sesión (botón 'Cerrar sesión' / 'Salir') y deja la dirección en `ruta`."""
     from services import db
 
     token = _tokens.pop(id(page), None)
@@ -185,7 +185,7 @@ def cerrar_sesion(page):
         print(f"⚠️ No se pudo borrar la sesión en la base: {ex}")
 
     async def _borrar():
-        await _poner_ruta(page, "/")
+        await _poner_ruta(page, ruta)
         try:
             await _con_reintento(page, "remove", SESSION_KEY)
             print("🗑️ Sesión eliminada")

@@ -60,17 +60,7 @@ def seleccionar_modo_view(page, codigo, nombre, logo):
         from views.codigo import codigo_view
         codigo_view(page)
 
-    def abrir_admin(e):
-        from views.admin import admin_view, pedir_pin
-        from services.session_manager import guardar_sesion
-
-        def entrar_admin():
-            guardar_sesion(page, {"codigo": codigo, "cliente": nombre, "logo": logo,
-                                  "telefono": "ADMIN", "modo": "admin"}, rol="admin")
-            admin_view(page, codigo, nombre, logo)
-
-        pedir_pin(page, entrar_admin, codigo)
-
+    # El administrador ya no entra desde aquí: tiene su propia dirección (/admin).
     page.add(
         ft.Image(src="/logohallowen.png", width=150),
         ft.Container(height=20),
@@ -81,9 +71,6 @@ def seleccionar_modo_view(page, codigo, nombre, logo):
         ft.Container(height=15),
         boton("Karaoke", "karaoke", "🎤"),
         ft.Container(height=25),
-        ft.TextButton("🔧 Administrador", on_click=abrir_admin,
-                      style=ft.ButtonStyle(color="#64748b")),
-        ft.Container(height=10),
         ft.TextButton(f"← Cambiar código del lugar ({codigo})", on_click=cambiar_codigo,
                       style=ft.ButtonStyle(color="#94A3B8")),
     )
