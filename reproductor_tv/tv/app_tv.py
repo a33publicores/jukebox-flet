@@ -517,27 +517,111 @@ def _limpiar(page):
     page.overlay.clear()
 
 
+# Teclado propio de la pantalla de configuración. No usa el teclado del sistema: en
+# muchos TV ese teclado sale pero no responde al control remoto (o ni sale). Este se
+# maneja con las flechas y OK; los números del control y un teclado USB/PC escriben directo.
+TECLADO = [list("1234567890"), list("ABCDEFGHJK"), list("LMNPQRSTUV"),
+           list("WXYZ-") + ["⌫"], ["Código", "Llave", "Guardar y empezar"]]
+T_ARRIBA, T_ABAJO = {"arrow up"}, {"arrow down"}
+T_IZQ, T_DER = {"arrow left"}, {"arrow right"}
+T_OK = {"select", "enter", "numpad enter", "game button a", "dpad center", "space", " "}
+T_BORRAR = {"backspace", "delete", "del"}
+
+
 async def _pantalla_config(page: ft.Page, mensaje=""):
     """Primera vez: código del lugar + llave del bar (las da el super administrador)."""
     _limpiar(page)
     previo = CFG.leer_config()
-    campo = ft.TextField(label="Código del lugar (ej. 8523)", width=380, autofocus=True,
-                         border_color=CYAN, color="white", value=previo.get("cliente", ""),
-                         keyboard_type=ft.KeyboardType.NUMBER)
-    llave = ft.TextField(label="Llave del bar (ej. K7M4-X9P2)", width=380, border_color=CYAN,
-                         color="white", value=previo.get("llave", ""))
-    servidor = ft.TextField(label="Servidor de PlayBar GO", width=380, border_color="#334155",
-                            color="#cbd5e1", value=previo.get("api") or API_POR_DEFECTO,
-                            keyboard_type=ft.KeyboardType.URL)
-    texto = ft.Text(mensaje, color="#fca5a5", width=380, text_align=ft.TextAlign.CENTER)
+    url = previo.get("api") or API_POR_DEFECTO
+    valores = {"Código": str(previo.get("cliente", "")), "Llave": str(previo.get("llave", ""))}
+    est = {"campo": "Código" if not valores["Código"] else "Llave", "fila": 0, "col": 0,
+           "ocupado": False}
+    texto = ft.Text(mensaje, color="#fca5a5", width=560, text_align=ft.TextAlign.CENTER)
     hecho = asyncio.Event()
 
-    async def guardar(e):
-        cod, ll, url = campo.value.strip(), llave.value.strip(), servidor.value.strip()
-        if not (cod and ll and url):
-            texto.value = "Escribe el código, la llave y el servidor."
-            page.update()
+    cajas = {}
+    for nombre, ejemplo in (("Código", "ej. 8523"), ("Llave", "ej. K7M4-X9P2")):
+        valor = ft.Text("", size=26, color="white", weight=ft.FontWeight.BOLD)
+        cajas[nombre] = (ft.Container(
+            width=540, padding=ft.Padding.symmetric(horizontal=16, vertical=10), border_radius=12,
+            bgcolor=PANEL,
+            content=ft.Column([ft.Text(f"{'Código del lugar' if nombre == 'Código' else 'Llave del bar'} "
+                                       f"({ejemplo})", size=13, color="#94A3B8"), valor], spacing=2)),
+            valor)
+
+    teclas_ui = []
+    filas_ui = []
+    for f, fila in enumerate(TECLADO):
+        fila_ui = []
+        for c, t in enumerate(fila):
+            ancho = 52 if f < 4 else (130 if t != "Guardar y empezar" else 250)
+            caja = ft.Container(
+                width=ancho if t != "⌫" else 110, height=52, border_radius=10,
+                alignment=ft.Alignment.CENTER,
+                content=ft.Text(t, size=20 if f < 4 else 16, weight=ft.FontWeight.BOLD))
+            fila_ui.append(caja)
+        teclas_ui.append(fila_ui)
+        # GestureDetector (no on_click): así las teclas no toman el foco de Flutter y el OK
+        # del control no las activa dos veces; el mouse y la pantalla táctil siguen sirviendo.
+        filas_ui.append(ft.Row([ft.GestureDetector(content=caja, on_tap=lambda e, f=f, c=c: pulsar(f, c))
+                                for c, caja in enumerate(fila_ui)],
+                               spacing=8, alignment=ft.MainAxisAlignment.CENTER))
+
+    def pintar():
+        for nombre, (caja, valor) in cajas.items():
+            activo = est["campo"] == nombre
+            caja.border = ft.Border.all(3 if activo else 1, CYAN if activo else "#334155")
+            valor.value = valores[nombre] + ("▌" if activo else "") or " "
+        for f, fila in enumerate(teclas_ui):
+            for c, caja in enumerate(fila):
+                sel = (f, c) == (est["fila"], est["col"])
+                es_guardar = TECLADO[f][c] == "Guardar y empezar"
+                caja.bgcolor = CYAN if sel else (VIOLETA if es_guardar else "#1e293b")
+                caja.border = ft.Border.all(3, "white") if sel else None
+                caja.content.color = FONDO if sel else "white"
+        page.update()
+
+    def elegir_campo(nombre):
+        est["campo"] = nombre
+        pintar()
+
+    def escribir(letra):
+        campo = est["campo"]
+        if campo == "Código":
+            if letra.isdigit() and len(valores[campo]) < 8:
+                valores[campo] += letra
+        elif len(valores[campo]) < 40:
+            valores[campo] += letra
+        texto.value = ""
+        pintar()
+
+    def borrar():
+        valores[est["campo"]] = valores[est["campo"]][:-1]
+        pintar()
+
+    def pulsar(f, c):
+        est["fila"], est["col"] = f, c
+        t = TECLADO[f][c]
+        if t == "⌫":
+            borrar()
+        elif t in ("Código", "Llave"):
+            elegir_campo(t)
+        elif t == "Guardar y empezar":
+            page.run_task(guardar)
+        else:
+            escribir(t)
+
+    async def guardar():
+        if est["ocupado"]:
             return
+        cod, ll = valores["Código"].strip(), valores["Llave"].strip()
+        if not (cod and ll):
+            texto.value = "Escribe el código del lugar y la llave del bar."
+            texto.color = "#fca5a5"
+            est["campo"] = "Código" if not cod else "Llave"
+            pintar()
+            return
+        est["ocupado"] = True
         texto.value = "Comprobando la llave…"
         texto.color = "#94A3B8"
         page.update()
@@ -546,30 +630,68 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
         except Exception as ex:
             texto.value = f"No funcionó: {ex}"
             texto.color = "#fca5a5"
+            est["ocupado"] = False
             page.update()
             return
         if str(datos.get("codigo")) != cod:
             texto.value = (f"Esa llave es del lugar {datos.get('codigo')} "
                            f"({datos.get('nombre')}), no del {cod}.")
             texto.color = "#fca5a5"
+            est["ocupado"] = False
             page.update()
             return
         CFG.guardar_config({**previo, "cliente": cod, "llave": ll, "api": url})
         hecho.set()
 
-    campo.on_submit = lambda e: llave.focus()
-    llave.on_submit = guardar
+    def mover(df, dc):
+        f = max(0, min(len(TECLADO) - 1, est["fila"] + df))
+        if df:  # al cambiar de fila, quedar en la tecla más cercana
+            c = round(est["col"] * (len(TECLADO[f]) - 1) / max(1, len(TECLADO[est["fila"]]) - 1))
+        else:
+            c = est["col"] + dc
+        est["fila"], est["col"] = f, max(0, min(len(TECLADO[f]) - 1, c))
+        pintar()
+
+    async def teclas(e: ft.KeyboardEvent):
+        k = (e.key or "").lower()
+        if k in T_ARRIBA:
+            mover(-1, 0)
+        elif k in T_ABAJO:
+            mover(1, 0)
+        elif k in T_IZQ:
+            mover(0, -1)
+        elif k in T_DER:
+            mover(0, 1)
+        elif k in T_OK:
+            pulsar(est["fila"], est["col"])
+        elif k in T_BORRAR:
+            borrar()
+        elif k == "tab":
+            elegir_campo("Llave" if est["campo"] == "Código" else "Código")
+        elif len(k) == 1 and (k.isalnum() or k == "-"):
+            escribir(k.upper())  # números del control remoto, teclado USB o del PC
+        elif k.startswith("numpad ") and k[-1:].isdigit():
+            escribir(k[-1])
+        else:
+            print(f"ℹ️ tecla sin uso en la configuración: {e.key!r}")
+
+    page.on_keyboard_event = teclas
     page.add(ft.Container(expand=True, alignment=ft.Alignment.CENTER, content=ft.Column(
-        [ft.Image(src="/logo.png", width=200),
+        [ft.Image(src="/logo.png", width=150),
          ft.Text("Configurar reproductor de TV", size=22, color="white", weight=ft.FontWeight.BOLD),
-         ft.Text("Pide el código y la llave de tu bar al administrador de PlayBar GO.",
-                 color="#94A3B8", size=13),
-         campo, llave, servidor, ft.FilledButton("Guardar y empezar", on_click=guardar), texto],
+         ft.Text("Usa las flechas y OK del control. Pide el código y la llave de tu bar al "
+                 "administrador de PlayBar GO.", color="#94A3B8", size=13),
+         *[ft.GestureDetector(content=cajas[n][0], on_tap=lambda e, n=n: elegir_campo(n))
+           for n in ("Código", "Llave")],
+         *filas_ui, texto],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER,
-        scroll=ft.ScrollMode.AUTO, spacing=12,
+        scroll=ft.ScrollMode.AUTO, spacing=10,
     )))
-    page.update()
-    await hecho.wait()
+    pintar()
+    try:
+        await hecho.wait()
+    finally:
+        page.on_keyboard_event = None
 
 
 def _revisar(api, cliente):
@@ -722,6 +844,8 @@ async def _una_sesion(page: ft.Page):
     """Configura, revisa y hace sonar. Vuelve cuando hay que empezar de nuevo
     (cambiaron el código o la llave, o tocaron Reintentar)."""
     cfg = CFG.leer_config()
+    if not (cfg.get("cliente") and cfg.get("llave")) and await actualizador_tv.revisar_ya():
+        return "actualizar"  # código nuevo antes de configurar (p. ej. un arreglo de esta pantalla)
     while not (cfg.get("cliente") and cfg.get("llave") and cfg.get("api")):
         await _pantalla_config(page)
         cfg = CFG.leer_config()

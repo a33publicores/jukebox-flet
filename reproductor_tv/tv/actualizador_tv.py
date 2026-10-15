@@ -106,6 +106,21 @@ def descargar(info, timeout=60):
     return arr.guardar_nueva(info["version"], contenido)
 
 
+async def revisar_ya():
+    """Una revisión inmediata (antes de la pantalla de configuración, que corre sin música):
+    True si bajó código nuevo y hay que recargar la app. Nunca lanza errores."""
+    try:
+        info = await asyncio.wait_for(asyncio.to_thread(buscar), 20)
+        if not info:
+            return False
+        await asyncio.wait_for(asyncio.to_thread(descargar, info), 120)
+        print(f"⬇️ Código {info['version']} descargado antes de configurar")
+        return True
+    except Exception as ex:
+        print(f"ℹ️ Revisión de actualizaciones (sin configurar): {ex}")
+        return False
+
+
 def confirmar_que_funciona():
     """La app lleva un rato funcionando con este código: ya no se devuelve a la anterior."""
     arr = _arranque()

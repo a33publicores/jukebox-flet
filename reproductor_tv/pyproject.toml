@@ -2,7 +2,7 @@
 # Es un proyecto aparte de la app web (../pyproject.toml): otro paquete, otra versión.
 [project]
 name = "playbar_go_tv"
-version = "0.1.0"
+version = "0.1.1"
 description = "PlayBar GO TV - Reproductor para televisores Android"
 requires-python = ">=3.13,<3.14"   # mismo Python que la app Android que ya publicas
 dependencies = [
@@ -16,7 +16,7 @@ dependencies = [
 product = "PlayBar GO TV"
 org = "com.a33"
 bundle_id = "com.a33.playbargo.tv"   # distinto al de la app de pedidos (com.a33.daleplay)
-build_number = 1
+build_number = 2
 
 [tool.flet.app]
 # Lo que NO va dentro del .apk (herramientas de compilación del PC)
