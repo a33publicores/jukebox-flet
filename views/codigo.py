@@ -1,13 +1,6 @@
 import flet as ft
-import os
 from services.playbar_service import validar_cliente
 from views.seleccionar_modo import seleccionar_modo_view
-import time
-
-URL_REPRODUCTOR = os.getenv(
-    "URL_REPRODUCTOR",
-    "https://github.com/a33publicores/jukebox-flet/releases/latest/download/"
-    "PlayBarGO_Reproductor_Setup.exe")
 
 def codigo_view(page: ft.Page):
 
@@ -134,23 +127,9 @@ def codigo_view(page: ft.Page):
         )
     )
 
-    # Entrada oculta del super administrador: 5 toques seguidos al logo.
-    toques = {"n": 0, "t": 0.0}
-
-    def toque_logo(e):
-        ahora = time.time()
-        toques["n"] = toques["n"] + 1 if ahora - toques["t"] < 1.5 else 1
-        toques["t"] = ahora
-        if toques["n"] >= 5:
-            toques["n"] = 0
-            from views.super_admin import super_login_view
-            super_login_view(page)
-
-    logo_toque = ft.GestureDetector(content=logo, on_tap=toque_logo)
-
     # La descarga del reproductor (PC y TV) está en la portada, play.alnovix.com
     page.add(
-        logo_toque,
+        logo,
         ft.Container(height=20),
         titulo,
         ft.Container(height=8),

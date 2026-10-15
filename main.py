@@ -15,7 +15,10 @@ BUILD = "flet-musica-karaoke-v9-portada"
 def _ruta(page):
     """('/bar/1234', {'plan': ['3']}) a partir de page.route."""
     partes = urllib.parse.urlsplit(str(getattr(page, "route", "") or "/"))
-    return "/" + partes.path.strip("/").lower(), urllib.parse.parse_qs(partes.query)
+    ruta = "/" + partes.path.strip("/").lower()
+    if ruta.endswith("/super"):
+        ruta = "/admin"  # un solo "Iniciar sesión" para el super admin y los bares
+    return ruta, urllib.parse.parse_qs(partes.query)
 
 
 RUTAS_ENTRADA = ("/admin", "/comprar")
@@ -53,7 +56,7 @@ async def main(page: ft.Page):
     # La sesión se consulta mientras se muestra el splash.
     # Así el usuario siempre ve el arranque de PlayBar GO, incluso
     # cuando existe una sesión restaurable.
-    # Entrada directa del super administrador:  https://<app>/super
+    # /super y /admin abren el mismo "Iniciar sesión" (ver views/acceso.py).
     ruta, consulta = _ruta(page)
 
     # Flet reconecta la MISMA sesión cuando la pestaña recarga o cambia de dirección
@@ -64,25 +67,16 @@ async def main(page: ft.Page):
         if es_ruta_propia(page, e.route):
             return
         nueva, consulta_nueva = _ruta(page)
-        if not (nueva.endswith("/super") or nueva in RUTAS_ENTRADA or nueva.startswith("/bar/")):
+        if not (nueva in RUTAS_ENTRADA or nueva.startswith("/bar/")):
             return
         try:
             await splash_view(page)  # también retira la capa de carga del index.html
         except Exception as ex:
             print(f"⚠️ Error en splash visual: {ex}")
-        if nueva.endswith("/super"):
-            from views.super_admin import super_login_view
-            await asyncio.to_thread(super_login_view, page)
-        elif nueva in RUTAS_ENTRADA or nueva.startswith("/bar/"):
-            sesion = await cargar_sesion(page) if nueva == "/admin" else None
-            await _abrir_ruta(page, nueva, consulta_nueva, sesion)
+        sesion = await cargar_sesion(page) if nueva == "/admin" else None
+        await _abrir_ruta(page, nueva, consulta_nueva, sesion)
 
     page.on_route_change = al_cambiar_ruta
-
-    if ruta.endswith("/super"):
-        from views.super_admin import super_login_view
-        await asyncio.to_thread(super_login_view, page)
-        return
 
     preparar_prefs(page)
     session_task = asyncio.create_task(cargar_sesion(page))

@@ -1,12 +1,14 @@
 """
-🔐 Entrada del administrador del bar:  play.alnovix.com/admin
+🔐 Iniciar sesión:  play.alnovix.com/admin  (también /super)
 
-Separada de la app de los clientes: pide el código del bar, el usuario y la contraseña
-(los mismos de antes) y abre el panel. Si el bar todavía no ha pagado, el panel muestra
-"Mi plan" para terminar el pago.
+Separada de la app de los clientes. El administrador de un bar entra con el código del
+bar, su usuario y su contraseña (los mismos de antes) y abre su panel; si el bar todavía
+no ha pagado, el panel muestra "Mi plan" para terminar el pago. El super administrador
+entra aquí mismo con su usuario y contraseña (sin código) y abre /super.
 """
 import asyncio
 import os
+import time
 
 import flet as ft
 
@@ -38,7 +40,7 @@ async def ir_a_portada(e=None):
 
 
 def acceso_admin_view(page, codigo_inicial=""):
-    from views.admin import admin_view, credenciales_correctas
+    from views.admin import _intentos, admin_view, credenciales_correctas, es_super, intento_fallido
     from services.playbar_service import validar_cliente
     from services.session_manager import guardar_sesion
 
@@ -58,8 +60,22 @@ def acceso_admin_view(page, codigo_inicial=""):
 
     def entrar(e=None):
         cod = (codigo.value or "").strip()
-        if not cod or not (usuario.value or "").strip() or not (clave.value or "").strip():
-            error.value = "Escribe el código del bar, tu usuario y tu contraseña."
+        if not (usuario.value or "").strip() or not (clave.value or "").strip():
+            error.value = "Escribe tu usuario y tu contraseña."
+            page.update()
+            return
+        # Un solo "Iniciar sesión": con las credenciales del super administrador entra
+        # a /super (el código del bar no hace falta); con las de un bar, a su panel.
+        if es_super(usuario.value, clave.value):
+            from views.super_admin import entrar_como_super
+            entrar_como_super(page, usuario.value.strip())
+            return
+        if not cod:
+            if time.time() < _intentos["hasta"]:
+                error.value = "Demasiados intentos. Espera un minuto."
+            else:
+                error.value = intento_fallido() + ". Si administras un bar, escribe también su código."
+            clave.value = ""
             page.update()
             return
         datos = validar_cliente(cod)
@@ -90,7 +106,7 @@ def acceso_admin_view(page, codigo_inicial=""):
                           content=ft.Column(
         horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=14, controls=[
             ft.Image(src="/logo.png", width=170, height=120, fit=ft.BoxFit.CONTAIN),
-            ft.Text("Panel del administrador", size=26, weight=ft.FontWeight.BOLD,
+            ft.Text("Iniciar sesión", size=26, weight=ft.FontWeight.BOLD,
                     color="white", text_align=ft.TextAlign.CENTER),
             ft.Text("Entra con el código de tu bar, tu usuario y tu contraseña.",
                     size=14, color="#94A3B8", text_align=ft.TextAlign.CENTER),
@@ -107,7 +123,13 @@ def acceso_admin_view(page, codigo_inicial=""):
 
 
 async def abrir_desde_ruta(page, session):
-    """/admin: si este dispositivo ya tiene la sesión de un admin, entra directo."""
+    """/admin y /super: si este dispositivo ya tiene una sesión de admin o de super
+    administrador, entra directo; si no, muestra "Iniciar sesión"."""
+    if session and session.get("rol") == "super":
+        from views import super_admin
+        super_admin._sesiones_super.add(id(page))
+        await asyncio.to_thread(super_admin.super_inicio, page)
+        return
     if session and session.get("rol") == "admin" and session.get("codigo"):
         from views.admin import admin_view
         await asyncio.to_thread(admin_view, page, session["codigo"],

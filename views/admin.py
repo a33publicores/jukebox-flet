@@ -52,11 +52,28 @@ def credenciales_correctas(usuario, clave, codigo=None):
     if ok:
         _intentos["n"] = 0
         return True, ""
+    return False, intento_fallido()
+
+
+def intento_fallido():
+    """Cuenta un intento malo; al quinto bloquea un minuto. Devuelve el mensaje."""
     _intentos["n"] += 1
     if _intentos["n"] >= 5:
         _intentos["n"] = 0
         _intentos["hasta"] = time.time() + 60
-    return False, "Usuario o contraseña incorrectos"
+    return "Usuario o contraseña incorrectos"
+
+
+def es_super(usuario, clave):
+    """True si son las credenciales del super administrador (respeta el bloqueo)."""
+    if time.time() < _intentos["hasta"] or not str(usuario or "").strip():
+        return False
+    try:
+        from services import db
+        return db.validar_super(usuario, clave)
+    except Exception as ex:
+        print("⚠️ No se pudo validar el super admin:", ex)
+        return False
 
 
 def pedir_pin(page, al_entrar, codigo=None):
@@ -406,12 +423,12 @@ def admin_view(page, codigo, nombre, logo):
 
     pintar_generos()
 
-    def salir(e):
+    async def salir(e):
         vivo["v"] = False
         from services.session_manager import cerrar_sesion
-        cerrar_sesion(page, ruta="/admin")
-        from views.acceso import acceso_admin_view
-        acceso_admin_view(page, codigo)
+        from views.acceso import ir_a_portada
+        cerrar_sesion(page)
+        await ir_a_portada()
 
     def boton(icono, tooltip, cmd):
         return ft.IconButton(icon=icono, icon_size=44, icon_color="white", tooltip=tooltip,

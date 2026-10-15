@@ -13,7 +13,6 @@ Desde aquí se hace todo lo que antes se hacía a mano en Google Sheets:
 """
 import asyncio
 import os
-import time
 
 import flet as ft
 
@@ -100,53 +99,17 @@ def _preparar(page):
 # Entrada
 # ---------------------------------------------------------------------------
 def super_login_view(page):
-    _preparar(page)
-    page.vertical_alignment = ft.MainAxisAlignment.CENTER
-    usuario = _campo("Usuario")
-    clave = _campo("Clave", clave=True)
-    error = ft.Text("", color="#f87171")
+    """El super administrador entra por el mismo "Iniciar sesión" de todos (/admin)."""
+    from views.acceso import acceso_admin_view
+    acceso_admin_view(page)
 
-    def entrar(e):
-        if time.time() < _intentos["hasta"]:
-            error.value = "Demasiados intentos. Espera un minuto."
-            page.update()
-            return
-        try:
-            ok = db.validar_super(usuario.value, clave.value)
-        except Exception as ex:
-            error.value = f"No se pudo conectar con la base: {ex}"
-            page.update()
-            return
-        if ok:
-            _intentos["n"] = 0
-            _sesiones_super.add(id(page))
-            from services.session_manager import guardar_sesion
-            guardar_sesion(page, {"codigo": "*", "telefono": "SUPER", "usuario": usuario.value},
-                           rol="super")
-            super_inicio(page)
-            return
-        _intentos["n"] += 1
-        if _intentos["n"] >= 5:
-            _intentos.update(n=0, hasta=time.time() + 60)
-        error.value = "Usuario o clave incorrectos"
-        clave.value = ""
-        page.update()
 
-    def volver(e):
-        from views.codigo import codigo_view
-        codigo_view(page)
-
-    usuario.on_submit = lambda e: clave.focus()
-    clave.on_submit = entrar
-    page.add(ft.Column([
-        ft.Text("👑", size=48),
-        ft.Text("Super administrador", size=26, color="white", weight=ft.FontWeight.BOLD),
-        ft.Text("PlayBar GO", color="#94A3B8"),
-        ft.Container(height=10), usuario, clave, error,
-        _boton("Entrar", entrar, ancho=220),
-        ft.TextButton("← Volver", on_click=volver),
-    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10))
-    page.update()
+def entrar_como_super(page, usuario):
+    _intentos["n"] = 0
+    _sesiones_super.add(id(page))
+    from services.session_manager import guardar_sesion
+    guardar_sesion(page, {"codigo": "*", "telefono": "SUPER", "usuario": usuario}, rol="super")
+    super_inicio(page)
 
 
 def _es_super(page):
@@ -167,12 +130,12 @@ def super_inicio(page):
         page.update()
         return
 
-    def salir(e):
+    async def salir(e):
         _sesiones_super.discard(id(page))
         from services.session_manager import cerrar_sesion
+        from views.acceso import ir_a_portada
         cerrar_sesion(page)
-        from views.codigo import codigo_view
-        codigo_view(page)
+        await ir_a_portada()
 
     def tarjeta(c):
         def cambiar_activo(e):
