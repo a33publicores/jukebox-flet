@@ -128,8 +128,9 @@ def reclamar(request, cli, cuerpo):
     d = cuerpo
     if not d.get("instancia"):
         return JSONResponse({"ok": False, "error": "falta instancia"}, status_code=400)
+    info = d.get("info") if isinstance(d.get("info"), dict) else None
     activo, equipo = db.reclamar_reproductor(cli["codigo"], d["instancia"], d.get("equipo", ""),
-                                             bool(d.get("forzar")))
+                                             bool(d.get("forzar")), info)
     return JSONResponse({"ok": True, "activo": activo, "equipo": equipo})
 
 

@@ -93,10 +93,11 @@ class ApiCliente:
             datos.update(instancia=instancia, equipo=equipo)
         return self._post("/api/v1/estado", datos)
 
-    def reclamar(self, instancia, equipo="", forzar=False):
-        """Un solo reproductor por bar: {"activo": True/False, "equipo": quién lo tiene}."""
+    def reclamar(self, instancia, equipo="", forzar=False, info=None):
+        """Un solo reproductor por bar: {"activo": True/False, "equipo": quién lo tiene}.
+        `info`: modelo, sistema, RAM, espacio... (se ve en /super)."""
         return self._post("/api/v1/reclamar", {"instancia": instancia, "equipo": equipo,
-                                               "forzar": bool(forzar)})
+                                               "forzar": bool(forzar), "info": info or {}})
 
     def reordenar(self, filas):
         self._post("/api/v1/reordenar", {"filas": list(filas)})

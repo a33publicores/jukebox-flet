@@ -155,6 +155,7 @@ def super_inicio(page):
                         ft.Text(f"Código {c['codigo']}" + (" · playlist ✔" if c["playlist"] else ""),
                                 color="#94A3B8", size=13),
                         _linea_plan(c),
+                        _linea_equipo(c),
                     ], spacing=2, expand=True),
                     ft.Switch(value=bool(c["activo"]), active_color=CYAN, on_change=cambiar_activo,
                               label="Activo"),
@@ -557,6 +558,37 @@ def _linea_plan(c):
     elif e["estado"] in ("activo", "vencido") and e["vence"]:
         txt += f" · vence {sus.fecha_txt(e['vence'])}"
     return ft.Text(txt, color=color, size=13)
+
+
+def _linea_equipo(c):
+    """En qué equipo suena el bar (lo manda el reproductor al abrir): modelo, sistema, RAM..."""
+    import json
+    import time as _t
+    try:
+        ctl = db.control(c["codigo"]) or {}
+        info = json.loads(ctl.get("equipo_info") or "{}")
+    except Exception:
+        return ft.Text("")
+    if not info:
+        return ft.Text("📺 Reproductor: todavía no se ha conectado con la versión nueva",
+                       color="#64748b", size=12)
+    visto = float(ctl.get("instancia_visto") or 0)
+    hace = _t.time() - visto
+    cuando = ("en línea" if hace < 90 else
+              f"visto hace {int(hace // 60)} min" if hace < 3600 else
+              f"visto hace {int(hace // 3600)} h" if hace < 86400 else "visto hace días")
+    ram = float(info.get("ram_gb") or 0)
+    partes = [("📺 " if info.get("tipo") == "tv" else "💻 ") + str(info.get("modelo") or "Equipo"),
+              info.get("sistema", ""),
+              f"{ram:g} GB RAM" if ram else "",
+              f"{info['libre_gb']:g} GB libres" if info.get("libre_gb") is not None else "",
+              info.get("pantalla", ""), info.get("calidad", ""),
+              f"app {info['app']}" if info.get("app") else "", cuando]
+    texto = " · ".join(p for p in partes if p)
+    basico = 0 < ram < 2
+    if basico:
+        texto += " · ⚠️ equipo básico"
+    return ft.Text(texto, color="#facc15" if basico else "#94A3B8", size=12, selectable=True)
 
 
 def _form_plan_negocio(page, c):

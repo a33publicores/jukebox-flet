@@ -150,6 +150,8 @@ ESQUEMA = [
     "ALTER TABLE control ADD COLUMN IF NOT EXISTS instancia TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE control ADD COLUMN IF NOT EXISTS instancia_nombre TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE control ADD COLUMN IF NOT EXISTS instancia_visto DOUBLE PRECISION NOT NULL DEFAULT 0",
+    # Ficha del equipo donde suena el bar (modelo, sistema, RAM, espacio, pantalla) en JSON.
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS equipo_info TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE pagos ADD COLUMN IF NOT EXISTS bono TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE pagos ADD COLUMN IF NOT EXISTS descuento INTEGER NOT NULL DEFAULT 0",
 ]
@@ -637,7 +639,7 @@ def enviar_comando(codigo, comando, param=""):
 REPRODUCTOR_VENCE_SEG = 90  # si el reproductor activo no avisa en este tiempo, se apagó
 
 
-def reclamar_reproductor(codigo, instancia, equipo="", forzar=False):
+def reclamar_reproductor(codigo, instancia, equipo="", forzar=False, info=None):
     """Un solo reproductor activo por bar. Se queda con el control si está libre, si ya
     es suyo, si el otro dejó de avisar hace más de REPRODUCTOR_VENCE_SEG o si `forzar`
     ("Usar aquí"). Devuelve (activo, nombre del equipo que lo tiene)."""
@@ -649,6 +651,9 @@ def reclamar_reproductor(codigo, instancia, equipo="", forzar=False):
                (str(instancia), str(equipo or "")[:60], ahora, str(codigo), bool(forzar),
                 str(instancia), ahora - REPRODUCTOR_VENCE_SEG))
     if fila:
+        if info:
+            ejecutar("UPDATE control SET equipo_info = %s WHERE codigo = %s",
+                     (json.dumps(info, ensure_ascii=False)[:2000], str(codigo)))
         return True, fila["instancia_nombre"]
     otro = uno("SELECT instancia_nombre FROM control WHERE codigo = %s", (str(codigo),))
     return False, (otro or {}).get("instancia_nombre") or "otro equipo"

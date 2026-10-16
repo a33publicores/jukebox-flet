@@ -77,10 +77,10 @@ class BackendApi:
         except TypeError:  # cliente sin "un solo reproductor"
             return self.api.estado(estado, actual, siguiente, ack)
 
-    def reclamar(self, instancia, equipo="", forzar=False):
+    def reclamar(self, instancia, equipo="", forzar=False, info=None):
         if not hasattr(self.api, "reclamar"):
             return {"activo": True}
-        return self.api.reclamar(instancia, equipo, forzar)
+        return self.api.reclamar(instancia, equipo, forzar, info)
 
     def registrar(self, item):
         pass  # el historial ya queda en la base (estado2 = Reproducido)
@@ -219,6 +219,7 @@ class Motor:
             pass
         self.inactivo = False
         self.otro_equipo = ""
+        self.info = {}  # modelo, sistema, RAM... del equipo (lo llena la app; se ve en /super)
         self.alerta = ""          # aviso que se queda hasta que se arregle (ej. disco lleno)
         self.plan = None          # prueba gratis / plan del negocio (lo dice la API)
         self.bloqueado = False    # prueba terminada o plan vencido: no suena nada nuevo
@@ -560,6 +561,14 @@ class Motor:
                 return
             print(f"❌ Error de reproducción: {mensaje}")
             it = self.actual
+            # TV: antes de descartarla, se vuelve a bajar en 480p (más liviana); la cola la
+            # toma de nuevo sola. Si vuelve a fallar, entonces sí se salta.
+            reintentar = getattr(self.desc, "reintentar_liviano", None)
+            if reintentar is not None and await asyncio.to_thread(reintentar, it.video_id):
+                self.actual = None
+                self.relleno = False
+                self.token += 1
+                return
             if it.fila is not None:
                 await self._marcar(it.fila, e2=C.E_ERROR, estado=C.E_ERROR)
             self.previo = None
@@ -800,7 +809,8 @@ class Motor:
     # ---------------------------------------------- un solo reproductor por bar
     async def _reclamar(self, forzar=False):
         try:
-            r = await asyncio.to_thread(self.backend.reclamar, self.instancia, self.equipo, forzar)
+            r = await asyncio.to_thread(self.backend.reclamar, self.instancia, self.equipo, forzar,
+                                        self.info)
         except Exception as ex:
             print(f"ℹ️ No se pudo revisar si suena en otro equipo: {ex}")
             return True

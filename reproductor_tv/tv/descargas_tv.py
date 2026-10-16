@@ -20,6 +20,7 @@ from pathlib import Path
 
 _EXT_TEMP = (".part", ".ytdl", ".temp", ".tmp")
 _EXT_VIDEO = (".mp4", ".webm", ".mkv", ".m4v", ".mov", ".ts")
+LIVIANA = 480  # calidad para TV básicos (menos de 2 GB de RAM) o videos que fallaron
 
 # Un TV o TV Box tiene poca memoria (8-16 GB): los avisos son más bajos que en el PC.
 LIBRE_AVISO = 1 * 1024 ** 3      # menos de 1 GB: "queda poco espacio"
@@ -78,6 +79,7 @@ class Descargador:
         self.carpeta.mkdir(parents=True, exist_ok=True)
         self.cookies = cookies if cookies and os.path.exists(cookies) else None
         self.altura = altura_max
+        self.livianos = set()  # videos que el TV no pudo reproducir: se vuelven a bajar en 480p
         self._archivo_alt = self.carpeta / "alternativas.json"
         try:
             self._alt = json.loads(self._archivo_alt.read_text("utf-8"))
@@ -85,6 +87,21 @@ class Descargador:
             self._alt = {}
         self._lock = threading.Lock()
         threading.Thread(target=self.revisar_cache, daemon=True).start()
+
+    def reintentar_liviano(self, video_id):
+        """El TV no pudo reproducir este video: se borra y la próxima vez se baja en 480p
+        (más liviano para TV básicos). False si ya se intentó así (entonces se salta)."""
+        if video_id in self.livianos:
+            return False
+        self.livianos.add(video_id)
+        for vid in {video_id, self._alt.get(video_id, video_id)}:
+            for p in list(self.carpeta.glob(f"{vid}.*")) + list(self.carpeta.glob(f"{vid}_*")):
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+        print(f"↩️ {video_id}: se vuelve a bajar en {min(self.altura, LIVIANA)}p")
+        return True
 
     # -- caché ---------------------------------------------------------
     def ruta(self, video_id):
@@ -249,7 +266,7 @@ class Descargador:
         audio como dos archivos (ID.f136.mp4 + ID.f140.m4a) en vez de unirlos."""
         import yt_dlp
 
-        h = self.altura
+        h = min(self.altura, LIVIANA) if video_id in self.livianos else self.altura
         opts = {
             # 1º video h264 + audio m4a (lo que mejor decodifica un TV), luego cualquiera,
             # y si YouTube diera un archivo con todo junto, ese.

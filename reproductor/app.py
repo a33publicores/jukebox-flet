@@ -905,6 +905,33 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
     await hecho.wait()
 
 
+def _info_equipo(descargas):
+    """Modelo/sistema/RAM/espacio del PC: se ve en /super para saber en qué equipo suena el bar."""
+    import platform
+    d = {"tipo": "pc", "app": VERSION, "modelo": platform.node(),
+         "sistema": f"{platform.system()} {platform.release()}"}
+    try:
+        import ctypes
+
+        class _Mem(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                        ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                        ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                        ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                        ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+        m = _Mem()
+        m.dwLength = ctypes.sizeof(_Mem)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+        d["ram_gb"] = round(m.ullTotalPhys / 1024 ** 3, 1)
+    except Exception:
+        pass
+    try:
+        d["libre_gb"] = round(descargas.espacio_libre() / 1024 ** 3, 1)
+    except Exception:
+        pass
+    return d
+
+
 async def main(page: ft.Page):
     page.title = f"PlayBar GO — Reproductor v{VERSION}"
     page.bgcolor = FONDO
@@ -952,6 +979,7 @@ async def main(page: ft.Page):
         max_gb=float(cfg.get("cache_gb", 5)),
     )
     motor = Motor(BackendApi(api, cfg["cliente"]), descargas, pantalla)
+    motor.info = _info_equipo(descargas)
     pantalla.motor = motor
     _aviso["pantalla"] = pantalla
 

@@ -578,38 +578,70 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
     valores = {"Código": str(previo.get("cliente", "")), "Llave": str(previo.get("llave", ""))}
     est = {"campo": "Código" if not valores["Código"] else "Llave", "fila": 0, "col": 0,
            "ocupado": False}
-    texto = ft.Text(mensaje, color="#fca5a5", width=320, text_align=ft.TextAlign.CENTER, size=12)
+    texto = ft.Text(mensaje, color="#fca5a5", text_align=ft.TextAlign.CENTER)
     hecho = asyncio.Event()
+    cajas = {}       # nombre -> (caja, texto del valor)
+    teclas_ui = []   # filas de cajas de las teclas (para resaltar la seleccionada)
 
-    # Diseño para la pantalla del TV (≈960×540 puntos): datos a la izquierda y teclado a
-    # la derecha, para que todo quepa sin desplazarse.
-    cajas = {}
-    for nombre, ejemplo in (("Código", "ej. 8523"), ("Llave", "ej. K7M4-X9P2")):
-        valor = ft.Text("", size=20, color="white", weight=ft.FontWeight.BOLD)
-        cajas[nombre] = (ft.Container(
-            width=320, padding=ft.Padding.symmetric(horizontal=12, vertical=6), border_radius=12,
-            bgcolor=PANEL,
-            content=ft.Column([ft.Text(f"{'Código del lugar' if nombre == 'Código' else 'Llave del bar'} "
-                                       f"({ejemplo})", size=13, color="#94A3B8"), valor], spacing=2)),
-            valor)
+    def armar():
+        """Datos a la izquierda y teclado a la derecha, escalados al tamaño de la pantalla:
+        cabe completo en un TV grande, uno pequeño o un TV Box HD (desde 640×360 puntos).
+        Se vuelve a armar si cambia el tamaño (ventana en el PC)."""
+        ancho_p, alto_p = float(page.width or 960), float(page.height or 540)
+        k = max(0.5, min(1.15, (ancho_p - 24) / 800, (alto_p - 24) / 400))
 
-    teclas_ui = []
-    filas_ui = []
-    for f, fila in enumerate(TECLADO):
-        fila_ui = []
-        for c, t in enumerate(fila):
-            ancho = 36 if f < 4 else (90 if t != "Guardar y empezar" else 180)
-            caja = ft.Container(
-                width=ancho if t != "⌫" else 78, height=36, border_radius=8,
-                alignment=ft.Alignment.CENTER,
-                content=ft.Text(t, size=16 if f < 4 else 13, weight=ft.FontWeight.BOLD))
-            fila_ui.append(caja)
-        teclas_ui.append(fila_ui)
-        # GestureDetector (no on_click): así las teclas no toman el foco de Flutter y el OK
-        # del control no las activa dos veces; el mouse y la pantalla táctil siguen sirviendo.
-        filas_ui.append(ft.Row([ft.GestureDetector(content=caja, on_tap=lambda e, f=f, c=c: pulsar(f, c))
-                                for c, caja in enumerate(fila_ui)],
-                               spacing=5, alignment=ft.MainAxisAlignment.CENTER))
+        def z(n):
+            return round(n * k)
+
+        texto.width, texto.size = z(320), max(9, z(12))
+        cajas.clear()
+        for nombre, ejemplo in (("Código", "ej. 8523"), ("Llave", "ej. K7M4-X9P2")):
+            valor = ft.Text("", size=z(20), color="white", weight=ft.FontWeight.BOLD)
+            etiqueta = "Código del lugar" if nombre == "Código" else "Llave del bar"
+            cajas[nombre] = (ft.Container(
+                width=z(320), padding=ft.Padding.symmetric(horizontal=z(12), vertical=z(6)),
+                border_radius=z(12), bgcolor=PANEL,
+                content=ft.Column([ft.Text(f"{etiqueta} ({ejemplo})", size=max(8, z(13)),
+                                           color="#94A3B8"), valor], spacing=2)), valor)
+        teclas_ui.clear()
+        filas_ui = []
+        for f, fila in enumerate(TECLADO):
+            fila_ui = []
+            for c, t in enumerate(fila):
+                ancho = 36 if f < 4 else (90 if t != "Guardar y empezar" else 180)
+                fila_ui.append(ft.Container(
+                    width=z(ancho if t != "⌫" else 78), height=z(36), border_radius=z(8),
+                    alignment=ft.Alignment.CENTER,
+                    content=ft.Text(t, size=max(8, z(16 if f < 4 else 13)),
+                                    weight=ft.FontWeight.BOLD)))
+            teclas_ui.append(fila_ui)
+            # GestureDetector (no on_click): así las teclas no toman el foco de Flutter y el
+            # OK del control no las activa dos veces; el mouse y lo táctil siguen sirviendo.
+            filas_ui.append(ft.Row(
+                [ft.GestureDetector(content=caja, on_tap=lambda e, f=f, c=c: pulsar(f, c))
+                 for c, caja in enumerate(fila_ui)],
+                spacing=z(5), alignment=ft.MainAxisAlignment.CENTER))
+        izquierda = ft.Column(
+            [ft.Image(src="/logo.png", width=z(90)),
+             ft.Text("Configurar reproductor de TV", size=z(17), color="white",
+                     weight=ft.FontWeight.BOLD),
+             ft.Text("Usa las flechas y OK del control. El código y la llave te los da el "
+                     "administrador de PlayBar GO.", color="#94A3B8", size=max(8, z(11)),
+                     width=z(320), text_align=ft.TextAlign.CENTER),
+             *[ft.GestureDetector(content=cajas[n][0], on_tap=lambda e, n=n: elegir_campo(n))
+               for n in ("Código", "Llave")],
+             texto],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=z(8), tight=True)
+        derecha = ft.Column(filas_ui, spacing=z(5), tight=True,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+        page.controls.clear()
+        # Anchos fijos por columna: si no, cada columna ocupa todo el ancho y quedan apiladas.
+        page.add(ft.Container(expand=True, alignment=ft.Alignment.CENTER, padding=8, content=ft.Row(
+            [ft.Container(width=z(330), content=izquierda),
+             ft.Container(width=z(420), content=derecha)],
+            spacing=z(20), alignment=ft.MainAxisAlignment.CENTER,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER)))
+        pintar()
 
     def pintar():
         for nombre, (caja, valor) in cajas.items():
@@ -720,27 +752,20 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
             print(f"ℹ️ tecla sin uso en la configuración: {e.key!r}")
 
     page.on_keyboard_event = teclas
-    izquierda = ft.Column(
-        [ft.Image(src="/logo.png", width=90),
-         ft.Text("Configurar reproductor de TV", size=17, color="white", weight=ft.FontWeight.BOLD),
-         ft.Text("Usa las flechas y OK del control. El código y la llave te los da el "
-                 "administrador de PlayBar GO.", color="#94A3B8", size=11, width=320,
-                 text_align=ft.TextAlign.CENTER),
-         *[ft.GestureDetector(content=cajas[n][0], on_tap=lambda e, n=n: elegir_campo(n))
-           for n in ("Código", "Llave")],
-         texto],
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8, tight=True)
-    derecha = ft.Column(filas_ui, spacing=5, tight=True,
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-    page.add(ft.Container(expand=True, alignment=ft.Alignment.CENTER, padding=8, content=ft.Row(
-        [izquierda, derecha], spacing=20, wrap=True, run_spacing=10,
-        alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER,
-    )))
-    pintar()
+
+    def al_cambiar_tamano(e=None):
+        try:
+            armar()
+        except Exception as ex:
+            print(f"ℹ️ No se pudo reacomodar la configuración: {ex}")
+
+    page.on_resize = al_cambiar_tamano
+    armar()
     try:
         await hecho.wait()
     finally:
         page.on_keyboard_event = None
+        page.on_resize = None
 
 
 def _revisar(api, cliente):
@@ -911,8 +936,14 @@ async def _una_sesion(page: ft.Page):
         return
 
     pantalla = Pantalla(page)
-    descargas = descargas_tv.Descargador(CFG.CACHE, cookies=str(CFG.CARPETA / "cookies.txt"))
+    # TV básicos (menos de 2 GB de RAM): videos en 480p, más livianos de reproducir.
+    from tv import equipo
+    calidad = descargas_tv.LIVIANA if equipo.es_basico() else 720
+    descargas = descargas_tv.Descargador(CFG.CACHE, cookies=str(CFG.CARPETA / "cookies.txt"),
+                                         altura_max=calidad)
     motor = Motor(BackendApi(api, cfg["cliente"]), descargas, pantalla)
+    motor.info = equipo.info(page, calidad)
+    print(f"📺 Equipo: {motor.info}")
     pantalla.motor = motor
     reiniciar = asyncio.Event()
 
