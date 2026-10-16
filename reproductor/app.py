@@ -283,6 +283,27 @@ class Pantalla:
         except Exception:
             pass
 
+    # ------------------------------------------- un solo reproductor por bar
+    async def mostrar_otro_equipo(self, equipo):
+        """El bar quedó sonando en otro equipo: este se detiene y ofrece "Usar aquí"."""
+        try:
+            self.t_otro.value = f"Ahora está sonando en «{equipo}»."
+            self.capa_otro.visible = True
+            self.page.update()
+        except Exception:
+            pass
+
+    async def ocultar_otro_equipo(self):
+        try:
+            self.capa_otro.visible = False
+            self.page.update()
+        except Exception:
+            pass
+
+    def _usar_aqui(self, e=None):
+        if getattr(self, "motor", None) is not None:
+            self.page.run_task(self.motor.usar_aqui)
+
     # ------------------------------------------- prueba gratis / plan del bar
     def _abrir_pago(self, e=None):
         if self._url_pago:
@@ -723,6 +744,29 @@ class Pantalla:
             ],
             alignment=ft.MainAxisAlignment.CENTER,
         )
+        # Un solo reproductor por bar: si se abre en otro equipo, este se detiene.
+        self.t_otro = ft.Text("", size=18, color="#cbd5e1", text_align=ft.TextAlign.CENTER,
+                              width=640)
+        self.capa_otro = ft.Container(
+            visible=False, left=0, right=0, top=0, bottom=0, bgcolor="#020617F2",
+            alignment=ft.Alignment.CENTER,
+            content=ft.Column([
+                ft.Image(src="/logo.png", height=90, fit=ft.BoxFit.CONTAIN),
+                ft.Text("PlayBar GO se está usando en otro equipo", size=30, color="white",
+                        weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+                self.t_otro,
+                ft.Container(
+                    width=340, height=60, border_radius=18,
+                    gradient=ft.LinearGradient(colors=[CYAN, VIOLETA]),
+                    content=ft.TextButton(
+                        content=ft.Text("▶ Usar aquí", color="white", size=20,
+                                        weight=ft.FontWeight.BOLD),
+                        on_click=self._usar_aqui),
+                ),
+                ft.Text("Si tocas «Usar aquí», la música pasa a este equipo y el otro se detiene.",
+                        color="#64748b", size=14),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=18, tight=True),
+        )
         # Prueba gratis terminada / plan vencido: capa encima del video con el botón de pago.
         self._url_pago = ""
         self.t_plan_titulo = ft.Text("", size=34, color="white", weight=ft.FontWeight.BOLD,
@@ -770,6 +814,7 @@ class Pantalla:
                 ),
                 self.tiempo,
                 self.capa_plan,
+                self.capa_otro,
                 self._crear_cabecera(
                     left=0, right=0, top=0, padding=ft.Padding.symmetric(horizontal=16, vertical=10),
                     bgcolor="#000000B3",

@@ -85,9 +85,18 @@ class ApiCliente:
     def marcar(self, fila, estado2=None, estado=None):
         self._post("/api/v1/marcar", {"fila": fila, "estado2": estado2, "estado": estado})
 
-    def estado(self, estado, actual="", siguiente="", ack=None):
-        self._post("/api/v1/estado", {"estado": estado, "actual": actual,
-                                      "siguiente": siguiente, "ack": ack})
+    def estado(self, estado, actual="", siguiente="", ack=None, instancia=None, equipo=""):
+        """Publica qué suena. Con `instancia`, la API dice si este equipo tiene el control
+        del bar ({"activo": False, "equipo": ...} si suena en otro equipo)."""
+        datos = {"estado": estado, "actual": actual, "siguiente": siguiente, "ack": ack}
+        if instancia:
+            datos.update(instancia=instancia, equipo=equipo)
+        return self._post("/api/v1/estado", datos)
+
+    def reclamar(self, instancia, equipo="", forzar=False):
+        """Un solo reproductor por bar: {"activo": True/False, "equipo": quién lo tiene}."""
+        return self._post("/api/v1/reclamar", {"instancia": instancia, "equipo": equipo,
+                                               "forzar": bool(forzar)})
 
     def reordenar(self, filas):
         self._post("/api/v1/reordenar", {"filas": list(filas)})

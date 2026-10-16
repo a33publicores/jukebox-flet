@@ -143,6 +143,27 @@ class Pantalla:
                                   width=520)
         self.t_plan_url = ft.Text("", size=14, color=CYAN, text_align=ft.TextAlign.CENTER,
                                   width=520, selectable=True)
+        # Un solo reproductor por bar: si se abre en otro equipo, este se detiene.
+        self.t_otro = ft.Text("", size=15, color="#cbd5e1", text_align=ft.TextAlign.CENTER,
+                              width=520)
+        self.capa_otro = ft.Container(
+            visible=False, left=0, right=0, top=0, bottom=0, bgcolor="#020617F2",
+            alignment=ft.Alignment.CENTER,
+            content=ft.Column([
+                ft.Image(src="/logo.png", height=80, fit=ft.BoxFit.CONTAIN),
+                ft.Text("PlayBar GO se está usando en otro equipo", size=24, color="white",
+                        weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+                self.t_otro,
+                ft.Container(
+                    width=300, height=52, border_radius=16, bgcolor=CYAN,
+                    border=ft.Border.all(3, "white"), alignment=ft.Alignment.CENTER,
+                    content=ft.Text("▶ Usar aquí (OK)", color=FONDO, size=18,
+                                    weight=ft.FontWeight.BOLD),
+                ),
+                ft.Text("Presiona OK en el control para que la música pase a este TV.",
+                        color="#64748b", size=12),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12, tight=True),
+        )
         self.capa_plan = ft.Container(
             visible=False, left=0, right=0, top=0, bottom=0, bgcolor="#020617EE",
             alignment=ft.Alignment.CENTER,
@@ -286,6 +307,27 @@ class Pantalla:
             self.page.update()
         except Exception:
             pass
+
+    # ------------------------------------------- un solo reproductor por bar
+    async def mostrar_otro_equipo(self, equipo):
+        """El bar quedó sonando en otro equipo: este se detiene y ofrece "Usar aquí"."""
+        try:
+            self.t_otro.value = f"Ahora está sonando en «{equipo}»."
+            self.capa_otro.visible = True
+            self.page.update()
+        except Exception:
+            pass
+
+    async def ocultar_otro_equipo(self):
+        try:
+            self.capa_otro.visible = False
+            self.page.update()
+        except Exception:
+            pass
+
+    def _usar_aqui(self, e=None):
+        if getattr(self, "motor", None) is not None:
+            self.page.run_task(self.motor.usar_aqui)
 
     # ------------------------------------------- prueba gratis / plan del bar
     async def mostrar_plan(self, info, sonando=False):
@@ -483,7 +525,7 @@ class Pantalla:
             controls=[
                 ft.Container(content=self.video, expand=True, bgcolor="#000000",
                              left=0, right=0, top=0, bottom=0),
-                tiempo, self.t_pausa, self.capa_plan,
+                tiempo, self.t_pausa, self.capa_plan, self.capa_otro,
             ],
         )
         # El logo de PlayBar GO SIEMPRE visible encima de la playlist.
@@ -536,14 +578,16 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
     valores = {"Código": str(previo.get("cliente", "")), "Llave": str(previo.get("llave", ""))}
     est = {"campo": "Código" if not valores["Código"] else "Llave", "fila": 0, "col": 0,
            "ocupado": False}
-    texto = ft.Text(mensaje, color="#fca5a5", width=560, text_align=ft.TextAlign.CENTER)
+    texto = ft.Text(mensaje, color="#fca5a5", width=320, text_align=ft.TextAlign.CENTER, size=12)
     hecho = asyncio.Event()
 
+    # Diseño para la pantalla del TV (≈960×540 puntos): datos a la izquierda y teclado a
+    # la derecha, para que todo quepa sin desplazarse.
     cajas = {}
     for nombre, ejemplo in (("Código", "ej. 8523"), ("Llave", "ej. K7M4-X9P2")):
-        valor = ft.Text("", size=26, color="white", weight=ft.FontWeight.BOLD)
+        valor = ft.Text("", size=20, color="white", weight=ft.FontWeight.BOLD)
         cajas[nombre] = (ft.Container(
-            width=540, padding=ft.Padding.symmetric(horizontal=16, vertical=10), border_radius=12,
+            width=320, padding=ft.Padding.symmetric(horizontal=12, vertical=6), border_radius=12,
             bgcolor=PANEL,
             content=ft.Column([ft.Text(f"{'Código del lugar' if nombre == 'Código' else 'Llave del bar'} "
                                        f"({ejemplo})", size=13, color="#94A3B8"), valor], spacing=2)),
@@ -554,18 +598,18 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
     for f, fila in enumerate(TECLADO):
         fila_ui = []
         for c, t in enumerate(fila):
-            ancho = 52 if f < 4 else (130 if t != "Guardar y empezar" else 250)
+            ancho = 36 if f < 4 else (90 if t != "Guardar y empezar" else 180)
             caja = ft.Container(
-                width=ancho if t != "⌫" else 110, height=52, border_radius=10,
+                width=ancho if t != "⌫" else 78, height=36, border_radius=8,
                 alignment=ft.Alignment.CENTER,
-                content=ft.Text(t, size=20 if f < 4 else 16, weight=ft.FontWeight.BOLD))
+                content=ft.Text(t, size=16 if f < 4 else 13, weight=ft.FontWeight.BOLD))
             fila_ui.append(caja)
         teclas_ui.append(fila_ui)
         # GestureDetector (no on_click): así las teclas no toman el foco de Flutter y el OK
         # del control no las activa dos veces; el mouse y la pantalla táctil siguen sirviendo.
         filas_ui.append(ft.Row([ft.GestureDetector(content=caja, on_tap=lambda e, f=f, c=c: pulsar(f, c))
                                 for c, caja in enumerate(fila_ui)],
-                               spacing=8, alignment=ft.MainAxisAlignment.CENTER))
+                               spacing=5, alignment=ft.MainAxisAlignment.CENTER))
 
     def pintar():
         for nombre, (caja, valor) in cajas.items():
@@ -676,16 +720,21 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
             print(f"ℹ️ tecla sin uso en la configuración: {e.key!r}")
 
     page.on_keyboard_event = teclas
-    page.add(ft.Container(expand=True, alignment=ft.Alignment.CENTER, content=ft.Column(
-        [ft.Image(src="/logo.png", width=150),
-         ft.Text("Configurar reproductor de TV", size=22, color="white", weight=ft.FontWeight.BOLD),
-         ft.Text("Usa las flechas y OK del control. Pide el código y la llave de tu bar al "
-                 "administrador de PlayBar GO.", color="#94A3B8", size=13),
+    izquierda = ft.Column(
+        [ft.Image(src="/logo.png", width=90),
+         ft.Text("Configurar reproductor de TV", size=17, color="white", weight=ft.FontWeight.BOLD),
+         ft.Text("Usa las flechas y OK del control. El código y la llave te los da el "
+                 "administrador de PlayBar GO.", color="#94A3B8", size=11, width=320,
+                 text_align=ft.TextAlign.CENTER),
          *[ft.GestureDetector(content=cajas[n][0], on_tap=lambda e, n=n: elegir_campo(n))
            for n in ("Código", "Llave")],
-         *filas_ui, texto],
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER,
-        scroll=ft.ScrollMode.AUTO, spacing=10,
+         texto],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8, tight=True)
+    derecha = ft.Column(filas_ui, spacing=5, tight=True,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+    page.add(ft.Container(expand=True, alignment=ft.Alignment.CENTER, padding=8, content=ft.Row(
+        [izquierda, derecha], spacing=20, wrap=True, run_spacing=10,
+        alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER,
     )))
     pintar()
     try:
@@ -875,6 +924,10 @@ async def _una_sesion(page: ft.Page):
         k = (e.key or "").lower()
         if pantalla.menu_abierto:
             return  # con el menú abierto las flechas y OK mueven el menú
+        if motor.inactivo:  # suena en otro equipo: OK = "Usar aquí"
+            if k in T_PAUSA:
+                await motor.usar_aqui()
+            return
         if k in T_PAUSA:
             await motor.ejecutar("reanudar" if motor.pausado else "pausar")
         elif k in T_SIGUIENTE:

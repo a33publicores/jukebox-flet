@@ -110,9 +110,27 @@ def marcar(request, cli, cuerpo):
 @_protegido
 def estado(request, cli, cuerpo):
     d = cuerpo
+    # Un solo reproductor por bar: si otro equipo tiene el control, este no publica y se
+    # entera para mostrar "Se está usando en otro equipo · Usar aquí". Los reproductores
+    # viejos (sin "instancia") siguen funcionando como antes.
+    if d.get("instancia"):
+        activo, equipo = db.reclamar_reproductor(cli["codigo"], d["instancia"], d.get("equipo", ""))
+        if not activo:
+            return JSONResponse({"ok": True, "activo": False, "equipo": equipo})
     cola.publicar_estado(cli["codigo"], d.get("estado", ""), d.get("actual", ""),
                          d.get("siguiente", ""), d.get("ack"))
-    return JSONResponse({"ok": True})
+    return JSONResponse({"ok": True, "activo": True})
+
+
+@_protegido
+def reclamar(request, cli, cuerpo):
+    """Al abrir el reproductor (o al tocar "Usar aquí", con forzar): ¿este equipo tiene el control?"""
+    d = cuerpo
+    if not d.get("instancia"):
+        return JSONResponse({"ok": False, "error": "falta instancia"}, status_code=400)
+    activo, equipo = db.reclamar_reproductor(cli["codigo"], d["instancia"], d.get("equipo", ""),
+                                             bool(d.get("forzar")))
+    return JSONResponse({"ok": True, "activo": activo, "equipo": equipo})
 
 
 @_protegido
@@ -169,6 +187,7 @@ app = Starlette(routes=[
     Route("/api/v1/aleatorio", aleatorio),
     Route("/api/v1/marcar", marcar, methods=["POST"]),
     Route("/api/v1/estado", estado, methods=["POST"]),
+    Route("/api/v1/reclamar", reclamar, methods=["POST"]),
     Route("/api/v1/reordenar", reordenar, methods=["POST"]),
     Route("/api/v1/tabla", tabla),
     Route("/api/v1/excel", descargar_excel),

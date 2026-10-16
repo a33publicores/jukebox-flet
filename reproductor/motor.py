@@ -71,8 +71,16 @@ class BackendApi:
     def marcar(self, fila, estado2=None, estado=None):
         self.api.marcar(fila, estado2=estado2, estado=estado)
 
-    def publicar(self, estado, actual, siguiente, ack=None):
-        self.api.estado(estado, actual, siguiente, ack)
+    def publicar(self, estado, actual, siguiente, ack=None, instancia=None, equipo=""):
+        try:
+            return self.api.estado(estado, actual, siguiente, ack, instancia, equipo)
+        except TypeError:  # cliente sin "un solo reproductor"
+            return self.api.estado(estado, actual, siguiente, ack)
+
+    def reclamar(self, instancia, equipo="", forzar=False):
+        if not hasattr(self.api, "reclamar"):
+            return {"activo": True}
+        return self.api.reclamar(instancia, equipo, forzar)
 
     def registrar(self, item):
         pass  # el historial ya queda en la base (estado2 = Reproducido)
@@ -194,6 +202,17 @@ class Motor:
         self._marcas = set()      # escrituras a la API en segundo plano
         self._preparando_relleno = False
         self._ultimo_cid = None
+        # Un solo reproductor activo por bar (como Spotify): si el bar se abre en otro
+        # equipo, este se detiene y muestra "Usar aquí".
+        import socket
+        import uuid
+        self.instancia = uuid.uuid4().hex
+        try:
+            self.equipo = socket.gethostname()[:40] or "Reproductor"
+        except Exception:
+            self.equipo = "Reproductor"
+        self.inactivo = False
+        self.otro_equipo = ""
         self.alerta = ""          # aviso que se queda hasta que se arregle (ej. disco lleno)
         self.plan = None          # prueba gratis / plan del negocio (lo dice la API)
         self.bloqueado = False    # prueba terminada o plan vencido: no suena nada nuevo
@@ -206,7 +225,11 @@ class Motor:
     # ------------------------------------------------------------------ bucle
     async def correr(self):
         desde = None  # cuándo empezó a fallar la conexión
+        await self._reclamar()  # ¿ya suena en otro equipo? (si no hay red, sigue normal)
         while True:
+            if self.inactivo:  # suena en otro equipo: espera a que toquen "Usar aquí"
+                await asyncio.sleep(1)
+                continue
             try:
                 await self.tick()
                 if desde is not None:
@@ -517,6 +540,8 @@ class Motor:
 
     async def al_terminar(self, token):
         """La UI avisa que el video llegó al final."""
+        if self.inactivo:
+            return
         async with self._lock:
             if token == self.token and self.actual is not None:
                 await self._terminar("ok")
@@ -567,6 +592,8 @@ class Motor:
 
     async def ejecutar(self, cmd):
         """Botones locales de la pantalla (toman el candado si cambian la cola)."""
+        if self.inactivo:
+            return  # suena en otro equipo: primero hay que tocar "Usar aquí"
         if cmd in ("pausar", "reanudar"):
             await self._ejecutar(cmd)
         else:
@@ -755,10 +782,56 @@ class Motor:
         ahora = self.ahora()
         if clave == self._pub and ahora - self._t_pub < LATIDO:
             return
-        await asyncio.to_thread(
-            self.backend.publicar, clave[0], actual, sig, self._ack
+        r = await asyncio.to_thread(
+            self.backend.publicar, clave[0], actual, sig, self._ack, self.instancia, self.equipo
         )
+        if isinstance(r, dict) and r.get("activo") is False:
+            await self._quedar_inactivo(r.get("equipo", ""))
+            return
         self._pub, self._t_pub = clave, ahora
+
+    # ---------------------------------------------- un solo reproductor por bar
+    async def _reclamar(self, forzar=False):
+        try:
+            r = await asyncio.to_thread(self.backend.reclamar, self.instancia, self.equipo, forzar)
+        except Exception as ex:
+            print(f"ℹ️ No se pudo revisar si suena en otro equipo: {ex}")
+            return True
+        if isinstance(r, dict) and r.get("activo") is False:
+            await self._quedar_inactivo(r.get("equipo", ""))
+            return False
+        return True
+
+    async def _quedar_inactivo(self, equipo):
+        """Otro equipo tomó el control del bar: este deja de sonar y lo avisa."""
+        if self.inactivo:
+            return
+        self.inactivo, self.otro_equipo = True, equipo or "otro equipo"
+        print(f"⏸️ El bar se está usando en «{self.otro_equipo}»: este reproductor se detiene")
+        if self.actual is not None:
+            try:
+                await self.ui.pausar()
+            except Exception:
+                pass
+            self.pausado = True
+        if hasattr(self.ui, "mostrar_otro_equipo"):
+            await self.ui.mostrar_otro_equipo(self.otro_equipo)
+
+    async def usar_aqui(self):
+        """Botón "Usar aquí": este equipo toma el control (el otro se detiene solo)."""
+        if not await self._reclamar(forzar=True):
+            return
+        self.inactivo, self.otro_equipo = False, ""
+        self._pub = None  # publica de una vez que suena aquí
+        print("▶️ Este equipo tomó el control del bar")
+        if hasattr(self.ui, "ocultar_otro_equipo"):
+            await self.ui.ocultar_otro_equipo()
+        if self.actual is not None and self.pausado:
+            try:
+                await self.ui.reanudar()
+            except Exception:
+                pass
+            self.pausado = False
 
     async def _ui_lista(self, snap):
         omitir = self._hechas | ({self.actual.fila} if self.actual and self.actual.fila else set())

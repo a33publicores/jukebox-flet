@@ -146,6 +146,10 @@ ESQUEMA = [
         usado_bar       TEXT NOT NULL DEFAULT '',
         usado_en        DOUBLE PRECISION NOT NULL DEFAULT 0
     )""",
+    # Un solo reproductor activo por bar (como Spotify): cuál equipo tiene el control.
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS instancia TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS instancia_nombre TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS instancia_visto DOUBLE PRECISION NOT NULL DEFAULT 0",
     "ALTER TABLE pagos ADD COLUMN IF NOT EXISTS bono TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE pagos ADD COLUMN IF NOT EXISTS descuento INTEGER NOT NULL DEFAULT 0",
 ]
@@ -628,6 +632,26 @@ def enviar_comando(codigo, comando, param=""):
     ejecutar("UPDATE control SET comando = %s, comando_id = %s, param = %s WHERE codigo = %s",
              (comando, cid, str(param or ""), str(codigo)))
     return cid
+
+
+REPRODUCTOR_VENCE_SEG = 90  # si el reproductor activo no avisa en este tiempo, se apagó
+
+
+def reclamar_reproductor(codigo, instancia, equipo="", forzar=False):
+    """Un solo reproductor activo por bar. Se queda con el control si está libre, si ya
+    es suyo, si el otro dejó de avisar hace más de REPRODUCTOR_VENCE_SEG o si `forzar`
+    ("Usar aquí"). Devuelve (activo, nombre del equipo que lo tiene)."""
+    _asegurar_control(codigo)
+    ahora = time.time()
+    fila = uno("""UPDATE control SET instancia = %s, instancia_nombre = %s, instancia_visto = %s
+                  WHERE codigo = %s AND (%s OR instancia = '' OR instancia = %s OR instancia_visto < %s)
+                  RETURNING instancia_nombre""",
+               (str(instancia), str(equipo or "")[:60], ahora, str(codigo), bool(forzar),
+                str(instancia), ahora - REPRODUCTOR_VENCE_SEG))
+    if fila:
+        return True, fila["instancia_nombre"]
+    otro = uno("SELECT instancia_nombre FROM control WHERE codigo = %s", (str(codigo),))
+    return False, (otro or {}).get("instancia_nombre") or "otro equipo"
 
 
 def publicar_estado(codigo, estado, actual="", siguiente="", ack=None):
