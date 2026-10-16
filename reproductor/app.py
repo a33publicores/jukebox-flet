@@ -859,9 +859,16 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
     llave = ft.TextField(label="Llave del bar (ej. K7M4-X9P2)", width=380, border_color=CYAN,
                          color="white", password=True, can_reveal_password=True,
                          value=previo.get("llave", ""))
+    # Dirección interna del servidor (la API): ya viene puesta y casi nunca se cambia, por
+    # eso queda escondida en "Opciones avanzadas".
     servidor = ft.TextField(label="Servidor de PlayBar GO", width=380, border_color="#334155",
                             color="#cbd5e1", value=previo.get("api") or API_POR_DEFECTO,
-                            hint_text="https://playbar-api-production.up.railway.app")
+                            visible=False)
+
+    def avanzadas(e):
+        servidor.visible = not servidor.visible
+        page.update()
+
     texto = ft.Text(mensaje, color="#fca5a5", width=380, text_align=ft.TextAlign.CENTER)
     hecho = asyncio.Event()
 
@@ -897,7 +904,9 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
                                                       color="white", weight=ft.FontWeight.BOLD),
          ft.Text("Pide el código y la llave de tu bar al administrador de PlayBar GO.",
                  color="#94A3B8", size=13),
-         campo, llave, servidor, ft.FilledButton("Guardar y empezar", on_click=guardar), texto],
+         campo, llave, ft.FilledButton("Guardar y empezar", on_click=guardar), texto,
+         ft.TextButton("Opciones avanzadas", on_click=avanzadas,
+                       style=ft.ButtonStyle(color="#64748b")), servidor],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER,
         expand=True,
     ))
