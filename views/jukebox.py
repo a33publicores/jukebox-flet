@@ -327,10 +327,13 @@ def jukebox_view(
     def _cerrar_dialogo(dlg):
         dialogo_abierto["valor"] = False
         try:
-            page.pop_dialog()
+            dlg.open = False  # este diálogo (no "el de arriba", que podría ser otro aviso)
+            dlg.update()
         except Exception:
-            dlg.open = False
-            page.update()
+            try:
+                page.pop_dialog()
+            except Exception:
+                pass
 
     def abrir_confirmacion(item):
         if dialogo_abierto["valor"]:  # varios toques rápidos: un solo diálogo

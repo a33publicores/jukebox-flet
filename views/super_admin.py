@@ -64,6 +64,17 @@ def _campo(etiqueta, valor="", clave=False, ancho=340, numeros=False, disabled=F
 
 
 def _cerrar_dialogo(page):
+    """Cierra el cuadro de diálogo de arriba. No usa pop_dialog() a secas: si antes salió un
+    aviso (SnackBar, p. ej. "Llave copiada"), pop_dialog cerraba el aviso y el cuadro se
+    quedaba abierto ("Listo" no cerraba)."""
+    try:
+        for dlg in reversed(page._dialogs.controls):
+            if isinstance(dlg, ft.AlertDialog) and dlg.open:
+                dlg.open = False
+                dlg.update()
+                return
+    except Exception:
+        pass
     try:
         page.pop_dialog()
     except Exception:
