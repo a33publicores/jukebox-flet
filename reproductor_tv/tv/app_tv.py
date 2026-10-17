@@ -21,7 +21,7 @@ import flet as ft
 import flet_video as ftv
 
 from tv import config as CFG
-from tv import actualizador_tv, descargas_tv
+from tv import actualizador_tv, descargas_tv, dns_respaldo
 from tv.api_cliente import ApiCliente, LlaveInvalida
 from tv.motor import BackendApi, Motor
 from tv.version import API_POR_DEFECTO, VERSION
@@ -717,7 +717,9 @@ async def _pantalla_config(page: ft.Page, mensaje=""):
         try:
             datos = await asyncio.to_thread(ApiCliente(url, ll).config)
         except Exception as ex:
-            texto.value = f"No funcionó: {ex}"
+            print(f"⚠️ Configurar: {type(ex).__name__}: {ex}")
+            texto.value = ("No funcionó: " + str(ex) if isinstance(ex, LlaveInvalida)
+                           else dns_respaldo.explicar_error(ex))
             texto.color = "#fca5a5"
             est["ocupado"] = False
             page.update()
@@ -1078,5 +1080,6 @@ def preparar():
     except Exception:
         pass
     print(f"===== PlayBar GO TV v{VERSION} · {sys.platform} · datos en {CFG.CARPETA} =====")
+    dns_respaldo.activar()  # si el DNS del TV falla, se usa el de Cloudflare/Google
     descargas_tv.activar_ytdlp_actualizado(CFG.CARPETA)
     threading.Thread(target=descargas_tv.actualizar_ytdlp, args=(CFG.CARPETA,), daemon=True).start()

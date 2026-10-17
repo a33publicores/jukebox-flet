@@ -80,7 +80,19 @@ def estado(codigo, cli=None):
     elif est == "activo":
         dias = (vence - ahora) / 86400
         r["dias_restantes"] = max(0, int(dias + 0.999))
-        if vence > ahora:
+        es_prueba = r["plan_nombre"].lower().startswith("prueba")
+        r["prueba_dias"] = es_prueba
+        if vence > ahora and es_prueba:  # prueba por días (la crea el super admin)
+            horas = int((vence - ahora) / 3600)
+            queda = f"{horas} horas" if horas < 48 else f"{r['dias_restantes']} días"
+            r.update(permitido=True, aviso=True, titulo=r["plan_nombre"],
+                     mensaje=f"Prueba gratis hasta el {fecha_txt(vence)} (quedan {queda}). "
+                             "Adquiere tu plan para no quedarte sin música.")
+        elif es_prueba:
+            r.update(estado="vencido", permitido=False, aviso=True, titulo="Tu prueba terminó",
+                     mensaje="La prueba gratis terminó. Adquiere tu plan para seguir con "
+                             "PlayBar GO.")
+        elif vence > ahora:
             r.update(permitido=True, titulo=f"{r['plan_nombre'] or 'Plan'} activo",
                      mensaje=f"Vence el {fecha_txt(vence)} ({r['dias_restantes']} días).")
             r["aviso"] = dias <= AVISAR_DIAS
@@ -157,6 +169,15 @@ def guardar_plan(id_plan, nombre, precio, dias, activo=True, solo_para="", orden
 # ---------------------------------------------------------------------------
 # Lo que hace el super administrador
 # ---------------------------------------------------------------------------
+def crear_prueba_dias(codigo, dias):
+    """Prueba gratis por días (la da el super admin): música sin límite hasta que se
+    cumplan los días; luego se corta sola y el bar ve "Tu prueba terminó"."""
+    dias = max(1, min(30, int(dias or 2)))
+    return db.uno("""UPDATE clientes SET plan_estado = 'activo', plan_vence = %s, plan_nombre = %s
+                     WHERE codigo = %s RETURNING *""",
+                  (time.time() + dias * 86400, f"Prueba {dias} días", str(codigo)))
+
+
 def poner_estado(codigo, nuevo, dias=None, limite=None, reiniciar_prueba=False):
     nuevo = str(nuevo).strip().lower()
     if nuevo not in ESTADOS:
@@ -168,7 +189,8 @@ def poner_estado(codigo, nuevo, dias=None, limite=None, reiniciar_prueba=False):
             if c.get("plan_estado") == "activo" else time.time()
         sets.append("plan_vence = %s")
         params.append(base + int(dias) * 86400)
-        sets.append("plan_nombre = COALESCE(NULLIF(plan_nombre, ''), 'Plan manual')")
+        sets.append("plan_nombre = CASE WHEN plan_nombre = '' OR plan_nombre ILIKE 'prueba%%' "
+                    "THEN 'Plan manual' ELSE plan_nombre END")
     if limite is not None:
         sets.append("prueba_limite = %s")
         params.append(max(0, int(limite)))

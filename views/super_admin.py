@@ -13,6 +13,7 @@ Desde aquí se hace todo lo que antes se hacía a mano en Google Sheets:
 """
 import asyncio
 import os
+import re
 
 import flet as ft
 
@@ -194,6 +195,7 @@ def super_inicio(page):
         _encabezado(page, "👑 Super administrador"),
         ft.Row([
             _boton("➕ Nuevo negocio", lambda e: _form_negocio(page)),
+            _boton("🧪 Prueba 2 días", lambda e: _form_prueba(page)),
             _boton("👥 Super admins", lambda e: admins_view(page, None), apagado=True),
             _boton("💳 Planes", lambda e: planes_view(page), apagado=True),
             _boton("🎁 Bonos", lambda e: bonos_view(page), apagado=True),
@@ -370,6 +372,61 @@ def _form_negocio(page, c=None):
         activo, error,
     ], [ft.TextButton("Cancelar", on_click=lambda e: _cerrar_dialogo(page)),
         ft.FilledButton("Guardar", on_click=guardar)])
+
+
+def _form_prueba(page):
+    """Negocio de PRUEBA: el super admin le pone nombre, usuario y contraseña; tiene música
+    sin límite por unos días (2 por defecto) y después se corta solo."""
+    from services import registro
+    codigo = _campo("Código del lugar", registro.nuevo_codigo(), numeros=True)
+    nombre = _campo("Nombre del negocio")
+    usuario = _campo("Usuario del administrador (para entrar al panel)")
+    clave = _campo("Contraseña (mínimo 6)", clave=True)
+    dias = _campo("Días de prueba", "2", numeros=True)
+    error = ft.Text("", color="#f87171")
+
+    def crear(e):
+        cod = (codigo.value or "").strip()
+        usu = (usuario.value or "").strip()
+        d = (dias.value or "").strip() or "2"
+        if not cod.isdigit() or len(cod) < 3:
+            error.value = "El código debe tener al menos 3 números."
+        elif db.cliente(cod):
+            error.value = f"El código {cod} ya existe. Usa otro."
+        elif len((nombre.value or "").strip()) < 3:
+            error.value = "Escribe el nombre del negocio."
+        elif not re.fullmatch(r"[A-Za-z0-9._-]{3,30}", usu):
+            error.value = "Usuario: de 3 a 30 letras o números, sin espacios."
+        elif len(clave.value or "") < 6:
+            error.value = "La contraseña debe tener al menos 6 caracteres."
+        elif not d.isdigit() or not 1 <= int(d) <= 30:
+            error.value = "Días de prueba: de 1 a 30."
+        else:
+            error.value = ""
+        if error.value:
+            page.update()
+            return
+        try:
+            db.guardar_cliente(cod, nombre.value, "", _playlist_por_defecto(), True)
+            db.agregar_admin(cod, usu, clave.value, rol="admin", nota=f"Prueba {d} días")
+            sus.crear_prueba_dias(cod, int(d))
+        except Exception as ex:
+            error.value = f"No se pudo crear: {ex}"
+            page.update()
+            return
+        ps.olvidar_cliente(cod)
+        _cerrar_dialogo(page)
+        super_inicio(page)
+        _ver_llave(page, db.cliente(cod), recien=True)
+        _aviso(page, f"Prueba creada: {cod} · usuario {usu} · {d} días")
+
+    _dialogo(page, "🧪 Negocio de prueba", [
+        ft.Text("Música sin límite por los días que pongas. Al terminar se corta sola y "
+                "el bar ve \"Tu prueba terminó\" con la opción de comprar su plan.",
+                color="#94A3B8", size=13),
+        codigo, nombre, usuario, clave, dias, error,
+    ], [ft.TextButton("Cancelar", on_click=lambda e: _cerrar_dialogo(page)),
+        ft.FilledButton("Crear prueba", on_click=crear)])
 
 
 def _ver_llave(page, c, recien=False):
@@ -578,6 +635,8 @@ def _linea_plan(c):
     txt = e["titulo"]
     if e["estado"] == "prueba":
         txt += f" · {e['usadas']}/{e['limite']} canciones"
+    elif e.get("prueba_dias") and e["permitido"]:
+        txt += f" · hasta {sus.fecha_txt(e['vence'])} ({e['mensaje'].split('(quedan ')[-1].split(')')[0]})"
     elif e["estado"] in ("activo", "vencido") and e["vence"]:
         txt += f" · vence {sus.fecha_txt(e['vence'])}"
     return ft.Text(txt, color=color, size=13)
