@@ -74,14 +74,21 @@ def jukebox_view(
                               "telefono": "ADMIN", "modo": "admin"}, rol="admin")
         admin_view(page, codigo, cliente, logo_url)
 
+    # Los logos tienen un ancho fijo: así el centro (nombre y botón) siempre cabe,
+    # aunque el logo del bar sea ancho y el celular angosto.
+    ANCHO_LOGO = 64
     logo_playbar = ft.Image(
         src="/logohallowen.png",
+        width=ANCHO_LOGO,
         height=56,
         fit=ft.BoxFit.CONTAIN,
     )
 
     from services.playbar_service import imagen_logo
-    logo_local = ft.Image(src=imagen_logo(logo_url, codigo), height=56, fit=ft.BoxFit.CONTAIN)
+    logo_local = ft.Image(src=imagen_logo(logo_url, codigo), width=ANCHO_LOGO, height=56,
+                          fit=ft.BoxFit.CONTAIN)
+    # espacio del centro: encabezado - relleno - 2 logos - separaciones
+    centro = ancho_tarjeta() + 20 - 20 - 2 * ANCHO_LOGO - 20
 
     encabezado = ft.Container(
         width=ancho_tarjeta() + 20,
@@ -114,9 +121,10 @@ def jukebox_view(
                             text_align=ft.TextAlign.CENTER,
                         ),
                         ft.Container(height=6),
-                        (_boton("🔧 Volver al panel", volver_admin, ancho=170, alto=36)[0]
+                        (_boton("🔧 Volver al panel" if centro >= 175 else "🔧 Ir al panel",
+                                volver_admin, ancho=min(175, centro), alto=36)[0]
                          if es_admin else
-                         _boton("Cerrar sesión", cerrar_sesion, ancho=150, alto=36)[0]),
+                         _boton("Cerrar sesión", cerrar_sesion, ancho=min(150, centro), alto=36)[0]),
                     ],
                 ),
                 logo_local,
@@ -396,8 +404,12 @@ def jukebox_view(
             confirmacion.actions = [ft.Row([boton_listo], alignment=ft.MainAxisAlignment.CENTER)]
             page.update()
 
-        boton_aceptar, boton_aceptar_btn = _boton("Aceptar", aceptar)
-        boton_cancelar, boton_cancelar_btn = _boton("Cancelar", cancelar)
+        # el diálogo deja 40 px a cada lado de la pantalla y 24 px de margen adentro:
+        # los botones se ajustan para no salirse en celulares angostos
+        ancho_botones = max(200, min(280, int(page.width or 360) - 136))
+        ancho_boton = (ancho_botones - 12) // 2
+        boton_aceptar, boton_aceptar_btn = _boton("Aceptar", aceptar, ancho=ancho_boton)
+        boton_cancelar, boton_cancelar_btn = _boton("Cancelar", cancelar, ancho=ancho_boton)
         boton_listo, _ = _boton("Aceptar", listo, ancho=140)
 
         confirmacion = ft.AlertDialog(
@@ -408,8 +420,8 @@ def jukebox_view(
             actions=[
                 ft.Row(
                     controls=[boton_cancelar, boton_aceptar],
-                    width=280,
-                    spacing=15,
+                    width=ancho_botones,
+                    spacing=12,
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 )
