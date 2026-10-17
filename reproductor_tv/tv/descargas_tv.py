@@ -5,8 +5,8 @@ YouTube ya casi no entrega archivos con video y audio juntos. En el PC ffmpeg lo
 en Android no hay ffmpeg. Por eso aquí se bajan video (h264) y audio (m4a) por separado y
 se unen en un solo .mp4 con unir_mp4.py (Python puro, sin recodificar: es rápido).
 
-Cada canción se baja UNA vez y queda guardada. Si la memoria del TV se llena (menos de
-1 GB libre), se borra la mitad de canciones que hace más tiempo no suenan (ver
+Cada canción se baja UNA vez y queda guardada. Antes de que la memoria del TV se llene
+(menos de 1,5 GB libres, antes del aviso de 1 GB), se borra la mitad de canciones que hace más tiempo no suenan (ver
 liberar_espacio); si vuelven a pedirlas, se bajan de nuevo. Si un video no sirve se busca otro de
 la misma canción.
 """
@@ -24,7 +24,8 @@ _EXT_VIDEO = (".mp4", ".webm", ".mkv", ".m4v", ".mov", ".ts")
 LIVIANA = 480  # calidad para TV básicos (menos de 2 GB de RAM) o videos que fallaron
 
 # Un TV o TV Box tiene poca memoria (8-16 GB): los avisos son más bajos que en el PC.
-LIBRE_AVISO = 1 * 1024 ** 3      # menos de 1 GB: "queda poco espacio"
+LIMPIAR_DEBAJO = 1536 * 1024 ** 2  # menos de 1,5 GB: se borran canciones viejas (antes del aviso)
+LIBRE_AVISO = 1 * 1024 ** 3      # menos de 1 GB: "queda poco espacio" (si la limpieza no alcanzó)
 LIBRE_CRITICO = 300 * 1024 ** 2  # menos de 300 MB: no se descarga
 RECIENTE_SEG = 30 * 60           # lo que sonó o se bajó hace menos de 30 min no se borra
 LIMPIEZA_CADA_SEG = 6 * 3600     # si la limpieza no alcanzó, no se repite antes de 6 h
@@ -164,13 +165,13 @@ class Descargador:
             return 10 ** 12
 
     def liberar_espacio(self):
-        """Si queda menos de 1 GB: borra la MITAD de las canciones guardadas, las que hace
+        """Si queda menos de 1,5 GB (antes de que salga el aviso de 1 GB): borra la MITAD de las canciones guardadas, las que hace
         más tiempo no suenan (cada vez que una suena se le actualiza la fecha). Nunca toca lo
         que sonó o se bajó en los últimos 30 minutos (la que suena y las que están listas).
         Si aun así falta espacio (otras apps llenan el TV), no vuelve a borrar hasta dentro
         de 6 horas, salvo que la memoria esté del todo llena."""
         libre = self.espacio_libre()
-        if libre >= LIBRE_AVISO:
+        if libre >= LIMPIAR_DEBAJO:
             return 0
         ahora = time.time()
         if libre >= LIBRE_CRITICO and ahora - getattr(self, "_t_limpieza", 0) < LIMPIEZA_CADA_SEG:
@@ -200,9 +201,7 @@ class Descargador:
         return borradas
 
     def asegurar_espacio(self):
-        if self.espacio_libre() >= LIBRE_CRITICO:
-            return
-        self.liberar_espacio()
+        self.liberar_espacio()  # antes de cada descarga: limpia antes de que falte espacio
         if self.espacio_libre() >= LIBRE_CRITICO:
             return
         for p in list(self.carpeta.iterdir()):
