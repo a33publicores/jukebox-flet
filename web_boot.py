@@ -83,6 +83,59 @@ _HEAD_EXTRA = f"""
       setTimeout(hide, 20000);
     }})();
   </script>
+  <script>
+    // Vigilante de la conexión. En el celular, al bloquear la pantalla o cambiar de app,
+    // la conexión con el servidor puede quedar "muerta" sin que el navegador se entere:
+    // la página se ve normal pero tocar la lupa no hace nada hasta recargar.
+    // Si un toque no recibe NINGUNA respuesta del servidor en 8 s, se cierra esa conexión
+    // (Flet se reconecta solo y la sesión del dispositivo se recupera); si aun así no
+    // responde, se recarga la página.
+    (function () {{
+      var W = window.WebSocket;
+      if (!W) return;
+      var actual = null, tocado = 0, cerrado = 0;
+      function esToque(d) {{
+        // trama de Flet: [0x00][msgpack [accion, cuerpo]]; accion 3 = evento de un control
+        try {{
+          var b = d instanceof ArrayBuffer ? new Uint8Array(d)
+                : (ArrayBuffer.isView(d) ? new Uint8Array(d.buffer, d.byteOffset, d.byteLength) : null);
+          return !!b && b.length > 2 && b[0] === 0 && b[1] === 0x92 && b[2] === 3;
+        }} catch (e) {{ return false; }}
+      }}
+      function Envuelto(url, prot) {{
+        var s = prot === undefined ? new W(url) : new W(url, prot);
+        if (String(url).indexOf('/ws') < 0) return s;
+        actual = s; tocado = 0;
+        s.addEventListener('message', function () {{
+          if (s === actual) {{ tocado = 0; cerrado = 0; }}
+        }});
+        var enviar = s.send;
+        s.send = function (d) {{
+          if (s === actual && !tocado && esToque(d)) tocado = Date.now();
+          return enviar.apply(s, arguments);
+        }};
+        return s;
+      }}
+      Envuelto.prototype = W.prototype;
+      ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(function (k) {{ Envuelto[k] = W[k]; }});
+      window.WebSocket = Envuelto;
+      setInterval(function () {{
+        var ahora = Date.now();
+        if (cerrado && ahora - cerrado > 10000) {{
+          console.log('PBGO: sin respuesta tras reconectar, se recarga');
+          cerrado = 0;
+          location.reload();
+          return;
+        }}
+        if (tocado && !cerrado && actual && ahora - tocado > 8000) {{
+          console.log('PBGO: conexión sin respuesta, se reconecta');
+          tocado = 0;
+          cerrado = ahora;
+          try {{ actual.close(); }} catch (e) {{ location.reload(); }}
+        }}
+      }}, 1000);
+    }})();
+  </script>
 """
 
 _BODY_OVERLAY = (

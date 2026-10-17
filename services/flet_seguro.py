@@ -51,4 +51,43 @@ def aplicar():
 
     mensaje_seguro._playbar_seguro = True
     setattr(_app.FletApp, nombre, mensaje_seguro)
+
+    # Si el celular corta la conexión justo mientras se le envían datos (p. ej. los
+    # resultados de una búsqueda), Flet sale con error sin marcar la sesión como
+    # desconectada: queda "conectada" a una conexión muerta, no vence nunca y al volver
+    # el celular no la puede retomar. Aquí se cierra esa conexión y se sigue como una
+    # desconexión normal.
+    nombre_envio = "_FletApp__send_loop"
+    original_envio = getattr(_app.FletApp, nombre_envio, None)
+    if original_envio is not None and not getattr(original_envio, "_playbar_seguro", False):
+        async def envio_seguro(self):
+            try:
+                return await original_envio(self)
+            except Exception as ex:
+                print(f"ℹ️ Conexión cortada mientras se enviaban datos ({type(ex).__name__})")
+            ws = getattr(self, "_FletApp__websocket", None)
+            try:
+                if ws is not None:
+                    await ws.close()
+            except Exception:
+                pass
+            cola = getattr(self, "_FletApp__send_queue", None)
+            while cola is not None and await cola.get() is not None:
+                pass  # lo pendiente ya no tiene a quién llegar
+            self._FletApp__websocket = None
+            self._FletApp__send_queue = None
+
+        envio_seguro._playbar_seguro = True
+        setattr(_app.FletApp, nombre_envio, envio_seguro)
+
+    # Entre el corte y el aviso de "desconectada", un page.update() no debe fallar.
+    original_enviar = _app.FletApp.send_message
+    if not getattr(original_enviar, "_playbar_seguro", False):
+        def enviar_seguro(self, message):
+            if getattr(self, "_FletApp__send_queue", None) is None:
+                return
+            return original_enviar(self, message)
+
+        enviar_seguro._playbar_seguro = True
+        _app.FletApp.send_message = enviar_seguro
     print("🛡️ Conexión web de Flet blindada")
