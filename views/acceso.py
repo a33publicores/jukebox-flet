@@ -36,7 +36,9 @@ def campo(etiqueta, **kw):
 
 
 async def ir_a_portada(e=None):
-    await ft.UrlLauncher().launch_url(URL_PORTADA, web_only_window_name="_self")
+    # "?inicio": la portada se muestra aunque el dispositivo aún tenga una sesión guardada
+    await ft.UrlLauncher().launch_url(URL_PORTADA.rstrip("/") + "/?inicio",
+                                      web_only_window_name="_self")
 
 
 def acceso_admin_view(page, codigo_inicial=""):

@@ -9,6 +9,18 @@
 <meta property="og:title" content="PlayBar GO">
 <meta property="og:description" content="El DJ de tu bar, en el celular de cada cliente.">
 <meta property="og:image" content="https://play.alnovix.com/portada/logo.png">
+<script>
+  // Si este teléfono ya tiene una sesión abierta (un cliente que ya entró a su bar), vuelve
+  // directo a ella. La app la guarda en localStorage; "?inicio" muestra la portada igual
+  // (lo usan "Volver al inicio" y "Cerrar sesión").
+  (function () {
+    try {
+      if (location.pathname !== '/' || /[?&]inicio\b/.test(location.search)) return;
+      var t = JSON.parse(localStorage.getItem('flutter.playbar_session') || 'null');
+      if (typeof t === 'string' && /^[A-Za-z0-9_-]{16,}$/.test(t)) location.replace('/s/' + t);
+    } catch (e) { /* sin almacenamiento: se muestra la portada */ }
+  })();
+</script>
 <link rel="icon" type="image/png" href="/pbgo_favicon_v8_32.png">
 <link rel="apple-touch-icon" href="/pbgo_favicon_v8_192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">

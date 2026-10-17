@@ -114,10 +114,22 @@ async def cargar_sesion(page):
     Devuelve un dict con 'rol' (usuario/admin/super) o None."""
     from services import db
 
+    async def leer(token):
+        try:
+            return await asyncio.to_thread(db.leer_sesion, token)
+        except Exception as ex:
+            print(f"⚠️ No se pudo leer la sesión en la base: {ex}")
+            return None
+
+    datos = None
     token = _token_de_ruta(page)
     origen = "dirección"
+    if token:
+        datos = await leer(token)
+        if not datos:  # dirección vieja (del historial o compartida): se usa la del dispositivo
+            print("ℹ️ La sesión de la dirección ya no sirve; reviso la del dispositivo")
     viejo = None
-    if not token:
+    if not datos:
         origen = "dispositivo"
         try:
             valor = await _con_reintento(page, "get", SESSION_KEY)
@@ -129,18 +141,11 @@ async def cargar_sesion(page):
                 viejo = json.loads(valor)  # formato anterior: el JSON completo
             except Exception:
                 viejo = None
-        elif isinstance(valor, str) and valor.strip():
-            token = valor.strip()
-
-    datos = None
-    if token:
-        try:
-            datos = await asyncio.to_thread(db.leer_sesion, token)
-        except Exception as ex:
-            print(f"⚠️ No se pudo leer la sesión en la base: {ex}")
-    elif viejo and viejo.get("codigo") and viejo.get("telefono"):
-        guardar_sesion(page, viejo)  # se pasa al formato nuevo
-        datos = dict(viejo, rol="usuario", token=_tokens.get(id(page)))
+        elif isinstance(valor, str) and valor.strip() and valor.strip() != token:
+            datos = await leer(valor.strip())
+        if not datos and viejo and viejo.get("codigo") and viejo.get("telefono"):
+            guardar_sesion(page, viejo)  # se pasa al formato nuevo
+            datos = dict(viejo, rol="usuario", token=_tokens.get(id(page)))
 
     if not datos:
         print(f"ℹ️ No hay sesión guardada ({origen})")
