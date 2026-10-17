@@ -277,7 +277,8 @@ class Motor:
             await self.ui.mostrar_plan(info, self.actual is not None)
 
     async def _revisar_disco(self):
-        """Cada minuto: si queda poco espacio en el disco, avisa en pantalla (no borra nada)."""
+        """Cada minuto: si queda poco espacio, el TV borra canciones viejas; si aun así falta,
+        avisa en pantalla."""
         if not hasattr(self.desc, "espacio_libre") or self.ahora() - getattr(self, "_t_disco", 0) < 60:
             return
         self._t_disco = self.ahora()
@@ -506,6 +507,10 @@ class Motor:
         self.pausado = False
         self.token += 1
         self.recientes.append(item.video_id)
+        try:
+            os.utime(ruta, None)  # "sonó hoy": al limpiar espacio, se borran las que hace más tiempo no suenan
+        except (OSError, TypeError):
+            pass
         await self.ui.reproducir(ruta, item, self.token)
         print(f"▶️ {'(relleno) ' if relleno else ''}{item.titulo}")
         await self._anticipar()
