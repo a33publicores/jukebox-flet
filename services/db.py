@@ -154,6 +154,25 @@ ESQUEMA = [
     "ALTER TABLE control ADD COLUMN IF NOT EXISTS equipo_info TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE pagos ADD COLUMN IF NOT EXISTS bono TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE pagos ADD COLUMN IF NOT EXISTS descuento INTEGER NOT NULL DEFAULT 0",
+    # Cuántos televisores/equipos pueden tener abierto el reproductor del bar al mismo tiempo
+    # (lo pone el super administrador). Con más, al siguiente le sale "Usar aquí".
+    "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS televisores INTEGER NOT NULL DEFAULT 1",
+    # Los demás televisores del bar ("espejos"): siguen la canción del principal.
+    """CREATE TABLE IF NOT EXISTS reproductores (
+        codigo    TEXT NOT NULL,
+        instancia TEXT NOT NULL,
+        equipo    TEXT NOT NULL DEFAULT '',
+        desde     DOUBLE PRECISION NOT NULL,
+        visto     DOUBLE PRECISION NOT NULL,
+        info      TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (codigo, instancia)
+    )""",
+    # Qué suena en el principal (para que los espejos lo sigan): video, siguiente y posición.
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS actual_video TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS actual_canal TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS siguiente_video TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS actual_pos DOUBLE PRECISION NOT NULL DEFAULT 0",
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS actual_ts DOUBLE PRECISION NOT NULL DEFAULT 0",
 ]
 
 
@@ -335,6 +354,16 @@ def guardar_cliente(codigo, nombre, logo="", playlist="", activo=True):
     )
 
 
+MAX_TELEVISORES = 20
+
+
+def poner_televisores(codigo, cantidad):
+    """Cuántos equipos pueden tener abierto el reproductor del bar a la vez (1 a 20)."""
+    n = max(1, min(MAX_TELEVISORES, int(cantidad or 1)))
+    ejecutar("UPDATE clientes SET televisores = %s WHERE codigo = %s", (n, str(codigo).strip()))
+    return n
+
+
 def eliminar_negocio(codigo):
     """Borra de verdad TODO lo del negocio, en una sola operación (todo o nada): el bar
     (y con él su llave del reproductor), sus administradores, canciones e historial,
@@ -351,6 +380,7 @@ def eliminar_negocio(codigo):
                 admins_   AS (DELETE FROM admins    WHERE codigo = %s RETURNING 1),
                 pedidos_  AS (DELETE FROM pedidos   WHERE codigo = %s RETURNING 1),
                 control_  AS (DELETE FROM control   WHERE codigo = %s RETURNING 1),
+                espejos_  AS (DELETE FROM reproductores WHERE codigo = %s RETURNING 1),
                 logos_    AS (DELETE FROM logos     WHERE codigo = %s RETURNING 1),
                 pagos_    AS (DELETE FROM pagos     WHERE codigo = %s RETURNING 1),
                 descargas_ AS (DELETE FROM descargas WHERE codigo = %s RETURNING 1),
@@ -365,7 +395,7 @@ def eliminar_negocio(codigo):
                   (SELECT COUNT(*) FROM descargas_) AS descargas,
                   (SELECT COUNT(*) FROM sesiones_) AS sesiones,
                   (SELECT COUNT(*) FROM reservas) AS bonos_liberados""",
-        (codigo, codigo, codigo, codigo, codigo, codigo, codigo,
+        (codigo, codigo, codigo, codigo, codigo, codigo, codigo, codigo,
          "%" + json.dumps({"codigo": codigo})[1:-1] + "%", codigo))
     if not fila or not fila["negocio"]:
         return None
@@ -640,27 +670,104 @@ REPRODUCTOR_VENCE_SEG = 90  # si el reproductor activo no avisa en este tiempo, 
 
 
 def reclamar_reproductor(codigo, instancia, equipo="", forzar=False, info=None):
-    """Un solo reproductor activo por bar. Se queda con el control si está libre, si ya
-    es suyo, si el otro dejó de avisar hace más de REPRODUCTOR_VENCE_SEG o si `forzar`
-    ("Usar aquí"). Devuelve (activo, nombre del equipo que lo tiene)."""
+    """(activo, equipo que lo tiene). Ver reproductor()."""
+    r = reproductor(codigo, instancia, equipo, forzar, info)
+    return r["activo"], r["equipo"]
+
+
+def reproductor(codigo, instancia, equipo="", forzar=False, info=None, espejo=True):
+    """Quién suena en el bar. El bar puede tener abierto el reproductor en tantos equipos
+    como `clientes.televisores` (por defecto 1):
+
+      * el PRINCIPAL maneja la cola (control.instancia). Lo es el primero que llega, o
+        cualquiera si el principal dejó de avisar hace más de REPRODUCTOR_VENCE_SEG;
+      * los demás, hasta completar el número, son ESPEJOS: muestran la misma canción
+        (ver estado_principal());
+      * uno de más queda inactivo ("Usar aquí"). Con `forzar` ("Usar aquí") entra
+        sacando al espejo más antiguo, o al principal si el bar tiene un solo televisor.
+
+    `espejo=False`: reproductor viejo que no sabe ser espejo; para él cuenta 1 televisor.
+    Devuelve {"activo", "rol": "principal"|"espejo"|"", "equipo": quién tiene el control}."""
+    codigo, instancia = str(codigo), str(instancia)
+    equipo = str(equipo or "")[:60]
     _asegurar_control(codigo)
     ahora = time.time()
+    limite_visto = ahora - REPRODUCTOR_VENCE_SEG
+    fila_tv = uno("SELECT televisores FROM clientes WHERE codigo = %s", (codigo,))
+    televisores = max(1, int((fila_tv or {}).get("televisores") or 1)) if espejo else 1
+    info_txt = json.dumps(info, ensure_ascii=False)[:2000] if info else ""
+
     fila = uno("""UPDATE control SET instancia = %s, instancia_nombre = %s, instancia_visto = %s
-                  WHERE codigo = %s AND (%s OR instancia = '' OR instancia = %s OR instancia_visto < %s)
+                  WHERE codigo = %s AND (%s OR instancia = '' OR instancia = %s
+                                         OR instancia_visto < %s)
                   RETURNING instancia_nombre""",
-               (str(instancia), str(equipo or "")[:60], ahora, str(codigo), bool(forzar),
-                str(instancia), ahora - REPRODUCTOR_VENCE_SEG))
+               (instancia, equipo, ahora, codigo, bool(forzar and televisores == 1), instancia,
+                limite_visto))
     if fila:
-        if info:
-            ejecutar("UPDATE control SET equipo_info = %s WHERE codigo = %s",
-                     (json.dumps(info, ensure_ascii=False)[:2000], str(codigo)))
-        return True, fila["instancia_nombre"]
-    otro = uno("SELECT instancia_nombre FROM control WHERE codigo = %s", (str(codigo),))
-    return False, (otro or {}).get("instancia_nombre") or "otro equipo"
+        ejecutar("DELETE FROM reproductores WHERE codigo = %s AND instancia = %s",
+                 (codigo, instancia))
+        if info_txt:
+            ejecutar("UPDATE control SET equipo_info = %s WHERE codigo = %s", (info_txt, codigo))
+        return {"activo": True, "rol": "principal", "equipo": fila["instancia_nombre"]}
+
+    ctl = uno("SELECT instancia, instancia_nombre FROM control WHERE codigo = %s", (codigo,)) or {}
+    principal = ctl.get("instancia_nombre") or "otro equipo"
+    if televisores > 1:
+        otros = consultar("""SELECT instancia FROM reproductores
+                             WHERE codigo = %s AND visto >= %s AND instancia <> %s
+                             ORDER BY desde""", (codigo, limite_visto, ctl.get("instancia") or ""))
+        ya = any(o["instancia"] == instancia for o in otros)
+        libre = 1 + len(otros) < televisores
+        if not ya and not libre and forzar and otros:
+            ejecutar("DELETE FROM reproductores WHERE codigo = %s AND instancia = %s",
+                     (codigo, otros[0]["instancia"]))  # sale el espejo más antiguo
+            libre = True
+        if ya or libre:
+            ejecutar("""INSERT INTO reproductores (codigo, instancia, equipo, desde, visto, info)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (codigo, instancia) DO UPDATE SET equipo = EXCLUDED.equipo,
+                            visto = EXCLUDED.visto,
+                            info = CASE WHEN EXCLUDED.info = '' THEN reproductores.info
+                                        ELSE EXCLUDED.info END""",
+                     (codigo, instancia, equipo, ahora, ahora, info_txt))
+            return {"activo": True, "rol": "espejo", "equipo": principal}
+    return {"activo": False, "rol": "", "equipo": principal}
 
 
-def publicar_estado(codigo, estado, actual="", siguiente="", ack=None):
+def estado_principal(codigo):
+    """Lo que suena en el televisor principal, para que los espejos lo sigan. `pos` es la
+    posición (segundos) en este momento, calculada con el reloj del servidor."""
+    c = control(codigo)
+    if not c:
+        return {}
+    pos = float(c.get("actual_pos") or 0)
+    if c.get("estado") in ("reproduciendo", "relleno") and c.get("actual_ts"):
+        pos += max(0.0, time.time() - float(c["actual_ts"]))
+    return {"video": c.get("actual_video") or "", "titulo": c.get("actual") or "",
+            "canal": c.get("actual_canal") or "", "siguiente": c.get("siguiente_video") or "",
+            "estado": c.get("estado") or "", "pos": round(pos, 2)}
+
+
+def reproductores_activos(codigo):
+    """Los televisores espejo en línea del bar (para /super)."""
+    return consultar("""SELECT equipo, info, visto FROM reproductores
+                        WHERE codigo = %s AND visto >= %s ORDER BY desde""",
+                     (str(codigo), time.time() - REPRODUCTOR_VENCE_SEG))
+
+
+def publicar_estado(codigo, estado, actual="", siguiente="", ack=None, video=None):
+    """`video` (de los reproductores nuevos): {"id", "canal", "siguiente", "pos"} de lo que
+    suena, para que los televisores espejo lo sigan."""
     _asegurar_control(codigo)
+    if isinstance(video, dict):
+        try:
+            pos = float(video.get("pos") or 0)
+        except (TypeError, ValueError):
+            pos = 0.0
+        ejecutar("""UPDATE control SET actual_video = %s, actual_canal = %s, siguiente_video = %s,
+                    actual_pos = %s, actual_ts = %s WHERE codigo = %s""",
+                 (str(video.get("id") or "")[:40], str(video.get("canal") or "")[:200],
+                  str(video.get("siguiente") or "")[:40], pos, time.time(), str(codigo)))
     if ack is None:
         ejecutar("""UPDATE control SET estado = %s, actual = %s, siguiente = %s, latido = %s
                     WHERE codigo = %s""",

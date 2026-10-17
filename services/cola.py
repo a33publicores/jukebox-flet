@@ -123,8 +123,8 @@ def enviar_comando(cliente, comando, param=""):
     return db.enviar_comando(str(cliente), comando, param)
 
 
-def publicar_estado(cliente, estado, actual="", siguiente="", ack=None):
-    db.publicar_estado(str(cliente), estado, actual, siguiente, ack)
+def publicar_estado(cliente, estado, actual="", siguiente="", ack=None, video=None):
+    db.publicar_estado(str(cliente), estado, actual, siguiente, ack, video)
 
 
 def estado_reproductor(cliente):

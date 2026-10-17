@@ -535,6 +535,19 @@ class Pantalla:
     async def reanudar(self):
         await self.video.play()
 
+    async def ir_a(self, segundos):
+        """Televisor espejo: salta a la parte donde va el principal."""
+        seg = max(0.0, float(segundos or 0))
+        if self.dur > 0:
+            seg = min(seg, max(0.0, self.dur - 1))
+        try:
+            await self.video.seek(ft.Duration(milliseconds=int(seg * 1000)))
+            self.pos = seg
+            self._t_inicio = time.time() - seg
+            self._ult_seg = -1
+        except Exception as ex:
+            print("⚠️ No se pudo adelantar al punto del principal:", ex)
+
     async def estado(self, texto):
         if texto:
             self.chip.value = texto

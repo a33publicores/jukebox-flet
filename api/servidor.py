@@ -113,13 +113,20 @@ def estado(request, cli, cuerpo):
     # Un solo reproductor por bar: si otro equipo tiene el control, este no publica y se
     # entera para mostrar "Se está usando en otro equipo · Usar aquí". Los reproductores
     # viejos (sin "instancia") siguen funcionando como antes.
+    # Con varios televisores (clientes.televisores), solo el principal publica; los
+    # espejos reciben lo que suena en el principal para seguirlo.
     if d.get("instancia"):
-        activo, equipo = db.reclamar_reproductor(cli["codigo"], d["instancia"], d.get("equipo", ""))
-        if not activo:
-            return JSONResponse({"ok": True, "activo": False, "equipo": equipo})
+        r = db.reproductor(cli["codigo"], d["instancia"], d.get("equipo", ""),
+                           espejo=bool(d.get("espejo")))
+        if not r["activo"]:
+            return JSONResponse({"ok": True, "activo": False, "equipo": r["equipo"]})
+        if r["rol"] == "espejo":
+            return JSONResponse({"ok": True, "activo": True, "rol": "espejo",
+                                 "equipo": r["equipo"], "sigue": db.estado_principal(cli["codigo"])})
+    video = d.get("video") if isinstance(d.get("video"), dict) else None
     cola.publicar_estado(cli["codigo"], d.get("estado", ""), d.get("actual", ""),
-                         d.get("siguiente", ""), d.get("ack"))
-    return JSONResponse({"ok": True, "activo": True})
+                         d.get("siguiente", ""), d.get("ack"), video)
+    return JSONResponse({"ok": True, "activo": True, "rol": "principal"})
 
 
 @_protegido
@@ -129,9 +136,11 @@ def reclamar(request, cli, cuerpo):
     if not d.get("instancia"):
         return JSONResponse({"ok": False, "error": "falta instancia"}, status_code=400)
     info = d.get("info") if isinstance(d.get("info"), dict) else None
-    activo, equipo = db.reclamar_reproductor(cli["codigo"], d["instancia"], d.get("equipo", ""),
-                                             bool(d.get("forzar")), info)
-    return JSONResponse({"ok": True, "activo": activo, "equipo": equipo})
+    r = db.reproductor(cli["codigo"], d["instancia"], d.get("equipo", ""),
+                       bool(d.get("forzar")), info, espejo=bool(d.get("espejo")))
+    if r["rol"] == "espejo":
+        r["sigue"] = db.estado_principal(cli["codigo"])
+    return JSONResponse({"ok": True, **r})
 
 
 @_protegido

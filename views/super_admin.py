@@ -152,7 +152,8 @@ def super_inicio(page):
                              fit=ft.BoxFit.CONTAIN),
                     ft.Column([
                         ft.Text(c["nombre"], size=18, color="white", weight=ft.FontWeight.BOLD),
-                        ft.Text(f"Código {c['codigo']}" + (" · playlist ✔" if c["playlist"] else ""),
+                        ft.Text(f"Código {c['codigo']}" + (" · playlist ✔" if c["playlist"] else "")
+                                + f" · 📺 {int(c.get('televisores') or 1)} TV",
                                 color="#94A3B8", size=13),
                         _linea_plan(c),
                         _linea_equipo(c),
@@ -258,6 +259,8 @@ def _form_negocio(page, c=None):
                       _playlist_por_defecto() if nuevo else c["playlist"])
     activo = ft.Switch(value=True if nuevo else bool(c["activo"]), label="Activo",
                        active_color=CYAN)
+    televisores = _campo("Televisores (equipos con el reproductor a la vez)",
+                         "1" if nuevo else str(c.get("televisores") or 1), numeros=True)
     error = ft.Text("", color="#f87171")
 
     # Logo: se adjunta un PNG/JPG desde el computador o el celular (se guarda en la base)
@@ -313,8 +316,14 @@ def _form_negocio(page, c=None):
             error.value = f"El código {cod} ya existe."
             page.update()
             return
+        tv_txt = (televisores.value or "").strip() or "1"
+        if not tv_txt.isdigit() or not 1 <= int(tv_txt) <= db.MAX_TELEVISORES:
+            error.value = f"Televisores: escribe un número de 1 a {db.MAX_TELEVISORES}."
+            page.update()
+            return
         logo_actual = "" if nuevo else c["logo"]
         fila = db.guardar_cliente(cod, nombre.value, logo_actual, playlist.value, activo.value)
+        db.poner_televisores(cod, int(tv_txt))
         try:
             if logo_nuevo["bytes"]:
                 db.guardar_logo(cod, logo_nuevo["bytes"], logo_nuevo["tipo"])
@@ -344,6 +353,9 @@ def _form_negocio(page, c=None):
         playlist,
         ft.Text("Los negocios nuevos traen la playlist que ya tenemos, para que suene algo "
                 "desde el primer día. Puedes cambiarla.", color="#64748b", size=12),
+        televisores,
+        ft.Text("Con 3, el bar puede tener el reproductor abierto en 3 televisores; al abrirlo "
+                "en un 4.º le sale \"Usar aquí\".", color="#64748b", size=12),
         activo, error,
     ], [ft.TextButton("Cancelar", on_click=lambda e: _cerrar_dialogo(page)),
         ft.FilledButton("Guardar", on_click=guardar)])
@@ -585,6 +597,12 @@ def _linea_equipo(c):
               info.get("pantalla", ""), info.get("calidad", ""),
               f"app {info['app']}" if info.get("app") else "", cuando]
     texto = " · ".join(p for p in partes if p)
+    try:
+        espejos = db.reproductores_activos(c["codigo"])
+    except Exception:
+        espejos = []
+    if espejos:
+        texto += f" · +{len(espejos)} TV espejo: " + ", ".join(e["equipo"] or "TV" for e in espejos)
     basico = 0 < ram < 2
     if basico:
         texto += " · ⚠️ equipo básico"

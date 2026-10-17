@@ -29,6 +29,7 @@ from tv import cola as C
 from tv.config import CARPETA as CARPETA_DATOS
 INTERVALO = 4.0        # segundos entre lecturas de la hoja (cuota: 60 lecturas/min)
 LATIDO = 15.0          # segundos entre latidos al panel admin
+ESPEJO_DESFASE_SEG = 3.0  # televisor espejo: si va más de 3 s corrido del principal, se empareja
 PRECARGA = 3           # canciones pedidas por delante que se descargan
 RELLENO_LISTOS = 3     # aleatorias ya descargadas por adelantado (cambiar seguido sin esperar)
 RECIENTES = 15         # relleno: no repetir las últimas N
@@ -71,9 +72,10 @@ class BackendApi:
     def marcar(self, fila, estado2=None, estado=None):
         self.api.marcar(fila, estado2=estado2, estado=estado)
 
-    def publicar(self, estado, actual, siguiente, ack=None, instancia=None, equipo=""):
+    def publicar(self, estado, actual, siguiente, ack=None, instancia=None, equipo="",
+                 video=None):
         try:
-            return self.api.estado(estado, actual, siguiente, ack, instancia, equipo)
+            return self.api.estado(estado, actual, siguiente, ack, instancia, equipo, video)
         except TypeError:  # cliente sin "un solo reproductor"
             return self.api.estado(estado, actual, siguiente, ack)
 
@@ -219,6 +221,11 @@ class Motor:
             pass
         self.inactivo = False
         self.otro_equipo = ""
+        # Bar con varios televisores: el principal maneja la cola; este, si es "espejo",
+        # muestra la misma canción que el principal, en la misma parte.
+        self.espejo = False
+        self._espejo_vid = ""      # video del principal que este espejo ya está mostrando
+        self._espejo_tarea = None  # descarga en curso de la canción del principal
         self.info = {}  # modelo, sistema, RAM... del equipo (lo llena la app; se ve en /super)
         self.alerta = ""          # aviso que se queda hasta que se arregle (ej. disco lleno)
         self.plan = None          # prueba gratis / plan del negocio (lo dice la API)
@@ -238,7 +245,10 @@ class Motor:
                 await asyncio.sleep(1)
                 continue
             try:
-                await self.tick()
+                if self.espejo:
+                    await self._tick_espejo()
+                else:
+                    await self.tick()
                 if desde is not None:
                     print(f"✅ Conexión recuperada ({int(self.ahora() - desde)} s sin servidor)")
                 desde = None
@@ -556,7 +566,7 @@ class Motor:
 
     async def al_terminar(self, token):
         """La UI avisa que el video llegó al final."""
-        if self.inactivo:
+        if self.inactivo or self.espejo:  # el espejo espera la siguiente del principal
             return
         async with self._lock:
             if token == self.token and self.actual is not None:
@@ -564,6 +574,12 @@ class Motor:
 
     async def al_error(self, token, mensaje):
         """El reproductor no pudo abrir el archivo."""
+        if self.espejo:
+            reintentar = getattr(self.desc, "reintentar_liviano", None)
+            if self.actual is not None and reintentar is not None:
+                if await asyncio.to_thread(reintentar, self.actual.video_id):
+                    self._espejo_vid = ""  # la próxima revisión la vuelve a poner
+            return
         async with self._lock:
             if token != self.token or self.actual is None:
                 return
@@ -802,15 +818,25 @@ class Motor:
         cola = [i for i in snap.cola if i.fila not in omitir]
         actual = self.actual.titulo if self.actual else ""
         sig = cola[0].titulo if cola else ""
-        clave = (self._estado_txt(), actual, sig, self._ack)
+        vid = self.actual.video_id if self.actual else ""
+        clave = (self._estado_txt(), actual, sig, self._ack, vid)
         ahora = self.ahora()
         if clave == self._pub and ahora - self._t_pub < LATIDO:
             return
+        # para los televisores espejo: qué video suena, cuál sigue y en qué parte va
+        prox = cola[0] if cola else (self._rellenos[0] if self._rellenos else None)
+        video = {"id": vid, "canal": self.actual.canal if self.actual else "",
+                 "siguiente": getattr(prox, "video_id", "") or "",
+                 "pos": round(float(getattr(self.ui, "pos", 0) or 0), 2)}
         r = await asyncio.to_thread(
-            self.backend.publicar, clave[0], actual, sig, self._ack, self.instancia, self.equipo
+            self.backend.publicar, clave[0], actual, sig, self._ack, self.instancia, self.equipo,
+            video
         )
         if isinstance(r, dict) and r.get("activo") is False:
             await self._quedar_inactivo(r.get("equipo", ""))
+            return
+        if isinstance(r, dict) and r.get("rol") == "espejo":
+            await self._ser_espejo(r.get("equipo", ""))  # otro tomó la cola: este lo sigue
             return
         self._pub, self._t_pub = clave, ahora
 
@@ -825,7 +851,117 @@ class Motor:
         if isinstance(r, dict) and r.get("activo") is False:
             await self._quedar_inactivo(r.get("equipo", ""))
             return False
+        if isinstance(r, dict) and r.get("rol") == "espejo":
+            await self._ser_espejo(r.get("equipo", ""))
+        elif isinstance(r, dict) and r.get("rol") == "principal" and self.espejo:
+            await self._dejar_espejo()
         return True
+
+    # ------------------------------------- varios televisores: el espejo
+    async def _ser_espejo(self, principal=""):
+        """Este televisor sigue al principal: no maneja la cola ni los comandos."""
+        if self.espejo:
+            return
+        print(f"🪞 Este equipo muestra lo mismo que «{principal or 'el principal'}»")
+        self.espejo = True
+        self._espejo_vid = ""
+        self.relleno = False
+        self._pub = None
+        if hasattr(self.ui, "preparar_siguiente"):
+            try:
+                await self.ui.preparar_siguiente(None)
+            except Exception:
+                pass
+
+    async def _dejar_espejo(self):
+        """El principal se apagó y este quedó de principal: lo que suena se termina y
+        después sigue la cola como siempre."""
+        if not self.espejo:
+            return
+        print("👑 Este equipo quedó de principal: ahora maneja la cola")
+        self.espejo = False
+        self._espejo_vid = ""
+        if self._espejo_tarea is not None and not self._espejo_tarea.done():
+            self._espejo_tarea.cancel()
+        self._espejo_tarea = None
+        if self.actual is not None:
+            self.actual.fila = None  # suena como aleatoria: no se marca en la cola
+            self.relleno = True
+        self._pub = None
+
+    async def _tick_espejo(self):
+        """Cada INTERVALO: pregunta qué suena en el principal y lo sigue."""
+        r = await asyncio.to_thread(self.backend.reclamar, self.instancia, self.equipo, False,
+                                    None)
+        t_resp = self.ahora()
+        if isinstance(r, dict) and r.get("activo") is False:
+            await self._quedar_inactivo(r.get("equipo", ""))
+            return
+        if not isinstance(r, dict) or r.get("rol") != "espejo":
+            await self._dejar_espejo()
+            return
+        s = r.get("sigue") or {}
+        try:
+            snap = await asyncio.to_thread(self.backend.instantanea)
+            self.snap = snap
+        except Exception:
+            snap = self.snap
+        vid = s.get("video") or ""
+        quieto = s.get("estado") in ("pausado", "esperando", "")
+        if not vid:
+            if self.actual is not None and not self.pausado:
+                await self.ui.pausar()
+                self.pausado = True
+        elif vid != self._espejo_vid:
+            await self._espejo_poner(s, t_resp)
+        else:
+            if quieto and not self.pausado:
+                await self.ui.pausar()
+                self.pausado = True
+            elif not quieto and self.pausado:
+                await self.ui.reanudar()
+                self.pausado = False
+            if not quieto and hasattr(self.ui, "ir_a"):
+                destino = float(s.get("pos") or 0) + (self.ahora() - t_resp)
+                if abs(float(getattr(self.ui, "pos", 0) or 0) - destino) > ESPEJO_DESFASE_SEG:
+                    await self.ui.ir_a(destino)  # se corrió: se empareja con el principal
+        sig = s.get("siguiente") or ""
+        if sig and sig != vid and not self.desc.ruta(sig) and sig not in self._en_curso:
+            self._lanzar_descarga(sig)  # así cambia de canción casi al mismo tiempo
+        if snap is not None:
+            await self._ui_lista(snap)
+
+    async def _espejo_poner(self, s, t_resp):
+        vid = s["video"]
+        item = C.Item(fila=None, titulo=s.get("titulo") or "", canal=s.get("canal") or "",
+                      video_id=vid)
+        ruta = self.desc.ruta(vid)
+        if not ruta:
+            if self._espejo_tarea is None or self._espejo_tarea.done():
+                self._espejo_tarea = asyncio.ensure_future(self._descargar(vid, item))
+            if not self._espejo_tarea.done():
+                return  # se está bajando: la próxima revisión la pone
+            try:
+                ruta = self._espejo_tarea.result()
+            except Exception as ex:
+                print(f"⚠️ Espejo: no se pudo bajar «{item.titulo}»: {ex}")
+                self._espejo_tarea = None
+                return
+            self._espejo_tarea = None
+        self._espejo_vid = vid
+        self.actual = item
+        self.relleno = False
+        self.token += 1
+        await self.ui.reproducir(ruta, item, self.token)
+        self.pausado = False
+        print(f"🪞 ▶️ {item.titulo}")
+        destino = float(s.get("pos") or 0) + (self.ahora() - t_resp)
+        if destino > ESPEJO_DESFASE_SEG and hasattr(self.ui, "ir_a"):
+            await asyncio.sleep(0.8)  # que el video alcance a abrir antes de adelantarlo
+            await self.ui.ir_a(destino + 0.8)
+        if s.get("estado") == "pausado":
+            await self.ui.pausar()
+            self.pausado = True
 
     async def _quedar_inactivo(self, equipo):
         """Otro equipo tomó el control del bar: este deja de sonar y lo avisa."""

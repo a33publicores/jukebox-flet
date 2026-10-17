@@ -85,19 +85,25 @@ class ApiCliente:
     def marcar(self, fila, estado2=None, estado=None):
         self._post("/api/v1/marcar", {"fila": fila, "estado2": estado2, "estado": estado})
 
-    def estado(self, estado, actual="", siguiente="", ack=None, instancia=None, equipo=""):
+    def estado(self, estado, actual="", siguiente="", ack=None, instancia=None, equipo="",
+               video=None):
         """Publica qué suena. Con `instancia`, la API dice si este equipo tiene el control
-        del bar ({"activo": False, "equipo": ...} si suena en otro equipo)."""
+        del bar ({"activo": False, "equipo": ...} si suena en otro equipo) o si es un
+        televisor espejo ({"rol": "espejo", "sigue": lo que suena en el principal}).
+        `video`: {"id", "canal", "siguiente", "pos"} para que los espejos lo sigan."""
         datos = {"estado": estado, "actual": actual, "siguiente": siguiente, "ack": ack}
         if instancia:
-            datos.update(instancia=instancia, equipo=equipo)
+            datos.update(instancia=instancia, equipo=equipo, espejo=True)
+        if video:
+            datos["video"] = video
         return self._post("/api/v1/estado", datos)
 
     def reclamar(self, instancia, equipo="", forzar=False, info=None):
         """Un solo reproductor por bar: {"activo": True/False, "equipo": quién lo tiene}.
         `info`: modelo, sistema, RAM, espacio... (se ve en /super)."""
         return self._post("/api/v1/reclamar", {"instancia": instancia, "equipo": equipo,
-                                               "forzar": bool(forzar), "info": info or {}})
+                                               "forzar": bool(forzar), "info": info or {},
+                                               "espejo": True})
 
     def reordenar(self, filas):
         self._post("/api/v1/reordenar", {"filas": list(filas)})
