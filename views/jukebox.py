@@ -184,18 +184,6 @@ def jukebox_view(
         estado_busqueda.visible = visible
         page.update()
 
-    def bajar_a_resultados():
-        """En el celular, lleva la pantalla a los resultados."""
-        async def _ir():
-            try:
-                await resultados.scroll_to(offset=0, duration=300)
-            except Exception as ex:
-                print("ℹ️ No se pudo desplazar a los resultados:", ex)
-
-        try:
-            page.run_task(_ir)
-        except Exception as ex:
-            print("ℹ️ scroll a resultados:", ex)
 
     def construir_tarjeta(item):
         titulo = item["snippet"]["title"]
@@ -270,7 +258,8 @@ def jukebox_view(
                     f"{len(items)} {'resultado' if len(items) == 1 else 'resultados'}"
                     " · toca una canción para agregarla"
                 )
-                bajar_a_resultados()
+                # (ya no se "desplaza" a los resultados: en la web esa orden se quedaba
+                # esperando 10 s y su respuesta tardía podía congelar la pestaña)
         finally:
             buscando["activo"] = False
             boton_buscar.visible = True

@@ -4,7 +4,8 @@ version = "1.0.10"
 description = "PlayBar GO - Música y Karaoke"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "flet",
+    "flet==1.0.4",
+    "flet-web==1.0.4",
     "requests",
     "psycopg[binary]",
     "psycopg-pool",

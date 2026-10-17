@@ -1,4 +1,5 @@
-flet
+flet==1.0.4
+flet-web==1.0.4
 requests
 psycopg[binary]
 psycopg-pool

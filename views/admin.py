@@ -19,7 +19,7 @@ from services import cola
 
 URL_CLIENTES = os.getenv("URL_CLIENTES", "https://play.alnovix.com/bar/")
 REFRESCO_SEG = 6
-MAX_HORAS_PANEL = 3  # el panel deja de consultar solo después de esto
+MAX_HORAS_PANEL = 16  # tope de seguridad (una jornada larga); antes 3 h dejaba el panel "pegado"
 _intentos = {"n": 0, "hasta": 0.0}
 
 
@@ -249,11 +249,16 @@ def admin_view(page, codigo, nombre, logo):
             vivo["v"] = False  # el navegador se cerró: dejar de consultar la hoja
 
     def bucle():
+        # Sigue actualizando mientras la pestaña esté abierta (antes paraba a las 3 h y el
+        # panel se quedaba mostrando una canción vieja). Se detiene al cerrar la pestaña.
         fin = time.time() + MAX_HORAS_PANEL * 3600
         while vivo["v"] and time.time() < fin:
             try:
                 refrescar()
             except Exception as ex:
+                texto = str(ex).lower()
+                if "session closed" in texto or "destroyed" in texto or "disconnected" in texto:
+                    return  # cerraron la pestaña
                 print("⚠️ panel admin:", ex)
             for _ in range(REFRESCO_SEG * 2):
                 if not vivo["v"]:

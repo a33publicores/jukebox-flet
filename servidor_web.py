@@ -135,6 +135,8 @@ def iniciar(main):
     import uvicorn
 
     flet_app = ft.run(main, assets_dir="assets", export_asgi_app=True)
+    from services import flet_seguro
+    flet_seguro.aplicar()  # que una respuesta tardía no congele la pestaña
     puerto = int(os.getenv("FLET_SERVER_PORT") or 8000)
     host = os.getenv("FLET_SERVER_IP") or "0.0.0.0"
     print(f"🌐 PlayBar GO web en el puerto {puerto} · portada en: {', '.join(sorted(hosts_portada()))}")
