@@ -24,9 +24,17 @@ CACHE = CARPETA / "cache"
 
 def leer_config():
     try:
-        return json.loads(CONFIG.read_text(encoding="utf-8"))
+        cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
     except Exception:
         return {}
+    from tv.version import API_POR_DEFECTO, APIS_VIEJAS
+    if str(cfg.get("api") or "").rstrip("/") in APIS_VIEJAS:
+        cfg["api"] = API_POR_DEFECTO  # dirección nueva de la API (con respaldo)
+        try:
+            guardar_config(cfg)
+        except Exception:
+            pass
+    return cfg
 
 
 def guardar_config(cfg):

@@ -22,6 +22,10 @@ UPDATE_URL = os.environ.get(
 # Cada cuánto vuelve a revisar mientras está abierto (los bares lo dejan prendido toda la noche).
 REVISAR_CADA_HORAS = float(os.environ.get("PLAYBAR_REVISAR_HORAS", "3"))
 
-# Dirección de la API de PlayBar GO en Railway (servicio playbar-api). Se puede cambiar
+# Dirección de la API de PlayBar GO (dominio propio; hoy apunta a Railway, servicio playbar-api). Se puede cambiar
 # en la pantalla de configuración del reproductor o con la variable PLAYBAR_API.
-API_POR_DEFECTO = os.environ.get("PLAYBAR_API", "https://playbar-api-production.up.railway.app")
+API_POR_DEFECTO = os.environ.get("PLAYBAR_API", "https://api.play.alnovix.com")
+
+# Direcciones viejas de la API: se cambian solas por la nueva al abrir el reproductor
+# (la nueva puede pasar al servidor de respaldo si Railway se cae).
+APIS_VIEJAS = {"https://playbar-api-production.up.railway.app"}

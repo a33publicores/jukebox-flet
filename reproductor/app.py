@@ -22,7 +22,7 @@ from reproductor import actualizador, diagnostico
 from reproductor.version import REVISAR_CADA_HORAS, VERSION
 from reproductor.descargas import Descargador
 from reproductor.motor import BackendApi, Motor
-from reproductor.version import API_POR_DEFECTO
+from reproductor.version import API_POR_DEFECTO, APIS_VIEJAS
 from services.api_cliente import ApiCliente
 
 if getattr(sys, "frozen", False):  # instalado como .exe
@@ -66,9 +66,16 @@ VIOLETA = "#B44CFF"
 
 def _leer_config():
     try:
-        return json.loads(CONFIG.read_text(encoding="utf-8"))
+        cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
     except Exception:
         return {}
+    if str(cfg.get("api") or "").rstrip("/") in APIS_VIEJAS:
+        cfg["api"] = API_POR_DEFECTO  # dirección nueva de la API (con respaldo)
+        try:
+            _guardar_config(cfg)
+        except Exception:
+            pass
+    return cfg
 
 
 def _guardar_config(cfg):
