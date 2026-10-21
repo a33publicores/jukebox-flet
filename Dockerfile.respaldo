@@ -1,0 +1,10 @@
+# Servidores de RESPALDO de PlayBar GO en Fly.io (fly.api.toml y fly.web.toml).
+# Railway no usa este archivo: sigue desplegando los servicios principales.
+FROM python:3.13-slim
+ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+WORKDIR /app
+COPY requirements.txt ./
+# flet-web 1.0.x usa un parámetro que FastAPI quitó en versiones nuevas.
+RUN pip install -r requirements.txt "fastapi<0.116" && python -c "import flet_web.fastapi as f; f.FastAPI()"
+COPY . .
+EXPOSE 8080

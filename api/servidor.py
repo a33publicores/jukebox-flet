@@ -20,6 +20,7 @@ from starlette.routing import Route
 from api import pagos
 from services import cola, db, exportar
 from services import playbar_service as ps
+from services import respaldo
 from services import suscripcion as sus
 
 _cache_llaves = {}  # llave -> (cliente, hora)
@@ -183,15 +184,60 @@ def _excel(request):
                     headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
 
 
+# ---------------------------------------------------------------------------
+# Copia para el servidor de respaldo (ver services/respaldo.py)
+# ---------------------------------------------------------------------------
+def _token_valido(request):
+    import hmac
+    t = request.headers.get("x-respaldo-token", "")
+    return bool(respaldo.TOKEN) and bool(t) and hmac.compare_digest(t, respaldo.TOKEN)
+
+
+async def respaldo_exportar(request):
+    if not _token_valido(request):
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+    if respaldo.ES_RESPALDO:
+        return JSONResponse({"error": "Este servidor es el respaldo"}, status_code=409)
+    ruta = await run_in_threadpool(respaldo.exportar_a_archivo)
+    from starlette.background import BackgroundTask
+    from starlette.responses import FileResponse
+    return FileResponse(ruta, media_type="application/zip", filename="playbar_respaldo.zip",
+                        background=BackgroundTask(os.remove, ruta))
+
+
+async def respaldo_estado(request):
+    if not _token_valido(request):
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+    datos = {"rol": respaldo.ROL}
+    if respaldo.ES_RESPALDO:
+        datos.update(await run_in_threadpool(respaldo.leer_estado))
+    return JSONResponse(datos)
+
+
+async def respaldo_sincronizar(request):
+    if not _token_valido(request):
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+    if not respaldo.ES_RESPALDO:
+        return JSONResponse({"error": "Este servidor es el principal"}, status_code=409)
+    return JSONResponse({"resultado": await run_in_threadpool(respaldo.sincronizar_una_vez)})
+
+
 @asynccontextmanager
 async def _vida(app):
-    pagos.iniciar_revisor()  # confirma solos los pagos pendientes de Wompi
+    if respaldo.ES_RESPALDO:
+        # En el respaldo no se revisan pagos (lo hace el principal); solo se copian sus datos.
+        respaldo.iniciar_sincronizacion()
+    else:
+        pagos.iniciar_revisor()  # confirma solos los pagos pendientes de Wompi
     yield
 
 
 app = Starlette(routes=[
     Route("/", salud),
     Route("/api/salud", salud),
+    Route("/sistema/respaldo/exportar", respaldo_exportar),
+    Route("/sistema/respaldo/estado", respaldo_estado),
+    Route("/sistema/respaldo/sincronizar", respaldo_sincronizar, methods=["POST"]),
     Route("/api/v1/config", config),
     Route("/api/v1/instantanea", instantanea),
     Route("/api/v1/aleatorio", aleatorio),

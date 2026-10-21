@@ -320,6 +320,9 @@ def iniciar_procesador():
         except Exception as ex:
             print("❌ No se pudo conectar a la base de datos:", ex)
             return
+        from services import respaldo
+        if respaldo.ES_RESPALDO:
+            return  # el respaldo recibe los datos del principal: no migra nada
         try:
             import migrar_a_base
             migrar_a_base.migrar_automatica()
