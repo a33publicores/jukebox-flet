@@ -1,0 +1,2688 @@
+
+================================================================
+16:36:41  1. Python para el TV (.venv_tv)
+================================================================
+> D:\Python\Musica\jukebox-flet\reproductor_tv\.venv_tv\Scripts\python.exe -m pip install --upgrade pip
+
+> D:\Python\Musica\jukebox-flet\reproductor_tv\.venv_tv\Scripts\python.exe -m pip install flet==1.0.3 flet-cli==1.0.3 flet-desktop==1.0.3 flet-video yt-dlp requests
+
+
+================================================================
+16:37:05  2. Primera compilación
+================================================================
+✓ El proyecto de Android se generará de nuevo (con jni_flutter 1.0.3)
+
+================================================================
+16:37:05  flet build apk (la primera vez descarga Flutter y Android: paciencia)
+================================================================
+> D:\Python\Musica\jukebox-flet\reproductor_tv\.venv_tv\Scripts\flet.exe build apk --yes -vv
+[16:37:13] Run subprocess:
+[16:37:23] Flutter executable: C:\Users\USER\flutter\3.44.8\bin\flutter.bat
+[16:37:24] Configuring Flutter's path to JDK
+[16:37:28] Setting "jdk-dir" value to "C:\Users\USER\java\17.0.13+11".
+           JDK installed ✅
+           Android SDK installed ✅
+[16:37:40] Created app shell ✅
+[16:37:58] Running build hooks...Running build hooks...Running package command
+           Packaged Python app ✅
+[16:38:02] Registered Flutter user extensions ✅
+[16:38:08] Found "icon" image at
+[16:38:09] Generated app icons ✅
+[16:38:12] Generated splash screens ✅
+[16:38:26] [ +477 ms] Artifact Instance of 'MaterialFonts' is not required,
+[16:38:27] [ +693 ms] Artifact Instance of 'MaterialFonts' is not required,
+[16:38:28] Resolving dependencies...
+[16:38:42] Downloading packages...
+[16:38:47]   code_assets 1.2.1 (2.1.0 available)
+[16:38:48] [ +143 ms] Found plugin window_manager at
+.
+[16:38:49] [ +429 ms] Generating
+           pp\src\main\java\io\flutter\plugins\GeneratedPluginRegistrant.java
+           [  +61 ms] Skipping generating GeneratedPluginRegistrant.java
+           [  +10 ms] Skipping generating generated_plugin_registrant.h because
+           [  +89 ms] Skipping generating generated_plugin_registrant.h because
+           [  +79 ms] Skipping generating GeneratedPluginRegistrant.h because
+           [  +48 ms] Skipping generating GeneratedPluginRegistrant.m because
+[16:38:50] [ +620 ms] Exit code 0 from: C:\Program Files\Android\Android
+           [  +95 ms] Top-level Gradle build file not found, skipping migration
+[16:38:51] [ +398 ms] Exit code 0 from: C:\Users\USER\java\17.0.13+11\bin\java
+           [   +1 ms] Running Gradle task 'assembleRelease'...
+[16:39:15] [+24268 ms] Initialized native services in:
+[16:39:17] [+1693 ms] Removing daemon from the registry due to communication
+           failure. Daemon information: DaemonInfo{pid=7400,
+           vedCodeCacheSize=512m,-XX:+HeapDumpOnOutOfMemoryError,-Xmx8G,-Dfile.
+[16:39:20] [+3298 ms] Removing 1 daemon stop events from registry
+[16:39:21] [ +410 ms] Starting process 'Gradle build daemon'. Working
+           -XX:+HeapDumpOnOutOfMemoryError -Xmx8G -Dfile.encoding=windows-1252
+           [  +90 ms] Successfully started process 'Gradle build daemon'
+[16:39:41] [+20121 ms] An attempt to start the daemon took 20.259 secs.
+           [   +1 ms] Starting build in new daemon [memory: 8 GiB]
+[16:39:43] [+1692 ms] Using 4 worker leases.
+[16:39:44] [+1296 ms] Received JVM installation metadata from
+[16:39:46] [+1616 ms] Watching the file system is configured to be enabled if
+[16:39:48] [+2584 ms] Starting Build
+[16:39:52] [+3889 ms] Now considering
+[16:39:55] [+3017 ms] > Configure project :gradle
+           [   +3 ms] Evaluating project ':gradle' using build file
+[16:39:58] [+2471 ms] Resource missing. [HTTP HEAD:
+[16:40:18] [+19306 ms] Build 81ae4ce4-5abd-4741-8921-66d6ab6c791d is started
+[16:40:19] [+1191 ms] kotlin scripting plugin: created the scripting discovery
+[16:40:20] [ +594 ms] WARNING: Unsupported Kotlin plugin version.
+[16:40:22] [+2301 ms] Resolved plugin [id: 'dev.flutter.flutter-plugin-loader',
+[16:40:23] [ +527 ms] Resource missing. [HTTP HEAD:
+[16:40:24] [ +609 ms] Resolve mutations for
+           :gradle:checkKotlinGradlePluginConfigurationErrors (Thread[included
+           [ +114 ms] :gradle:checkKotlinGradlePluginConfigurationErrors
+           [  +88 ms] > Task :gradle:checkKotlinGradlePluginConfigurationErrors
+           ':gradle:checkKotlinGradlePluginConfigurationErrors' as task onlyIf
+           'errorDiagnostics are present' is false.
+[16:40:26] [+2304 ms] > Task :gradle:compileKotlin UP-TO-DATE
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:40:50] [+23678 ms] Settings evaluated using settings file
+           [ +110 ms] Projects loaded. Root project using build file
+[16:40:52] [+1997 ms] > Configure project :
+           [   +3 ms] Evaluating root project 'android' using build file
+[16:41:04] [+11893 ms] > Configure project :app
+           [   +6 ms] Evaluating project ':app' using build file
+           [   +5 ms] Build b76dd58d-cad0-407f-8b19-3d3d3c46dcf7 is started
+           [   +1 ms] Gradle build config:
+[16:41:05] [        ] C/C++: ndk.dir in local.properties is not set
+[16:41:06] [+1749 ms] > Configure project :battery_plus
+           [   +4 ms] Evaluating project ':battery_plus' using build file
+[16:41:12] [+5986 ms] Using default execution profile
+[16:41:20] [+7671 ms] > Configure project :connectivity_plus
+           [        ] Evaluating project ':connectivity_plus' using build file
+[16:41:21] [+1420 ms] Using default execution profile
+[16:41:25] [+3470 ms] > Configure project :device_info_plus
+           [        ] Evaluating project ':device_info_plus' using build file
+[16:41:27] [+2196 ms] Using default execution profile
+[16:41:30] [+2797 ms] > Configure project :file_picker
+           [        ] Evaluating project ':file_picker' using build file
+[16:41:43] [+13805 ms] Using default execution profile
+[16:41:46] [+2593 ms] > Configure project :flutter_plugin_android_lifecycle
+           using build file
+[16:41:49] [+2801 ms] Using default execution profile
+[16:41:54] [+5603 ms] > Configure project :jni
+           [        ] Evaluating project ':jni' using build file
+[16:41:55] [   +3 ms] C/C++: sdkFolder is
+           [   +3 ms] Evaluating project ':jni_flutter' using build file
+[16:41:57] [+1995 ms] > Configure project :media_kit_libs_android_video
+           build file
+[16:42:00] [+2489 ms] Using default execution profile
+[16:42:06] [+5604 ms] > Configure project :media_kit_video
+           [        ] Evaluating project ':media_kit_video' using build file
+           [   +1 ms] Evaluating project ':package_info_plus' using build file
+[16:42:09] [+2076 ms] > Configure project :pasteboard
+           [        ] Evaluating project ':pasteboard' using build file
+[16:42:15] [+6017 ms] Using default execution profile
+[16:42:23] [+8702 ms] > Configure project :screen_brightness_android
+           build file
+[16:42:32] [+8892 ms] Using default execution profile
+[16:42:37] [+5115 ms] > Configure project :sensors_plus
+           [        ] Evaluating project ':sensors_plus' using build file
+[16:42:39] [+2046 ms] > Configure project :serious_python_android
+[16:42:41] [+1927 ms] Using default execution profile
+[16:42:43] [+1528 ms] > Configure project :share_plus
+           [        ] Evaluating project ':share_plus' using build file
+[16:42:45] [+2107 ms] > Configure project :shared_preferences_android
+           build file
+[16:42:48] [+2627 ms] Using default execution profile
+[16:42:53] [+5709 ms] > Configure project :url_launcher_android
+[16:42:55] [+1400 ms] > Configure project :wakelock_plus
+           [   +4 ms] Evaluating project ':wakelock_plus' using build file
+[16:43:01] [+6179 ms] Adding -Xuse-inline-scopes-numbers Kotlin compiler flag
+[16:43:05] [+4294 ms] Tasks to be executed: [task ':app:ReleaseMinSdkCheck',
+           ':battery_plus:checkKotlinGradlePluginConfigurationErrors', task
+           ':battery_plus:mergeReleaseGeneratedProguardFiles', task
+           ':connectivity_plus:checkKotlinGradlePluginConfigurationErrors',
+           ':connectivity_plus:mergeReleaseGeneratedProguardFiles', task
+           ':device_info_plus:checkKotlinGradlePluginConfigurationErrors', task
+           ':device_info_plus:mergeReleaseGeneratedProguardFiles', task
+           ':file_picker:checkKotlinGradlePluginConfigurationErrors', task
+           ionErrors', task
+           ':file_picker:mergeReleaseGeneratedProguardFiles', task
+           ':flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFile
+           s', task ':jni:checkKotlinGradlePluginConfigurationErrors', task
+           ':jni_flutter:checkKotlinGradlePluginConfigurationErrors', task
+           ':jni_flutter:mergeReleaseGeneratedProguardFiles', task
+           ':jni:mergeReleaseGeneratedProguardFiles', task
+           ':media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles',
+           task ':media_kit_video:checkKotlinGradlePluginConfigurationErrors',
+           ':package_info_plus:checkKotlinGradlePluginConfigurationErrors',
+           ':wakelock_plus:checkKotlinGradlePluginConfigurationErrors', task
+           ':media_kit_video:mergeReleaseGeneratedProguardFiles', task
+           ':wakelock_plus:mergeReleaseGeneratedProguardFiles', task
+           ':package_info_plus:mergeReleaseGeneratedProguardFiles', task
+           ':pasteboard:checkKotlinGradlePluginConfigurationErrors', task
+           ':pasteboard:mergeReleaseGeneratedProguardFiles', task
+           ':screen_brightness_android:mergeReleaseGeneratedProguardFiles',
+           task ':sensors_plus:checkKotlinGradlePluginConfigurationErrors',
+           ':sensors_plus:mergeReleaseGeneratedProguardFiles', task
+           ':serious_python_android:mergeReleaseGeneratedProguardFiles', task
+           ':share_plus:checkKotlinGradlePluginConfigurationErrors', task
+           ':share_plus:mergeReleaseGeneratedProguardFiles', task
+           ':shared_preferences_android:mergeReleaseGeneratedProguardFiles',
+           ':url_launcher_android:checkKotlinGradlePluginConfigurationErrors',
+           ':url_launcher_android:mergeReleaseGeneratedProguardFiles', task
+           ':app:checkKotlinGradlePluginConfigurationErrors', task
+           ':app:mergeReleaseGeneratedProguardFiles', task
+.
+[16:43:06] [  +15 ms] Tasks that were excluded: []
+           [        ]   Build cache is disabled
+           [        ] Resolve mutations for :app:preBuild (Thread[included
+           [        ] :app:preBuild (Thread[included builds Thread 2,5,main])
+           [        ] > Task :app:preBuild UP-TO-DATE
+           [        ] :app:preReleaseBuild (Thread[included builds Thread
+           [        ] > Task :app:preReleaseBuild UP-TO-DATE
+[16:43:07] [+1600 ms] > Task :app:configureCMakeRelease[arm64-v8a]
+           [        ]   Build cache is disabled
+           scripts\CMakeLists.txt release|arm64-v8a : Writing build model to
+           [        ]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+           [        ]   Build cache is disabled
+           scripts\CMakeLists.txt release|armeabi-v7a : Writing build model to
+           [        ]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+[16:43:08] [        ] C/C++: no libraries
+           [   +1 ms]   Build cache is disabled
+           scripts\CMakeLists.txt release|x86_64 : Writing build model to
+           [   +2 ms]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+[16:43:11] [+2901 ms] > Task :app:compileFlutterBuildRelease UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :battery_plus:preBuild (Thread[included builds Thread
+           [        ] > Task :battery_plus:preBuild UP-TO-DATE
+           [        ] :battery_plus:preReleaseBuild (Thread[included builds
+           [        ] > Task :battery_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :connectivity_plus:preBuild (Thread[Execution worker
+           [        ] > Task :connectivity_plus:preBuild UP-TO-DATE
+           [        ] :connectivity_plus:preReleaseBuild (Thread[included
+           [        ] > Task :connectivity_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :device_info_plus:preBuild (Thread[Execution worker
+           [   +1 ms] > Task :device_info_plus:preBuild UP-TO-DATE
+           [        ] :device_info_plus:preReleaseBuild (Thread[Execution
+           [   +3 ms] > Task :device_info_plus:preReleaseBuild UP-TO-DATE
+           [  +13 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :file_picker:preBuild (Thread[included builds Thread
+           [        ] > Task :file_picker:preBuild UP-TO-DATE
+           [        ] :file_picker:preReleaseBuild (Thread[Execution worker
+           [        ] > Task :file_picker:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :flutter_plugin_android_lifecycle:preBuild (Thread[Execution worker
+           :flutter_plugin_android_lifecycle:preReleaseBuild (Thread[Execution
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] Resolve mutations for :jni:preBuild (Thread[Execution
+           [        ] :jni:preBuild (Thread[Execution worker Thread 3,5,main])
+           [        ] > Task :jni:preBuild UP-TO-DATE
+           [        ] :jni:preReleaseBuild (Thread[Execution worker Thread
+           [        ] > Task :jni:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           MakeLists.txt release|arm64-v8a : Writing build model to
+[16:43:12] [ +399 ms] > Task :jni:buildCMakeRelWithDebInfo[arm64-v8a]
+           [        ]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+           [        ] C/C++: about to build targets jni
+           [        ] C/C++: Build jni
+           [        ] C/C++: check expected build outputs
+           [        ] C/C++: build complete
+           [        ]   Build cache is disabled
+           MakeLists.txt release|armeabi-v7a : Writing build model to
+           [        ]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+           [        ] C/C++: about to build targets jni
+           [        ] C/C++: Build jni
+           [        ] C/C++: check expected build outputs
+           [        ] C/C++: build complete
+[16:43:13] [ +384 ms] > Task :jni:configureCMakeRelWithDebInfo[x86]
+           [        ]   Build cache is disabled
+           MakeLists.txt release|x86 : Writing build model to
+           [   +1 ms]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+           [        ] C/C++: about to build targets jni
+           [        ] C/C++: Build jni
+           [        ] C/C++: check expected build outputs
+           [        ] C/C++: build complete
+           [        ]   Build cache is disabled
+           MakeLists.txt release|x86_64 : Writing build model to
+           [   +2 ms]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+           [        ] C/C++: about to build targets jni
+           [        ] C/C++: Build jni
+           [        ] C/C++: check expected build outputs
+           [        ] C/C++: build complete
+           [  +11 ms]   Build cache is disabled
+[16:43:14] [        ]   Simple merging task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :jni_flutter:preBuild (Thread[Execution worker,5,main])
+           [   +1 ms] > Task :jni_flutter:preBuild UP-TO-DATE
+           [        ] :jni_flutter:preReleaseBuild (Thread[Execution
+           [        ] > Task :jni_flutter:preReleaseBuild UP-TO-DATE
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :media_kit_libs_android_video:preBuild (Thread[Execution worker
+           [        ] :media_kit_libs_android_video:preBuild (Thread[Execution
+           [        ] > Task :media_kit_libs_android_video:preBuild UP-TO-DATE
+           :media_kit_libs_android_video:preReleaseBuild (Thread[Execution
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :media_kit_video:preBuild (Thread[Execution worker Thread
+           [        ] > Task :media_kit_video:preBuild UP-TO-DATE
+           [        ] :media_kit_video:preReleaseBuild (Thread[Execution worker
+           [        ] > Task :media_kit_video:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :package_info_plus:preBuild (Thread[Execution worker
+           [        ] > Task :package_info_plus:preBuild UP-TO-DATE
+           [        ] :package_info_plus:preReleaseBuild (Thread[Execution
+           [        ] > Task :package_info_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :pasteboard:preBuild (Thread[Execution worker Thread
+           [        ] > Task :pasteboard:preBuild UP-TO-DATE
+           [        ] :pasteboard:preReleaseBuild (Thread[Execution worker
+           [        ] > Task :pasteboard:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+[16:43:15] [        ] Resolve mutations for :pasteboard:mergeReleaseNativeLibs
+           [        ]   Build cache is disabled
+           [  +21 ms] :screen_brightness_android:preBuild (Thread[Execution
+           [        ] > Task :screen_brightness_android:preBuild UP-TO-DATE
+           :screen_brightness_android:preReleaseBuild (Thread[Execution worker
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :sensors_plus:preBuild (Thread[Execution worker Thread
+           [        ] > Task :sensors_plus:preBuild UP-TO-DATE
+           [        ] :sensors_plus:preReleaseBuild (Thread[Execution worker
+           [        ] > Task :sensors_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+[16:43:16] [        ]   Output property 'destinationDir' file
+           [        ]   Build cache is disabled
+[16:43:17] [+1807 ms] > Task :serious_python_android:untarFile_arm64-v8a
+           [        ]   Build cache is disabled
+[16:43:18] [ +480 ms] > Task :serious_python_android:downloadDistArchive_x86_64
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:43:19] [ +395 ms] > Task :serious_python_android:untarFile_armeabi-v7a
+           [        ]   Build cache is disabled
+[16:43:21] [+1996 ms] > Task :serious_python_android:splitStdlib_arm64-v8a
+           [        ]   Build cache is disabled
+[16:43:23] [+2002 ms] > Task
+           [        ]   Build cache is disabled
+[16:43:59] [+35905 ms] Resolve mutations for
+[16:44:00] [+1008 ms] > Task :serious_python_android:splitStdlib_armeabi-v7a
+           [        ]   Build cache is disabled
+[16:44:02] [+1801 ms] > Task
+           [        ]   Build cache is disabled
+[16:44:03] [ +885 ms] > Task :serious_python_android:splitStdlib_x86_64
+           [        ]   Build cache is disabled
+[16:44:04] [+1099 ms] > Task :serious_python_android:splitSitePackages_x86_64
+           [        ]   Build cache is disabled
+           [        ] :serious_python_android:preBuild (Thread[Execution worker
+           :serious_python_android:preReleaseBuild (Thread[Execution worker
+           [        ] :serious_python_android:preReleaseBuild (Thread[Execution
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [   +9 ms]   Build cache is disabled
+           [        ] :share_plus:preBuild (Thread[Execution worker,5,main])
+           [   +5 ms] > Task :share_plus:preBuild UP-TO-DATE
+           [   +1 ms] :share_plus:preReleaseBuild (Thread[Execution
+           [   +3 ms] > Task :share_plus:preReleaseBuild UP-TO-DATE
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :shared_preferences_android:preBuild (Thread[Execution
+           [   +3 ms] :shared_preferences_android:preBuild (Thread[Execution
+           [   +1 ms] > Task :shared_preferences_android:preBuild UP-TO-DATE
+           :shared_preferences_android:preReleaseBuild (Thread[Execution
+[16:44:05] [   +1 ms] > Task :shared_preferences_android:preReleaseBuild
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :url_launcher_android:preBuild (Thread[Execution
+           [        ] > Task :url_launcher_android:preBuild UP-TO-DATE
+           :url_launcher_android:preReleaseBuild (Thread[Execution
+           [        ] :url_launcher_android:preReleaseBuild (Thread[Execution
+           [        ] > Task :url_launcher_android:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :wakelock_plus:preBuild (Thread[Execution worker Thread
+           [ +134 ms] > Task :wakelock_plus:preBuild UP-TO-DATE
+           [        ] :wakelock_plus:preReleaseBuild (Thread[Execution worker
+           [        ] > Task :wakelock_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:14] [+9084 ms] > Task :app:mergeReleaseNativeLibs UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :battery_plus:checkKotlinGradlePluginConfigurationErrors
+           [        ] :battery_plus:checkKotlinGradlePluginConfigurationErrors
+           :battery_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':battery_plus:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:16] [+1803 ms] > Task :battery_plus:compileReleaseKotlin UP-TO-DATE
+           [   +4 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :battery_plus:mergeReleaseGeneratedProguardFiles (Thread[included
+           [   +1 ms] :battery_plus:mergeReleaseGeneratedProguardFiles
+           [   +1 ms] > Task :battery_plus:mergeReleaseGeneratedProguardFiles
+           ':battery_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':battery_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :connectivity_plus:checkKotlinGradlePluginConfigurationErrors
+           :connectivity_plus:checkKotlinGradlePluginConfigurationErrors
+           :connectivity_plus:checkKotlinGradlePluginConfigurationErrors
+           ':connectivity_plus:checkKotlinGradlePluginConfigurationErrors' as
+           task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +11 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:17] [ +601 ms] > Task :connectivity_plus:compileReleaseJavaWithJavac
+           [        ]   Build cache is disabled
+           :connectivity_plus:mergeReleaseGeneratedProguardFiles
+           [        ] :connectivity_plus:mergeReleaseGeneratedProguardFiles
+           :connectivity_plus:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':connectivity_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':connectivity_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :device_info_plus:checkKotlinGradlePluginConfigurationErrors
+           :device_info_plus:checkKotlinGradlePluginConfigurationErrors
+           :device_info_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':device_info_plus:checkKotlinGradlePluginConfigurationErrors' as
+           task onlyIf 'errorDiagnostics are present' is false.
+           [   +2 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :device_info_plus:mergeReleaseGeneratedProguardFiles
+           [        ] :device_info_plus:mergeReleaseGeneratedProguardFiles
+[16:44:18] [        ] > Task
+           :device_info_plus:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':device_info_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':device_info_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :file_picker:checkKotlinGradlePluginConfigurationErrors
+           [        ] :file_picker:checkKotlinGradlePluginConfigurationErrors
+           :file_picker:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':file_picker:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           onErrors (Thread[Execution worker,5,main]) started.
+           onErrors (Thread[Execution worker,5,main]) started.
+           onErrors SKIPPED
+           ionErrors' as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +2 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:19] [+1202 ms] > Task :file_picker:compileReleaseKotlin UP-TO-DATE
+           [   +1 ms]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           :file_picker:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :file_picker:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :file_picker:mergeReleaseGeneratedProguardFiles
+           ':file_picker:mergeReleaseGeneratedProguardFiles' because:
+           [   +1 ms]   Build cache is disabled
+           ':file_picker:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFiles
+[16:44:20] [        ]
+           :flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFiles
+           :flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFiles
+           ':flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFile
+           [        ]   Build cache is disabled
+           ':flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFile
+           [        ]   Build cache is disabled
+           :jni:checkKotlinGradlePluginConfigurationErrors (Thread[Execution
+           [        ] :jni:checkKotlinGradlePluginConfigurationErrors
+           [        ] > Task :jni:checkKotlinGradlePluginConfigurationErrors
+           ':jni:checkKotlinGradlePluginConfigurationErrors' as task onlyIf
+           'errorDiagnostics are present' is false.
+           [   +2 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :jni_flutter:checkKotlinGradlePluginConfigurationErrors
+           [        ] :jni_flutter:checkKotlinGradlePluginConfigurationErrors
+           :jni_flutter:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':jni_flutter:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :jni_flutter:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :jni_flutter:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :jni_flutter:mergeReleaseGeneratedProguardFiles
+           ':jni_flutter:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':jni_flutter:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :jni:mergeReleaseGeneratedProguardFiles (Thread[Execution worker
+           [        ] :jni:mergeReleaseGeneratedProguardFiles (Thread[Execution
+[16:44:21] [   +1 ms] > Task :jni:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':jni:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           [        ] Skipping task ':jni:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           rrors' as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles
+           :media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles
+           :media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles
+           ':media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           ':media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           :media_kit_video:checkKotlinGradlePluginConfigurationErrors
+           :media_kit_video:checkKotlinGradlePluginConfigurationErrors
+           :media_kit_video:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':media_kit_video:checkKotlinGradlePluginConfigurationErrors' as
+           task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +242 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :package_info_plus:checkKotlinGradlePluginConfigurationErrors
+           :package_info_plus:checkKotlinGradlePluginConfigurationErrors
+           :package_info_plus:checkKotlinGradlePluginConfigurationErrors
+           ':package_info_plus:checkKotlinGradlePluginConfigurationErrors' as
+           task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:22] [   +2 ms] > Task :package_info_plus:compileReleaseKotlin UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :wakelock_plus:checkKotlinGradlePluginConfigurationErrors
+           [        ] :wakelock_plus:checkKotlinGradlePluginConfigurationErrors
+           :wakelock_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':wakelock_plus:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +8 ms]   Build cache is disabled
+           :media_kit_video:mergeReleaseGeneratedProguardFiles
+           [        ] :media_kit_video:mergeReleaseGeneratedProguardFiles
+           :media_kit_video:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':media_kit_video:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':media_kit_video:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :wakelock_plus:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :wakelock_plus:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :wakelock_plus:mergeReleaseGeneratedProguardFiles
+           ':wakelock_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':wakelock_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [  +38 ms]   Build cache is disabled
+           :package_info_plus:mergeReleaseGeneratedProguardFiles
+           [        ] :package_info_plus:mergeReleaseGeneratedProguardFiles
+           :package_info_plus:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':package_info_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':package_info_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :pasteboard:checkKotlinGradlePluginConfigurationErrors
+           [        ] :pasteboard:checkKotlinGradlePluginConfigurationErrors
+           :pasteboard:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':pasteboard:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:23] [        ] :pasteboard:packageReleaseResources (Thread[Execution
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :pasteboard:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :pasteboard:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :pasteboard:mergeReleaseGeneratedProguardFiles
+           ':pasteboard:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':pasteboard:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :screen_brightness_android:checkKotlinGradlePluginConfigurationError
+           :screen_brightness_android:checkKotlinGradlePluginConfigurationError
+           :screen_brightness_android:checkKotlinGradlePluginConfigurationError
+           rs' as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :screen_brightness_android:mergeReleaseGeneratedProguardFiles
+           :screen_brightness_android:mergeReleaseGeneratedProguardFiles
+           :screen_brightness_android:mergeReleaseGeneratedProguardFiles
+           ':screen_brightness_android:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           ':screen_brightness_android:mergeReleaseGeneratedProguardFiles' as
+           [        ]   Build cache is disabled
+           :sensors_plus:checkKotlinGradlePluginConfigurationErrors
+           [        ] :sensors_plus:checkKotlinGradlePluginConfigurationErrors
+           :sensors_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':sensors_plus:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+[16:44:24] [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +246 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :sensors_plus:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :sensors_plus:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :sensors_plus:mergeReleaseGeneratedProguardFiles
+           ':sensors_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':sensors_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +196 ms]   Build cache is disabled
+           :serious_python_android:mergeReleaseGeneratedProguardFiles
+           :serious_python_android:mergeReleaseGeneratedProguardFiles
+           :serious_python_android:mergeReleaseGeneratedProguardFiles
+           ':serious_python_android:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           ':serious_python_android:mergeReleaseGeneratedProguardFiles' as it
+           [        ]   Build cache is disabled
+           :share_plus:checkKotlinGradlePluginConfigurationErrors
+           [        ] :share_plus:checkKotlinGradlePluginConfigurationErrors
+           :share_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':share_plus:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :share_plus:mergeReleaseGeneratedProguardFiles (Thread[included
+           [        ] :share_plus:mergeReleaseGeneratedProguardFiles
+[16:44:25] [   +2 ms] > Task :share_plus:mergeReleaseGeneratedProguardFiles
+           ':share_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':share_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           ors' as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:28] [+3333 ms] > Task :shared_preferences_android:compileReleaseKotlin
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :shared_preferences_android:mergeReleaseGeneratedProguardFiles
+           :shared_preferences_android:mergeReleaseGeneratedProguardFiles
+           :shared_preferences_android:mergeReleaseGeneratedProguardFiles
+           ':shared_preferences_android:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           ':shared_preferences_android:mergeReleaseGeneratedProguardFiles' as
+           [        ]   Build cache is disabled
+           :url_launcher_android:checkKotlinGradlePluginConfigurationErrors
+           :url_launcher_android:checkKotlinGradlePluginConfigurationErrors
+           :url_launcher_android:checkKotlinGradlePluginConfigurationErrors
+           ':url_launcher_android:checkKotlinGradlePluginConfigurationErrors'
+           as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:29] [        ] :url_launcher_android:generateReleaseRFile
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :url_launcher_android:mergeReleaseGeneratedProguardFiles
+           [        ] :url_launcher_android:mergeReleaseGeneratedProguardFiles
+           :url_launcher_android:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':url_launcher_android:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':url_launcher_android:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+[16:44:30] [ +304 ms] > Task :app:buildKotlinToolingMetadata UP-TO-DATE
+           [        ]   Build cache is disabled
+[16:44:31] [+1790 ms] > Task :app:checkReleaseDuplicateClasses UP-TO-DATE
+           [   +1 ms]   Build cache is disabled
+           :app:checkKotlinGradlePluginConfigurationErrors (Thread[Execution
+           [        ] :app:checkKotlinGradlePluginConfigurationErrors
+           [        ] > Task :app:checkKotlinGradlePluginConfigurationErrors
+           ':app:checkKotlinGradlePluginConfigurationErrors' as task onlyIf
+           'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+[16:44:32] [        ] Skipping task ':battery_plus:writeReleaseAarMetadata' as
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:33] [ +484 ms] > Task :app:cleanMergeReleaseAssets
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:34] [        ] Resolve mutations for :sensors_plus:mergeReleaseShaders
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:35] [+1396 ms] > Task :serious_python_android:mergeReleaseAssets
+           [   +5 ms]   Build cache is disabled
+           [   +5 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:37] [+1523 ms] > Task :app:mergeReleaseAssets
+           [        ]   Build cache is disabled
+           [        ] The input changes require a full rebuild for incremental
+[16:44:39] [+1999 ms] > Task :app:copyFlutterAssetsRelease
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:43] [+3916 ms] > Task :app:mapReleaseSourceSetPaths UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:44] [+1388 ms] > Task :app:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+[16:44:45] [ +199 ms] > Task :app:packageReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:46] [        ] > Task :jni:extractDeepLinksRelease UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:47] [ +976 ms] > Task :app:processReleaseMainManifest
+           [        ]   Build cache is disabled
+[16:44:48] [ +105 ms] Loading library manifest
+.
+[16:44:49] [        ] Merging uses-sdk with lower
+.
+[16:44:50] [        ] Merging library manifest
+           [   +8 ms] Merging result: WARNING
+           essReleaseManifest\AndroidManifest.xml:7:18-50 Warning:
+           [        ] Otherwise, you can silence this type of warning by adding
+           android.experimental.suppressExtractNativeLibsWarnings=true to your
+[16:44:51] [        ] MERGED from
+.
+[16:44:52] [        ] MERGED from [:media_kit_libs_android_video]
+.
+[16:44:53] [        ] MERGED from
+.
+[16:44:54] [        ]      android:permission
+.
+           generate GeneratedPluginRegistrant.java
+.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:55] [        ] Resolve mutations for
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +91 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:44:56] [        ] work action resolve out (project :media_kit_video)
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +80 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] The input changes require a full rebuild for incremental
+[16:44:58] [+1573 ms] > Task :app:compressReleaseAssets
+           [        ]   Build cache is disabled
+[16:45:00] [+2184 ms] > Task :file_picker:generateReleaseLintModel UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:01] [        ] Caching disabled for task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:02] [        ] :pasteboard:createFullJarRelease (Thread[Execution worker
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:03] [        ] Resolve mutations for
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:04] [        ] Caching disabled for task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +300 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:05] [        ] Skipping task ':file_picker:bundleReleaseLocalLintAar' as
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +187 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:06] [        ] Caching disabled for task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:07] [        ] Caching disabled for task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:17] [+10608 ms] work action resolve out.aar (project
+[16:45:18] [ +869 ms] > Task :app:compileReleaseKotlin UP-TO-DATE
+           [   +1 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           :app:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [   +1 ms] :app:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [   +1 ms] > Task :app:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':app:mergeReleaseGeneratedProguardFiles' because:
+           [   +1 ms]   Build cache is disabled
+           [        ] Skipping task ':app:mergeReleaseGeneratedProguardFiles'
+[16:45:19] [  +97 ms] > Task :app:processReleaseJavaRes UP-TO-DATE
+           [   +4 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:24] [+4204 ms] > Task :app:minifyReleaseWithR8
+           [        ]   Build cache is disabled
+           p\intermediates\generated_proguard_file\release\mergeReleaseGenerate
+           [   +3 ms]   Build cache is disabled
+[16:45:25] [        ] :share_plus:stripReleaseDebugSymbols (Thread[Execution
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:26] [        ] > Task :url_launcher_android:syncReleaseLibJars
+           [   +4 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +279 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +266 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:27] [        ] Caching disabled for task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +304 ms]   Build cache is disabled
+[16:45:28] [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +325 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:29] [        ] Android Lint: Creating lint class loader 31.11.1_false
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:30] [        ]   Caching has been disabled for the task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:31] [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +4 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:32] [ +105 ms] > Task
+           [        ]   Build cache is disabled
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:33] [ +304 ms] > Task :jni:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +7 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:34] [ +287 ms] > Task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:35] [ +405 ms] > Task :package_info_plus:mergeReleaseResources
+           [        ]   Build cache is disabled
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:36] [ +689 ms] > Task :pasteboard:verifyReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [   +3 ms]   Build cache is disabled
+           [   +2 ms]   Build cache is disabled
+[16:45:37] [+1189 ms] > Task :screen_brightness_android:verifyReleaseResources
+           [   +5 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:38] [ +710 ms] > Task :sensors_plus:mergeReleaseResources UP-TO-DATE
+           [   +6 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:45:40] [+2023 ms] > Task :serious_python_android:bundleReleaseAar
+           [        ]   Build cache is disabled
+[16:46:10] [+29255 ms] Resolve mutations for
+           [        ]   Build cache is disabled
+[16:46:11] [+1083 ms] > Task :serious_python_android:mergeReleaseResources
+           [  +18 ms]   Build cache is disabled
+           [   +3 ms]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:46:14] [+2401 ms] > Task :share_plus:mergeReleaseResources UP-TO-DATE
+           [   +4 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +2 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:46:15] [+1018 ms] > Task :app:minifyReleaseWithR8
+           class * implements androidx.lifecycle.GeneratedAdapter {
+[16:46:16] [        ]   @androidx.annotation.Keep <init>(...);
+[16:46:17] [+1642 ms] > Task :shared_preferences_android:mergeReleaseResources
+           [   +2 ms]   Build cache is disabled
+[16:46:20] [+2965 ms] work action resolve out (project :serious_python_android)
+           [        ]   Build cache is disabled
+[16:46:27] [+7348 ms] > Task :app:lintVitalAnalyzeRelease
+           [        ]   Build cache is disabled
+[16:46:29] [+1954 ms] Resolve mutations for
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:46:31] [+1445 ms] > Task :url_launcher_android:mergeReleaseResources
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:46:32] [+1321 ms] > Task :wakelock_plus:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [   +2 ms]   Build cache is disabled
+[16:46:33] [        ] Resolve mutations for :wakelock_plus:assembleRelease
+[16:47:34] [+61679 ms] Resolve mutations for :app:lintVitalReportRelease
+[16:47:35] [  +66 ms] > Task :app:lintVitalReportRelease UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:48:07] [+32187 ms] Resolve mutations for :app:compileReleaseArtProfile
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:48:08] [ +388 ms] > Task :app:optimizeReleaseResources
+           [        ]   Build cache is disabled
+[16:48:10] [+2054 ms] > Task :app:packageRelease
+           [   +1 ms]   Build cache is disabled
+           [  +12 ms] The input changes require a full rebuild for incremental
+[16:48:25] [+15582 ms] Resolve mutations for
+[16:48:26] [ +310 ms] > Task :app:createReleaseApkListingFileRedirect
+           [        ]   Build cache is disabled
+[16:48:28] [+1991 ms] > Task :app:assembleRelease
+           [        ]   Build cache is disabled
+[16:48:35] [+7089 ms] Build 81ae4ce4-5abd-4741-8921-66d6ab6c791d is closed
+           [ +108 ms] Build b76dd58d-cad0-407f-8b19-3d3d3c46dcf7 is closed
+           [        ] You can use '--warning-mode all' to show the individual
+           deprecation warnings and determine if they come from your own
+           ec:command_line_warnings in the Gradle documentation.
+           [        ] BUILD SUCCESSFUL in 9m 44s
+[16:48:36] [ +395 ms] Watched directory hierarchies:
+[16:48:37] [ +214 ms] Running Gradle task 'assembleRelease'... (completed in
+           p\outputs\flutter-apk'/app-release.apk
+[16:48:42] [+5108 ms] √ Built build\app\outputs\flutter-apk\app-release.apk
+           Built .apk for Android ✅
+           Copying build output from:
+[16:48:44] Renamed build output from app-release.apk to playbar_go_tv.apk.
+           Renamed build output from app-release.apk.sha1 to
+           playbar_go_tv.apk.sha1.
+           Copied build to build\apk directory ✅
+│ Successfully built your .apk for Android! 🥳 Find it in build\apk           │
+
+
+================================================================
+16:48:50  3. Ajustes para Android TV (inicio del TV + banner)
+================================================================
+✓ AndroidManifest con LEANBACK_LAUNCHER y banner
+
+================================================================
+16:48:50  flet build apk (la primera vez descarga Flutter y Android: paciencia)
+================================================================
+> D:\Python\Musica\jukebox-flet\reproductor_tv\.venv_tv\Scripts\flet.exe build apk --yes -vv
+[16:49:04] Run subprocess:
+[16:49:08] Flutter executable: C:\Users\USER\flutter\3.44.8\bin\flutter.bat
+[16:49:09] Configuring Flutter's path to JDK
+[16:49:10] Setting "jdk-dir" value to "C:\Users\USER\java\17.0.13+11".
+           JDK installed ✅
+[16:49:11] Android SDK installation found at
+           Android SDK installed ✅
+[16:49:24] Running build hooks...Running build hooks...Running package command
+           Packaged Python app ✅
+[16:49:28] Found Flutter extension at
+           Registered Flutter user extensions ✅
+[16:49:31] [ +350 ms] Artifact Instance of 'MaterialFonts' is not required,
+[16:49:32] [ +247 ms] Found plugin window_manager at
+[16:49:33] [  +69 ms] Found plugin path_provider at
+[16:49:34] [ +266 ms] Found plugin media_kit_libs_windows_video at
+[16:49:35] [  +33 ms] Found plugin device_info_plus at
+[16:49:36] [  +35 ms] Found plugin window_manager at
+           pp\src\main\java\io\flutter\plugins\GeneratedPluginRegistrant.java
+           [  +32 ms] Skipping generating GeneratedPluginRegistrant.java
+[16:49:37] [  +28 ms] Skipping generating generated_plugin_registrant.h because
+           [  +83 ms] Skipping generating generated_plugin_registrant.cc
+           [  +77 ms] Skipping generating generated_plugins.cmake because it is
+           [  +83 ms] Skipping generating generated_plugin_registrant.h because
+           [  +82 ms] Skipping generating generated_plugin_registrant.cc
+           [  +89 ms] Skipping generating generated_plugins.cmake because it is
+           [  +84 ms] Skipping generating GeneratedPluginRegistrant.h because
+           [  +77 ms] Skipping generating GeneratedPluginRegistrant.m because
+           [ +117 ms] Skipping generating GeneratedPluginRegistrant.swift
+[16:49:38] [ +538 ms] executing: C:\Program Files\Android\Android
+           [  +72 ms] Top-level Gradle build file not found, skipping migration
+[16:49:39] [ +402 ms] Exit code 0 from: C:\Users\USER\java\17.0.13+11\bin\java
+           [   +2 ms] Running Gradle task 'assembleRelease'...
+[16:49:40] [+1795 ms] Initialized native services in:
+[16:49:42] [+1682 ms] The client will now receive all logging from the daemon
+           [  +10 ms] Starting 2nd build in daemon [uptime: 10 mins 2.813 secs,
+[16:49:43] [+1095 ms] > Configure project :gradle
+           [   +2 ms] Evaluating project ':gradle' using build file
+[16:49:44] [        ] Build 479da3d0-d00b-4f6b-867a-b2f378a92278 is started
+           [   +3 ms] WARNING: Unsupported Kotlin plugin version.
+           :gradle:checkKotlinGradlePluginConfigurationErrors (Thread[included
+           [   +5 ms] :gradle:checkKotlinGradlePluginConfigurationErrors
+           [   +8 ms] > Task :gradle:checkKotlinGradlePluginConfigurationErrors
+           ':gradle:checkKotlinGradlePluginConfigurationErrors' as task onlyIf
+           'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+[16:49:45] [        ] Skipping task ':gradle:compileKotlin' as it is
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +2 ms]   Build cache is disabled
+[16:49:46] [+1965 ms] Settings evaluated using settings file
+[16:49:47] [ +109 ms] Projects loaded. Root project using build file
+[16:49:48] [+1388 ms] > Configure project :app
+           [        ] Evaluating project ':app' using build file
+           [        ] Build 9f75e637-45b4-4d8a-aab4-5a70a487c9fb is started
+           [        ] Gradle build config:
+           [        ] Evaluating root project 'android' using build file
+[16:49:50] [+1445 ms] > Configure project :battery_plus
+           [   +3 ms] Evaluating project ':battery_plus' using build file
+           [   +1 ms] Evaluating project ':connectivity_plus' using build file
+           [   +6 ms] Evaluating project ':device_info_plus' using build file
+[16:49:52] [+1884 ms] > Configure project :file_picker
+           [   +4 ms] Evaluating project ':file_picker' using build file
+[16:49:53] [ +882 ms] > Configure project :flutter_plugin_android_lifecycle
+           using build file
+[16:49:54] [ +500 ms] > Configure project :jni
+           [        ] Evaluating project ':jni' using build file
+           [   +3 ms] Evaluating project ':jni_flutter' using build file
+[16:49:56] [+1891 ms] > Configure project :media_kit_libs_android_video
+           build file
+[16:49:58] [+1713 ms] > Configure project :media_kit_video
+           [   +6 ms] Evaluating project ':media_kit_video' using build file
+           [   +3 ms] Evaluating project ':package_info_plus' using build file
+[16:50:00] [+1602 ms] > Configure project :pasteboard
+           [        ] Evaluating project ':pasteboard' using build file
+[16:50:01] [ +995 ms] > Configure project :screen_brightness_android
+           build file
+           [        ] Evaluating project ':sensors_plus' using build file
+           [   +1 ms] Evaluating project ':share_plus' using build file
+[16:50:02] [ +395 ms] > Configure project :shared_preferences_android
+           build file
+           [   +1 ms] Evaluating project ':wakelock_plus' using build file
+[16:50:03] [ +791 ms] Adding -Xuse-inline-scopes-numbers Kotlin compiler flag
+[16:50:04] [+1106 ms] Tasks to be executed: [task ':app:ReleaseMinSdkCheck',
+           ':battery_plus:checkKotlinGradlePluginConfigurationErrors', task
+           ':battery_plus:mergeReleaseGeneratedProguardFiles', task
+           ':connectivity_plus:checkKotlinGradlePluginConfigurationErrors',
+           ':connectivity_plus:mergeReleaseGeneratedProguardFiles', task
+           ':device_info_plus:checkKotlinGradlePluginConfigurationErrors', task
+           ':device_info_plus:mergeReleaseGeneratedProguardFiles', task
+           ':file_picker:checkKotlinGradlePluginConfigurationErrors', task
+           ionErrors', task
+           ':file_picker:mergeReleaseGeneratedProguardFiles', task
+           ':flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFile
+           s', task ':jni:checkKotlinGradlePluginConfigurationErrors', task
+           ':jni_flutter:checkKotlinGradlePluginConfigurationErrors', task
+           ':jni_flutter:mergeReleaseGeneratedProguardFiles', task
+           ':jni:mergeReleaseGeneratedProguardFiles', task
+           ':media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles',
+           task ':media_kit_video:checkKotlinGradlePluginConfigurationErrors',
+           ':package_info_plus:checkKotlinGradlePluginConfigurationErrors',
+           ':wakelock_plus:checkKotlinGradlePluginConfigurationErrors', task
+           ':media_kit_video:mergeReleaseGeneratedProguardFiles', task
+           ':wakelock_plus:mergeReleaseGeneratedProguardFiles', task
+           ':package_info_plus:mergeReleaseGeneratedProguardFiles', task
+           ':pasteboard:checkKotlinGradlePluginConfigurationErrors', task
+           ':pasteboard:mergeReleaseGeneratedProguardFiles', task
+           ':screen_brightness_android:mergeReleaseGeneratedProguardFiles',
+           task ':sensors_plus:checkKotlinGradlePluginConfigurationErrors',
+           ':sensors_plus:mergeReleaseGeneratedProguardFiles', task
+           ':serious_python_android:mergeReleaseGeneratedProguardFiles', task
+           ':share_plus:checkKotlinGradlePluginConfigurationErrors', task
+           ':share_plus:mergeReleaseGeneratedProguardFiles', task
+           ':shared_preferences_android:mergeReleaseGeneratedProguardFiles',
+           ':url_launcher_android:checkKotlinGradlePluginConfigurationErrors',
+           ':url_launcher_android:mergeReleaseGeneratedProguardFiles', task
+           ':app:checkKotlinGradlePluginConfigurationErrors', task
+           ':app:mergeReleaseGeneratedProguardFiles', task
+.
+[16:50:05] [   +7 ms] Tasks that were excluded: []
+           [        ]   Build cache is disabled
+           [        ] Resolve mutations for :app:preBuild (Thread[included
+           [        ] :app:preBuild (Thread[included builds,5,main]) started.
+           [        ] > Task :app:preBuild UP-TO-DATE
+           [        ] :app:preReleaseBuild (Thread[included builds,5,main])
+           [        ] > Task :app:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           scripts\CMakeLists.txt release|arm64-v8a : Writing build model to
+           [        ]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+[16:50:06] [ +891 ms] > Task :app:configureCMakeRelease[armeabi-v7a]
+           [        ]   Build cache is disabled
+           scripts\CMakeLists.txt release|armeabi-v7a : Writing build model to
+           [        ]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+           [        ]   Build cache is disabled
+[16:50:07] [        ] C/C++:
+           scripts\CMakeLists.txt release|x86_64 : Writing build model to
+           [        ]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+[16:50:08] [+1498 ms] > Task :app:compileFlutterBuildRelease UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :battery_plus:preBuild (Thread[included builds,5,main])
+           [        ] > Task :battery_plus:preBuild UP-TO-DATE
+           [        ] :battery_plus:preReleaseBuild (Thread[included
+           [        ] > Task :battery_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :connectivity_plus:preBuild (Thread[included
+           [        ] > Task :connectivity_plus:preBuild UP-TO-DATE
+           [        ] :connectivity_plus:preReleaseBuild (Thread[included
+           [        ] > Task :connectivity_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :device_info_plus:preBuild (Thread[included
+           [   +1 ms] > Task :device_info_plus:preBuild UP-TO-DATE
+           [        ] :device_info_plus:preReleaseBuild (Thread[included
+           [        ] > Task :device_info_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :file_picker:preBuild (Thread[included builds,5,main])
+           [        ] > Task :file_picker:preBuild UP-TO-DATE
+           [   +2 ms] :file_picker:preReleaseBuild (Thread[included
+           [        ] > Task :file_picker:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :flutter_plugin_android_lifecycle:preBuild (Thread[Execution worker
+           :flutter_plugin_android_lifecycle:preReleaseBuild (Thread[Execution
+[16:50:09] [        ] > Task :flutter_plugin_android_lifecycle:preReleaseBuild
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] Resolve mutations for :jni:preBuild (Thread[Execution
+           [        ] :jni:preBuild (Thread[Execution worker Thread 3,5,main])
+           [        ] > Task :jni:preBuild UP-TO-DATE
+           [        ] :jni:preReleaseBuild (Thread[Execution worker Thread
+           [        ] > Task :jni:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           MakeLists.txt release|arm64-v8a : Writing build model to
+           [        ]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+           [        ] C/C++: about to build targets jni
+           [        ] C/C++: Build jni
+           [        ] C/C++: check expected build outputs
+           [        ] C/C++: build complete
+           [        ]   Build cache is disabled
+           MakeLists.txt release|armeabi-v7a : Writing build model to
+           [        ]   Build cache is disabled
+[16:50:10] [        ]   Caching has been disabled for the task
+           [        ] C/C++: executing build commands for targets that produce
+           [        ] C/C++: about to build targets jni
+           [        ] C/C++: Build jni
+           [        ] C/C++: check expected build outputs
+           [        ] C/C++: build complete
+[16:50:11] [+1780 ms] > Task :jni:configureCMakeRelWithDebInfo[x86]
+           [        ]   Build cache is disabled
+           MakeLists.txt release|x86 : Writing build model to
+           [        ]   Build cache is disabled
+[16:50:12] [        ] C/C++: done reading expected JSONs
+           [        ] C/C++: executing build commands for targets that produce
+           [        ] C/C++: about to build targets jni
+           [        ] C/C++: Build jni
+           [        ] C/C++: check expected build outputs
+           [        ] C/C++: build complete
+           [        ]   Build cache is disabled
+           MakeLists.txt release|x86_64 : Writing build model to
+           [        ]   Build cache is disabled
+           [        ] C/C++: executing build commands for targets that produce
+           [        ] C/C++: about to build targets jni
+           [        ] C/C++: Build jni
+           [        ] C/C++: check expected build outputs
+           [        ] C/C++: build complete
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :jni_flutter:preBuild (Thread[included builds,5,main])
+           [   +3 ms] > Task :jni_flutter:preBuild UP-TO-DATE
+           [        ] :jni_flutter:preReleaseBuild (Thread[included
+           [        ] > Task :jni_flutter:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :media_kit_libs_android_video:preBuild (Thread[included
+           [   +2 ms] :media_kit_libs_android_video:preBuild (Thread[included
+           [   +3 ms] > Task :media_kit_libs_android_video:preBuild UP-TO-DATE
+           :media_kit_libs_android_video:preReleaseBuild (Thread[included
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :media_kit_video:preBuild (Thread[included
+           [        ] > Task :media_kit_video:preBuild UP-TO-DATE
+           [        ] :media_kit_video:preReleaseBuild (Thread[included
+           [        ] > Task :media_kit_video:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :package_info_plus:preBuild (Thread[included
+           [        ] > Task :package_info_plus:preBuild UP-TO-DATE
+           [ +217 ms] :package_info_plus:preReleaseBuild (Thread[included
+           [        ] > Task :package_info_plus:preReleaseBuild UP-TO-DATE
+[16:50:13] [        ] Resolve mutations for
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :pasteboard:preBuild (Thread[Execution worker,5,main])
+           [        ] > Task :pasteboard:preBuild UP-TO-DATE
+           [        ] :pasteboard:preReleaseBuild (Thread[Execution
+           [        ] > Task :pasteboard:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +148 ms] :screen_brightness_android:preBuild (Thread[Execution
+           [        ] > Task :screen_brightness_android:preBuild UP-TO-DATE
+           :screen_brightness_android:preReleaseBuild (Thread[Execution
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :sensors_plus:preBuild (Thread[Execution worker,5,main])
+           [        ] > Task :sensors_plus:preBuild UP-TO-DATE
+           [        ] :sensors_plus:preReleaseBuild (Thread[Execution
+           [        ] > Task :sensors_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:14] [        ] Download
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:15] [        ]   Output property 'destinationDir' file
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:17] [+1695 ms] > Task :serious_python_android:splitStdlib_arm64-v8a
+           [        ]   Build cache is disabled
+[16:50:19] [+1880 ms] > Task
+           [        ]   Build cache is disabled
+[16:50:38] [+18807 ms] Resolve mutations for
+[16:50:39] [ +897 ms] > Task :serious_python_android:splitStdlib_armeabi-v7a
+           [        ]   Build cache is disabled
+[16:50:41] [+1997 ms] > Task
+           [        ]   Build cache is disabled
+[16:50:42] [+1010 ms] > Task :serious_python_android:splitStdlib_x86_64
+           [   +1 ms]   Build cache is disabled
+[16:50:44] [+1889 ms] > Task :serious_python_android:splitSitePackages_x86_64
+           [        ]   Build cache is disabled
+           [        ] :serious_python_android:preBuild (Thread[Execution worker
+           :serious_python_android:preReleaseBuild (Thread[Execution worker
+           [        ] :serious_python_android:preReleaseBuild (Thread[Execution
+[16:50:45] [ +197 ms] > Task :serious_python_android:mergeReleaseJniLibFolders
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [        ] :share_plus:preBuild (Thread[Execution worker,5,main])
+           [   +5 ms] > Task :share_plus:preBuild UP-TO-DATE
+           [        ] :share_plus:preReleaseBuild (Thread[Execution
+           [        ] > Task :share_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :shared_preferences_android:preBuild (Thread[Execution
+           [        ] :shared_preferences_android:preBuild (Thread[Execution
+           [   +2 ms] > Task :shared_preferences_android:preBuild UP-TO-DATE
+           :shared_preferences_android:preReleaseBuild (Thread[Execution
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :url_launcher_android:preBuild (Thread[Execution
+           [        ] > Task :url_launcher_android:preBuild UP-TO-DATE
+           :url_launcher_android:preReleaseBuild (Thread[Execution
+           [        ] :url_launcher_android:preReleaseBuild (Thread[Execution
+           [        ] > Task :url_launcher_android:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ] :wakelock_plus:preBuild (Thread[Execution worker Thread
+           [        ] > Task :wakelock_plus:preBuild UP-TO-DATE
+           [        ] :wakelock_plus:preReleaseBuild (Thread[Execution worker
+           [        ] > Task :wakelock_plus:preReleaseBuild UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:46] [        ]   Caching has been disabled for the task
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :battery_plus:checkKotlinGradlePluginConfigurationErrors
+           [   +4 ms] :battery_plus:checkKotlinGradlePluginConfigurationErrors
+           :battery_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':battery_plus:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:47] [ +288 ms] > Task :battery_plus:compileReleaseKotlin UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :battery_plus:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :battery_plus:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :battery_plus:mergeReleaseGeneratedProguardFiles
+           ':battery_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':battery_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :connectivity_plus:checkKotlinGradlePluginConfigurationErrors
+           :connectivity_plus:checkKotlinGradlePluginConfigurationErrors
+           :connectivity_plus:checkKotlinGradlePluginConfigurationErrors
+           ':connectivity_plus:checkKotlinGradlePluginConfigurationErrors' as
+           task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           :connectivity_plus:mergeReleaseGeneratedProguardFiles
+           [        ] :connectivity_plus:mergeReleaseGeneratedProguardFiles
+           :connectivity_plus:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':connectivity_plus:mergeReleaseGeneratedProguardFiles' because:
+           [   +3 ms]   Build cache is disabled
+           ':connectivity_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :device_info_plus:checkKotlinGradlePluginConfigurationErrors
+           :device_info_plus:checkKotlinGradlePluginConfigurationErrors
+           :device_info_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':device_info_plus:checkKotlinGradlePluginConfigurationErrors' as
+           task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +2 ms]   Build cache is disabled
+           :device_info_plus:mergeReleaseGeneratedProguardFiles
+           [        ] :device_info_plus:mergeReleaseGeneratedProguardFiles
+           :device_info_plus:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':device_info_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':device_info_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :file_picker:checkKotlinGradlePluginConfigurationErrors
+           [        ] :file_picker:checkKotlinGradlePluginConfigurationErrors
+           :file_picker:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':file_picker:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:48] [  +18 ms] > Task :file_picker:packageReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           onErrors (Thread[Execution worker,5,main]) started.
+           onErrors (Thread[Execution worker,5,main]) started.
+           onErrors SKIPPED
+           ionErrors' as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :file_picker:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :file_picker:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :file_picker:mergeReleaseGeneratedProguardFiles
+           ':file_picker:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':file_picker:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFiles
+           :flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFiles
+           :flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFiles
+           ':flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFile
+           [        ]   Build cache is disabled
+           ':flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFile
+           [        ]   Build cache is disabled
+           :jni:checkKotlinGradlePluginConfigurationErrors (Thread[Execution
+           [        ] :jni:checkKotlinGradlePluginConfigurationErrors
+           [        ] > Task :jni:checkKotlinGradlePluginConfigurationErrors
+           ':jni:checkKotlinGradlePluginConfigurationErrors' as task onlyIf
+           'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +2 ms]   Build cache is disabled
+           :jni_flutter:checkKotlinGradlePluginConfigurationErrors
+           [        ] :jni_flutter:checkKotlinGradlePluginConfigurationErrors
+           :jni_flutter:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':jni_flutter:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:49] [        ] Skipping task ':jni_flutter:generateReleaseResources' as
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +10 ms]   Build cache is disabled
+[16:50:50] [        ] Resolve mutations for :jni_flutter:javaPreCompileRelease
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :jni_flutter:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :jni_flutter:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :jni_flutter:mergeReleaseGeneratedProguardFiles
+           ':jni_flutter:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':jni_flutter:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :jni:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :jni:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] > Task :jni:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':jni:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           [        ] Skipping task ':jni:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           rrors' as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles
+           :media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles
+           :media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles
+           ':media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           ':media_kit_libs_android_video:mergeReleaseGeneratedProguardFiles'
+           [ +282 ms]   Build cache is disabled
+           :media_kit_video:checkKotlinGradlePluginConfigurationErrors
+           :media_kit_video:checkKotlinGradlePluginConfigurationErrors
+           :media_kit_video:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':media_kit_video:checkKotlinGradlePluginConfigurationErrors' as
+           task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :package_info_plus:checkKotlinGradlePluginConfigurationErrors
+           :package_info_plus:checkKotlinGradlePluginConfigurationErrors
+           :package_info_plus:checkKotlinGradlePluginConfigurationErrors
+           ':package_info_plus:checkKotlinGradlePluginConfigurationErrors' as
+           task onlyIf 'errorDiagnostics are present' is false.
+[16:50:51] [        ] :package_info_plus:generateReleaseResValues
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :wakelock_plus:checkKotlinGradlePluginConfigurationErrors
+           [        ] :wakelock_plus:checkKotlinGradlePluginConfigurationErrors
+           :wakelock_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':wakelock_plus:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +19 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :media_kit_video:mergeReleaseGeneratedProguardFiles (Thread[included
+           [        ] :media_kit_video:mergeReleaseGeneratedProguardFiles
+           :media_kit_video:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':media_kit_video:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':media_kit_video:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :wakelock_plus:mergeReleaseGeneratedProguardFiles (Thread[included
+           [        ] :wakelock_plus:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :wakelock_plus:mergeReleaseGeneratedProguardFiles
+           ':wakelock_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':wakelock_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :package_info_plus:mergeReleaseGeneratedProguardFiles
+           [        ] :package_info_plus:mergeReleaseGeneratedProguardFiles
+           :package_info_plus:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':package_info_plus:mergeReleaseGeneratedProguardFiles' because:
+           [   +1 ms]   Build cache is disabled
+           ':package_info_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           :pasteboard:checkKotlinGradlePluginConfigurationErrors
+           [        ] :pasteboard:checkKotlinGradlePluginConfigurationErrors
+           :pasteboard:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':pasteboard:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :pasteboard:mergeReleaseGeneratedProguardFiles (Thread[included
+           [        ] :pasteboard:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :pasteboard:mergeReleaseGeneratedProguardFiles
+           ':pasteboard:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':pasteboard:mergeReleaseGeneratedProguardFiles' as it is
+[16:50:52] [        ] Caching disabled for task
+           [        ]   Build cache is disabled
+           :screen_brightness_android:checkKotlinGradlePluginConfigurationError
+           :screen_brightness_android:checkKotlinGradlePluginConfigurationError
+           :screen_brightness_android:checkKotlinGradlePluginConfigurationError
+           rs' as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :screen_brightness_android:mergeReleaseGeneratedProguardFiles
+           :screen_brightness_android:mergeReleaseGeneratedProguardFiles
+           :screen_brightness_android:mergeReleaseGeneratedProguardFiles
+           ':screen_brightness_android:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           ':screen_brightness_android:mergeReleaseGeneratedProguardFiles' as
+           [        ]   Build cache is disabled
+           :sensors_plus:checkKotlinGradlePluginConfigurationErrors
+           [        ] :sensors_plus:checkKotlinGradlePluginConfigurationErrors
+           :sensors_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':sensors_plus:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +204 ms]   Build cache is disabled
+           :sensors_plus:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :sensors_plus:mergeReleaseGeneratedProguardFiles
+           [   +3 ms] > Task :sensors_plus:mergeReleaseGeneratedProguardFiles
+           ':sensors_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':sensors_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +159 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :serious_python_android:mergeReleaseGeneratedProguardFiles
+           :serious_python_android:mergeReleaseGeneratedProguardFiles
+           :serious_python_android:mergeReleaseGeneratedProguardFiles
+           ':serious_python_android:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           ':serious_python_android:mergeReleaseGeneratedProguardFiles' as it
+           [        ]   Build cache is disabled
+           :share_plus:checkKotlinGradlePluginConfigurationErrors
+           [        ] :share_plus:checkKotlinGradlePluginConfigurationErrors
+           :share_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+           ':share_plus:checkKotlinGradlePluginConfigurationErrors' as task
+           onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:53] [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :share_plus:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :share_plus:mergeReleaseGeneratedProguardFiles
+           [        ] > Task :share_plus:mergeReleaseGeneratedProguardFiles
+           ':share_plus:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':share_plus:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           ors' as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :shared_preferences_android:mergeReleaseGeneratedProguardFiles
+           :shared_preferences_android:mergeReleaseGeneratedProguardFiles
+           :shared_preferences_android:mergeReleaseGeneratedProguardFiles
+           ':shared_preferences_android:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           ':shared_preferences_android:mergeReleaseGeneratedProguardFiles' as
+           [        ]   Build cache is disabled
+           :url_launcher_android:checkKotlinGradlePluginConfigurationErrors
+           :url_launcher_android:checkKotlinGradlePluginConfigurationErrors
+           :url_launcher_android:checkKotlinGradlePluginConfigurationErrors
+           ':url_launcher_android:checkKotlinGradlePluginConfigurationErrors'
+           as task onlyIf 'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :url_launcher_android:mergeReleaseGeneratedProguardFiles
+           [        ] :url_launcher_android:mergeReleaseGeneratedProguardFiles
+           :url_launcher_android:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':url_launcher_android:mergeReleaseGeneratedProguardFiles' because:
+           [        ]   Build cache is disabled
+           ':url_launcher_android:mergeReleaseGeneratedProguardFiles' as it is
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +100 ms]   Build cache is disabled
+           :app:checkKotlinGradlePluginConfigurationErrors (Thread[Execution
+           [        ] :app:checkKotlinGradlePluginConfigurationErrors
+           [        ] > Task :app:checkKotlinGradlePluginConfigurationErrors
+           ':app:checkKotlinGradlePluginConfigurationErrors' as task onlyIf
+           'errorDiagnostics are present' is false.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:54] [        ] Caching disabled for task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:55] [   +2 ms] > Task :media_kit_video:mergeReleaseAssets UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:56] [+1172 ms] > Task :app:mergeReleaseAssets
+           [        ]   Build cache is disabled
+[16:50:57] [        ]   Output property 'outputDir' file
+           [   +1 ms] The input changes require a full rebuild for incremental
+[16:50:58] [+1689 ms] > Task :app:copyFlutterAssetsRelease
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:50:59] [        ] Skipping task ':app:generateReleaseResources' as it is
+[16:51:01] [+2411 ms] > Task :app:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +114 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:02] [        ] > Task :media_kit_video:extractDeepLinksRelease
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:03] [        ] Loading library manifest
+..
+[16:51:04] [        ] uses-sdk defined in both files...
+           [        ] Merging result: WARNING
+           essReleaseManifest\AndroidManifest.xml:7:18-50 Warning:
+           [        ] Otherwise, you can silence this type of warning by adding
+           android.experimental.suppressExtractNativeLibsWarnings=true to your
+.
+[16:51:05] [        ]              INJECTED from
+.
+[16:51:06] [ +162 ms] MERGED from [androidx.loader:loader:1.0.0]
+..
+[16:51:07] [        ] ADDED from [androidx.core:core:1.18.0]
+.
+           generate GeneratedPluginRegistrant.java
+.
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:08] [        ] work action resolve classes.jar (project
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +113 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +97 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +77 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:09] [        ] file or directory
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:10] [        ] work action resolve lint.jar (project
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +77 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +89 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:11] [        ] Resolve mutations for
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           \intermediates\packaged_manifests\release\processReleaseManifestForP
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:17] [+5224 ms] > Task :app:processReleaseResources
+           [   +3 ms]   Build cache is disabled
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           :app:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [        ] :app:mergeReleaseGeneratedProguardFiles (Thread[Execution
+           [  +67 ms] > Task :app:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+           ':app:mergeReleaseGeneratedProguardFiles' because:
+           [   +4 ms]   Build cache is disabled
+           [  +37 ms] Skipping task ':app:mergeReleaseGeneratedProguardFiles'
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:18] [ +445 ms] > Task :app:generateReleaseLintVitalReportModel
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:19] [        ] Caching disabled for task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:20] [        ] Resolve mutations for :jni:lintVitalAnalyzeRelease
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:21] [        ] :media_kit_video:lintVitalAnalyzeRelease (Thread[included
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:22] [        ] work action resolve out (project
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           'toolParameters.packagedManifestDirectory' file
+           \intermediates\packaged_manifests\release\processReleaseManifestForP
+           p\intermediates\generated_proguard_file\release\mergeReleaseGenerate
+[16:51:29] [+8637 ms] Resolve mutations for
+           [   +5 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:30] [  +83 ms] > Task :share_plus:lintVitalAnalyzeRelease UP-TO-DATE
+           [  +11 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +7 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:31] [        ] work action resolve generateReleaseLintVitalModel
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:32] [        ] work action resolve generateReleaseLintVitalModel
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:33] [        ]   Caching has been disabled for the task
+           [ +831 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [ +606 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:34] [        ]   Caching has been disabled for the task
+[16:51:35] [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:36] [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:38] [+2230 ms] > Task :device_info_plus:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+[16:51:39] [  +60 ms] work action resolve out (project :serious_python_android)
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:40] [ +273 ms] > Task :app:minifyReleaseWithR8
+           class * implements androidx.lifecycle.GeneratedAdapter {
+[16:51:42] [+1846 ms] > Task :file_picker:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +42 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:44] [+2564 ms] > Task
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:46] [+1697 ms] > Task :jni:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+[16:51:48] [+2196 ms] > Task :jni:verifyReleaseResources UP-TO-DATE
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:49] [   +1 ms] > Task :jni_flutter:mapReleaseSourceSetPaths UP-TO-DATE
+           [        ]   Build cache is disabled
+[16:51:50] [+2071 ms] > Task :jni_flutter:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:51] [ +655 ms] > Task
+           [   +9 ms]   Build cache is disabled
+[16:51:52] [+1250 ms] > Task
+           [        ]   Build cache is disabled
+[16:51:53] [ +191 ms] :media_kit_libs_android_video:verifyReleaseResources
+           [        ]   Build cache is disabled
+           [   +4 ms]   Build cache is disabled
+           [   +3 ms]   Build cache is disabled
+[16:51:54] [ +987 ms] > Task :media_kit_video:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:55] [ +170 ms] :wakelock_plus:compileReleaseLibraryResources
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:51:57] [+1871 ms] > Task :package_info_plus:mergeReleaseResources
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:52:00] [+3186 ms] > Task :pasteboard:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+[16:52:01] [+1015 ms] > Task :pasteboard:verifyReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:52:02] [        ]   Caching has been disabled for the task
+           [        ]   Build cache is disabled
+[16:52:04] [+2340 ms] > Task :screen_brightness_android:mergeReleaseResources
+           [        ]   Build cache is disabled
+[16:52:07] [+2794 ms] > Task :screen_brightness_android:verifyReleaseResources
+           [   +2 ms]   Build cache is disabled
+           [   +6 ms]   Build cache is disabled
+           [   +3 ms]   Build cache is disabled
+[16:52:09] [+2317 ms] > Task :sensors_plus:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:52:11] [+1990 ms] > Task :serious_python_android:bundleReleaseAar
+           [        ]   Build cache is disabled
+[16:52:33] [+21437 ms] Resolve mutations for
+           [        ]   Build cache is disabled
+[16:52:34] [+1566 ms] > Task :serious_python_android:mergeReleaseResources
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:52:35] [        ] :serious_python_android:assembleRelease (Thread[Execution
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:52:37] [+2263 ms] > Task :share_plus:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:52:41] [+3592 ms] > Task :shared_preferences_android:mergeReleaseResources
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:52:42] [ +662 ms] > Task :url_launcher_android:mergeReleaseResources
+           [   +3 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [  +10 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:52:43] [ +896 ms] > Task :wakelock_plus:mergeReleaseResources UP-TO-DATE
+           [        ]   Build cache is disabled
+           [        ]   Build cache is disabled
+           [   +1 ms]   Build cache is disabled
+           [        ]   Build cache is disabled
+[16:52:44] [ +398 ms] > Task :app:optimizeReleaseResources
+           [        ]   Build cache is disabled
+[16:52:46] [+2001 ms] > Task :app:packageRelease
+           [        ]   Build cache is disabled
+           \intermediates\packaged_manifests\release\processReleaseManifestForP
+           [        ] The input changes require a full rebuild for incremental
+[16:52:55] [+8894 ms] Resolve mutations for
+           [        ]   Build cache is disabled
+[16:52:57] [+1994 ms] > Task :app:assembleRelease
+           [        ]   Build cache is disabled
+[16:52:58] [+1190 ms] Build 479da3d0-d00b-4f6b-867a-b2f378a92278 is closed
+           [        ] Build 9f75e637-45b4-4d8a-aab4-5a70a487c9fb is closed
+           [        ] You can use '--warning-mode all' to show the individual
+           deprecation warnings and determine if they come from your own
+           ec:command_line_warnings in the Gradle documentation.
+           [        ] BUILD SUCCESSFUL in 3m 19s
+[16:52:59] [ +492 ms] Watched directory hierarchies:
+[16:53:01] [+2070 ms] Running Gradle task 'assembleRelease'... (completed in
+           p\outputs\flutter-apk'/app-release.apk
+[16:53:06] [+5137 ms] √ Built build\app\outputs\flutter-apk\app-release.apk
+           Built .apk for Android ✅
+           Copying build output from:
+[16:53:16] Renamed build output from app-release.apk to playbar_go_tv.apk.
+           Renamed build output from app-release.apk.sha1 to
+           playbar_go_tv.apk.sha1.
+           Copied build to build\apk directory ✅
+│ Successfully built your .apk for Android! 🥳 Find it in build\apk           │
+
+
+================================================================
+16:53:17  4. Listo
+================================================================
+✅ D:\Python\Musica\jukebox-flet\reproductor_tv\salida_apk\PlayBarGO_TV.apk  (173 MB)
+   Sale en el inicio del TV.
+   Cómo instalarlo en el TV: mira README_TV.md
+salida 0
