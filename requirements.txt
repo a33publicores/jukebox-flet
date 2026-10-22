@@ -1,10 +1,11 @@
 flet==1.0.4
 flet-web==1.0.4
+fastapi==0.144.0
+starlette>=0.46.0,<1.0
+uvicorn
 requests
 psycopg[binary]
 psycopg-pool
-starlette
-uvicorn
 openpyxl
 gspread
 google-auth
