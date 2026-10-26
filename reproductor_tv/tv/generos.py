@@ -178,3 +178,52 @@ def clasificar(titulo, canal=""):
 def lista(texto):
     """'vallenato,salsa' -> {'vallenato', 'salsa'} (solo claves válidas)."""
     return {g.strip() for g in str(texto or "").split(",") if g.strip() in NOMBRES}
+
+
+# ---------------------------------------------------------------------------------------
+# Artistas del relleno: el admin también puede escoger artistas. Se guardan en el mismo
+# campo (control.generos) como "artista:<nombre>"; los reproductores viejos los ignoran.
+# ---------------------------------------------------------------------------------------
+PREFIJO_ARTISTA = "artista:"
+_SOBRA_CANAL = re.compile(r"\s*(-\s*topic|vevo|oficial|official|music|tv|channel|canal)\s*$", re.I)
+
+
+def artistas(texto):
+    """'vallenato,artista:Diomedes Díaz' -> {'Diomedes Díaz'}"""
+    return {a.strip()[len(PREFIJO_ARTISTA):].strip() for a in str(texto or "").split(",")
+            if a.strip().lower().startswith(PREFIJO_ARTISTA) and a.strip()[len(PREFIJO_ARTISTA):].strip()}
+
+
+def guardar_texto(claves, nombres_artistas):
+    """Lo que va en control.generos: géneros + artistas (sin comas en los nombres)."""
+    partes = sorted({c for c in claves if c in NOMBRES})
+    partes += sorted({PREFIJO_ARTISTA + str(a).replace(",", " ").strip()
+                      for a in nombres_artistas if str(a).strip()})
+    return ",".join(partes)
+
+
+def artista_de(titulo, canal=""):
+    """Nombre del artista de una canción: lo que va antes de " - " en el título, o el canal."""
+    t = str(titulo or "")
+    for sep in (" - ", " – ", " — ", " | "):
+        if sep in t:
+            nombre = t.split(sep, 1)[0]
+            break
+    else:
+        nombre = str(canal or "")
+    nombre = re.split(r"\s*(?:,|&| ft\.? | feat\.? | x | y )\s*", nombre, maxsplit=1, flags=re.I)[0]
+    nombre = _SOBRA_CANAL.sub("", nombre).strip(" .-|")
+    return nombre[:60]
+
+
+@lru_cache(maxsize=20000)
+def _norm_corto(texto):
+    return _norm(texto).strip()
+
+
+def es_de_artistas(titulo, canal, nombres):
+    """True si la canción es de alguno de esos artistas (nombre en el título o el canal)."""
+    if not nombres:
+        return False
+    texto = _norm(f"{titulo} {canal}")
+    return any(f" {_norm_corto(a)} " in texto for a in nombres if _norm_corto(a))

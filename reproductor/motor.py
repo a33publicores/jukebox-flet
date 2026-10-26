@@ -136,22 +136,24 @@ class BackendApi:
         self._playlist, self._t_playlist = lista, time.time()
         return lista
 
-    def elegir_relleno(self, excluir, generos=None):
+    def elegir_relleno(self, excluir, generos=None, artistas=None):
         """Canción al azar: playlist del negocio + lo pedido en fechas anteriores,
-        evitando las que sonaron hace poco. Si el admin escogió géneros, solo de esos
-        (si no hay ninguna de esos géneros, se usa todo para no quedarse en silencio)."""
+        evitando las que sonaron hace poco. Si el admin escogió géneros o artistas, solo
+        de esos (si no hay ninguna, se usa todo para no quedarse en silencio)."""
         excluir = set(excluir)
         pool = list(self.aleatorio())
         ya = {i.video_id for i in pool}
         pool += [C.Item(None, p["t"], p["c"], p["id"]) for p in self.canciones_playlist()
                  if p["id"] not in ya]
-        if generos:
-            from services.generos import clasificar
-            del_genero = [i for i in pool if clasificar(i.titulo, i.canal) in generos]
+        if generos or artistas:
+            from services.generos import clasificar, es_de_artistas
+            del_genero = [i for i in pool
+                          if (generos and clasificar(i.titulo, i.canal) in generos)
+                          or es_de_artistas(i.titulo, i.canal, artistas or ())]
             if del_genero:
                 pool = del_genero
             else:
-                print(f"ℹ️ No hay canciones de {', '.join(sorted(generos))}: uso todas")
+                print(f"ℹ️ No hay canciones de {', '.join(sorted(set(generos or ()) | set(artistas or ())))}: uso todas")
         candidatas = [i for i in pool if i.video_id not in excluir] or pool
         if not candidatas:
             return None
@@ -430,10 +432,14 @@ class Motor:
         from services.generos import lista
         return lista(((self.snap.control if self.snap else {}) or {}).get("generos", ""))
 
+    def _artistas(self):
+        from services.generos import artistas
+        return artistas(((self.snap.control if self.snap else {}) or {}).get("generos", ""))
+
     async def _elegir_relleno(self):
-        gen = self._generos()
+        gen, art = self._generos(), self._artistas()
         try:
-            return await asyncio.to_thread(self.backend.elegir_relleno, self._evitar(), gen)
+            return await asyncio.to_thread(self.backend.elegir_relleno, self._evitar(), gen, art)
         except TypeError:  # respaldo para un backend sin filtro de géneros
             return await asyncio.to_thread(self.backend.elegir_relleno, self._evitar())
 
@@ -443,10 +449,10 @@ class Motor:
 
     def _revisar_generos(self):
         """Si el admin cambió los géneros, las aleatorias ya escogidas se descartan."""
-        gen = self._generos()
+        gen = (frozenset(self._generos()), frozenset(self._artistas()))
         if gen != getattr(self, "_gen_previos", None):
             if getattr(self, "_gen_previos", None) is not None:
-                print(f"🎚️ Géneros del relleno: {', '.join(sorted(gen)) or 'todos'}")
+                print(f"🎚️ Relleno: {', '.join(sorted(gen[0] | gen[1])) or 'todo'}")
                 self._rellenos = []
             self._gen_previos = gen
 

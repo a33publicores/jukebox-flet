@@ -300,133 +300,80 @@ def admin_view(page, codigo, nombre, logo):
     except Exception as ex:
         print("⚠️ estado del plan:", ex)
 
-    # --- Géneros del relleno (lo que suena cuando nadie pide) -------------------------
+    # --- Relleno (lo que suena cuando nadie pide): géneros y artistas ----------------
     from services import generos as G
-    elegidos = set()
+    from views.selector_multiple import selector
+    elegidos, artistas_elegidos = set(), set()
     try:
         from services import db as _db
-        elegidos = G.lista((_db.control(codigo) or {}).get("generos", ""))
+        _txt = (_db.control(codigo) or {}).get("generos", "")
+        elegidos = G.lista(_txt)
+        artistas_elegidos = G.artistas(_txt)
     except Exception as ex:
         print("⚠️ géneros:", ex)
-    cuantos = {}
-    # Lista desplegable con selección múltiple: cerrada ocupa una línea; al tocarla se
-    # abre debajo con casillas (texto blanco sobre fondo oscuro, que se lea bien).
-    # Lo que se marca queda en "borrador" hasta tocar ✔ Aplicar (ahí se guarda y se cierra).
-    abierta = {"v": False}
-    borrador = set(elegidos)
-    resumen_generos = ft.Text("", color="white", size=14, expand=True,
-                              overflow=ft.TextOverflow.ELLIPSIS, max_lines=1)
-    flecha_generos = ft.Icon(ft.Icons.ARROW_DROP_DOWN, color="white")
-    opciones_generos = ft.Column(spacing=0, tight=True)
-    def _aplicar(e=None):
-        elegidos.clear()
-        elegidos.update(borrador)
-        abierta["v"] = False
-        pintar_generos()
-        page.update()
-        guardar_generos()
-
-    panel_generos = ft.Container(
-        visible=False, width=320, bgcolor="#1e293b", border_radius=12,
-        border=ft.Border.all(1, "#334155"), padding=ft.Padding.symmetric(vertical=6),
-        content=ft.Column(spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER, controls=[
-            opciones_generos,
-            ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=10, controls=[
-                ft.TextButton(content=ft.Text("Cancelar", color="#CBD5E1", size=14),
-                              on_click=lambda e: abrir_generos()),
-                ft.Container(
-                    width=150, height=40, border_radius=12,
-                    gradient=ft.LinearGradient(colors=["#00D4FF", "#B44CFF"]),
-                    content=ft.TextButton(
-                        content=ft.Text("✔ Aplicar", color="white", size=15,
-                                        weight=ft.FontWeight.BOLD),
-                        on_click=_aplicar)),
-            ]),
-        ]))
-    lista_generos = ft.Column(spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                              controls=[
-        ft.Container(
-            width=320, bgcolor="#0f172a", border_radius=12, border=ft.Border.all(1, "#334155"),
-            padding=ft.Padding.symmetric(horizontal=14, vertical=10), ink=True,
-            on_click=lambda e: abrir_generos(),
-            content=ft.Row([resumen_generos, flecha_generos], spacing=6)),
-        panel_generos,
-    ])
     nota_generos = ft.Text("", color="#94A3B8", size=12, text_align=ft.TextAlign.CENTER,
                            width=380)
 
-    def abrir_generos():
-        """Abre o cierra la lista. Cerrar sin Aplicar deja todo como estaba."""
-        abierta["v"] = not abierta["v"]
-        borrador.clear()
-        borrador.update(elegidos)
-        pintar_generos()
-        page.update()
-
-    def pintar_generos():
-        def fila(clave, nombre):
-            activo = (clave in borrador) if clave else not borrador
-            n = cuantos.get(clave) if clave else sum(cuantos.values())
-            return ft.Container(
-                padding=ft.Padding.symmetric(horizontal=12, vertical=8), ink=True,
-                bgcolor="#0e7490" if activo else None,
-                on_click=lambda e, k=clave: tocar_genero(k),
-                content=ft.Row(spacing=10, controls=[
-                    ft.Icon(ft.Icons.CHECK_BOX if activo else ft.Icons.CHECK_BOX_OUTLINE_BLANK,
-                            color="#00D4FF" if not activo else "white", size=20),
-                    ft.Text(nombre, color="white", size=14, expand=True,
-                            weight=ft.FontWeight.BOLD if activo else None),
-                    ft.Text(str(n) if n else "", color="#CBD5E1", size=13),
-                ]))
-        opciones_generos.controls = [fila("", "🎵 Todos los géneros")] + [
-            fila(k, nombre) for k, nombre in G.GENEROS
-            if cuantos.get(k) or k in elegidos or k in borrador]
-        panel_generos.visible = abierta["v"]
-        flecha_generos.icon = ft.Icons.ARROW_DROP_UP if abierta["v"] else ft.Icons.ARROW_DROP_DOWN
-        resumen_generos.value = ("🎵 Todos los géneros" if not elegidos else
-                                 ", ".join(G.NOMBRES[k] for k, _ in G.GENEROS if k in elegidos))
-        nota_generos.value = ("Suena de todo cuando nadie pide." if not elegidos else
-                              "Cuando nadie pide solo suena lo marcado. "
-                              "Lo que pidan los clientes suena siempre.")
-
-    def tocar_genero(clave):
-        """Marca/desmarca en el borrador (todavía no se guarda)."""
-        if not clave:
-            borrador.clear()
-        elif clave in borrador:
-            borrador.discard(clave)
-        else:
-            borrador.add(clave)
-        pintar_generos()
-        page.update()
+    def pintar_nota():
+        nota_generos.value = ("Suena de todo cuando nadie pide." if not (elegidos or artistas_elegidos)
+                              else "Cuando nadie pide solo suena lo marcado (géneros y artistas). "
+                                   "Lo que pidan los clientes suena siempre.")
 
     def guardar_generos():
+        pintar_nota()
+        try:
+            nota_generos.update()
+        except Exception:
+            pass
+
         def _guardar():
             try:
                 from services import db as _db
-                _db.poner_generos(codigo, elegidos)
-                aviso.value = "Géneros del relleno guardados ✔ (el reproductor los toma en segundos)"
+                _db.poner_generos(codigo, G.guardar_texto(elegidos, artistas_elegidos))
+                aviso.value = "Relleno guardado ✔ (el reproductor lo toma en segundos)"
             except Exception as ex:
                 print("❌ géneros:", ex)
-                aviso.value = "No se pudieron guardar los géneros"
-            page.update()
+                aviso.value = "No se pudo guardar el relleno"
+            try:
+                aviso.update()
+            except Exception:
+                pass
         threading.Thread(target=_guardar, daemon=True).start()
 
+    # Los géneros salen de una vez (no esperan a contar el historial); los números llegan después.
+    lista_generos, opciones_generos = selector("🎵 Todos los géneros", elegidos, guardar_generos)
+    opciones_generos([(k, nombre, 0) for k, nombre in G.GENEROS])
+    lista_artistas, opciones_artistas = selector(
+        "🎤 Todos los artistas", artistas_elegidos, guardar_generos, buscador=True,
+        vacio_txt="Cargando los artistas que han sonado en el bar…")
+    pintar_nota()
+
     def contar_generos():
-        """Cuántas canciones del historial hay de cada género (se ve en la lista)."""
+        """Cuántas canciones del historial hay de cada género y de cada artista."""
         try:
             from services import db as _db
             from services.playbar_service import inicio_jornada
-            cuantos.clear()
+            cuantos, por_artista, nombre_de = {}, {}, {}
             for f in _db.aleatorio(codigo, inicio_jornada()):
                 g = G.clasificar(f["titulo"], f["canal"])
                 cuantos[g] = cuantos.get(g, 0) + 1
-            pintar_generos()
-            page.update()
+                a = G.artista_de(f["titulo"], f["canal"])
+                if len(a) >= 2:
+                    clave = a.lower()
+                    por_artista[clave] = por_artista.get(clave, 0) + 1
+                    nombre_de.setdefault(clave, a)
+            opciones_generos([(k, nombre, cuantos.get(k, 0)) for k, nombre in G.GENEROS])
+            # un artista ya elegido conserva su nombre guardado (aunque cambien mayúsculas)
+            nombre_de.update({a.lower(): a for a in artistas_elegidos})
+            arts = sorted(por_artista.items(), key=lambda x: (-x[1], x[0]))
+            opciones = [(nombre_de[k], nombre_de[k], n) for k, n in arts]
+            # los ya elegidos siempre aparecen (aunque ya no estén en el historial)
+            opciones += [(a, a, 0) for a in sorted(artistas_elegidos)
+                         if a.lower() not in por_artista]
+            opciones_artistas(opciones)
         except Exception as ex:
             print("⚠️ contar géneros:", ex)
-
-    pintar_generos()
+            opciones_artistas([(a, a, 0) for a in sorted(artistas_elegidos)])
 
     async def salir(e):
         vivo["v"] = False
@@ -464,6 +411,7 @@ def admin_view(page, codigo, nombre, logo):
                 ft.Text("🎚️ MÚSICA DE RELLENO (cuando nadie pide)", color="#94A3B8", size=13,
                         weight=ft.FontWeight.BOLD),
                 lista_generos,
+                lista_artistas,
                 nota_generos,
                 ft.Container(height=10),
                 ft.Container(

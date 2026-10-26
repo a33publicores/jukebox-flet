@@ -652,10 +652,11 @@ def _asegurar_control(codigo):
 
 
 def poner_generos(codigo, claves):
-    """Géneros del relleno del bar (lista de claves; vacía = todos)."""
+    """Relleno del bar: lista de claves de géneros, o el texto ya armado con
+    generos.guardar_texto() (géneros + "artista:<nombre>"). Vacío = todo."""
     _asegurar_control(codigo)
-    ejecutar("UPDATE control SET generos = %s WHERE codigo = %s",
-             (",".join(sorted(set(claves))), str(codigo)))
+    texto = claves if isinstance(claves, str) else ",".join(sorted(set(claves)))
+    ejecutar("UPDATE control SET generos = %s WHERE codigo = %s", (texto, str(codigo)))
 
 
 def enviar_comando(codigo, comando, param=""):
