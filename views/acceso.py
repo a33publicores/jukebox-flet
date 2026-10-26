@@ -60,12 +60,33 @@ def acceso_admin_view(page, codigo_inicial=""):
     clave = campo("Contraseña", password=True, can_reveal_password=True)
     error = ft.Text("", color="#f87171", size=13, width=320, text_align=ft.TextAlign.CENTER)
 
-    def entrar(e=None):
-        cod = (codigo.value or "").strip()
+    ocupado = {"v": False}
+
+    async def entrar(e=None):
+        """Responde de una ("Entrando…") y valida en segundo plano: la contraseña cifrada
+        tarda un momento y antes la pantalla parecía pegada."""
+        if ocupado["v"]:
+            return
         if not (usuario.value or "").strip() or not (clave.value or "").strip():
             error.value = "Escribe tu usuario y tu contraseña."
             page.update()
             return
+        ocupado["v"] = True
+        error.value = ""
+        boton.content.content.value = "Entrando…"
+        page.update()
+        try:
+            await asyncio.to_thread(_entrar)
+        finally:
+            ocupado["v"] = False
+            try:
+                boton.content.content.value = "Entrar al panel"
+                page.update()
+            except Exception:
+                pass  # ya se cambió de pantalla
+
+    def _entrar():
+        cod = (codigo.value or "").strip()
         # Un solo "Iniciar sesión": con las credenciales del super administrador entra
         # a /super (el código del bar no hace falta); con las de un bar, a su panel.
         if es_super(usuario.value, clave.value):
@@ -96,9 +117,17 @@ def acceso_admin_view(page, codigo_inicial=""):
                               "telefono": "ADMIN", "modo": "admin"}, rol="admin")
         admin_view(page, cod, datos["nombre"], datos["logo"])
 
-    codigo.on_submit = lambda e: usuario.focus()
-    usuario.on_submit = lambda e: clave.focus()
+    async def _a_usuario(e):
+        await usuario.focus()
+
+    async def _a_clave(e):
+        await clave.focus()
+
+    codigo.on_submit = _a_usuario
+    usuario.on_submit = _a_clave
     clave.on_submit = entrar
+
+    boton = boton_degradado("Entrar al panel", entrar)
 
     def comprar(e):
         from views.comprar import comprar_view
@@ -114,7 +143,7 @@ def acceso_admin_view(page, codigo_inicial=""):
                     size=14, color="#94A3B8", text_align=ft.TextAlign.CENTER),
             ft.Container(height=4),
             codigo, usuario, clave, error,
-            boton_degradado("Entrar al panel", entrar),
+            boton,
             ft.Container(height=6),
             ft.TextButton("¿Aún no tienes PlayBar GO? Comprar", on_click=comprar,
                           style=ft.ButtonStyle(color=CYAN)),

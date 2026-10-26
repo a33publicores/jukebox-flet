@@ -37,6 +37,9 @@ _HEAD_EXTRA = f"""
   <link rel="apple-touch-icon" href="{FAVICON_192}">
   <meta name="theme-color" content="{BG}">
   <link rel="preload" as="image" href="logo.png">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <style>
     /* oculta el loader original de Flet (flor) por si llegara a existir */
     #loading {{ display: none !important; }}
@@ -87,7 +90,7 @@ _HEAD_EXTRA = f"""
     // Vigilante de la conexión. En el celular, al bloquear la pantalla o cambiar de app,
     // la conexión con el servidor puede quedar "muerta" sin que el navegador se entere:
     // la página se ve normal pero tocar la lupa no hace nada hasta recargar.
-    // Si un toque no recibe NINGUNA respuesta del servidor en 8 s, se cierra esa conexión
+    // Si un toque no recibe NINGUNA respuesta del servidor en 15 s, se cierra esa conexión
     // (Flet se reconecta solo y la sesión del dispositivo se recupera); si aun así no
     // responde, se recarga la página.
     (function () {{
@@ -127,7 +130,7 @@ _HEAD_EXTRA = f"""
           location.reload();
           return;
         }}
-        if (tocado && !cerrado && actual && ahora - tocado > 8000) {{
+        if (tocado && !cerrado && actual && ahora - tocado > 15000) {{
           console.log('PBGO: conexión sin respuesta, se reconecta');
           tocado = 0;
           cerrado = ahora;

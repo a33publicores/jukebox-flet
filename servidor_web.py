@@ -153,9 +153,61 @@ def crear_app(flet_app):
             if ruta == "/inicio" or (ruta == "/" and _es_dominio_portada(scope)):
                 await _enviar_html(send, await run_in_threadpool(html_portada))
                 return
+        if scope["type"] == "http" and scope.get("path") == "/assets/FontManifest.json":
+            await _manifiesto_fuentes(flet_app, scope, receive, send)
+            return
+        if scope["type"] == "http" and (scope.get("path") or "").startswith(CACHE_LARGO):
+            await flet_app(scope, receive, _con_cache(send))
+            return
         await flet_app(scope, receive, send)
 
     return app
+
+
+# Archivos pesados de Flet que solo cambian al cambiar la versión de Flet (fijada en
+# requirements): el navegador los guarda 7 días en vez de volver a preguntar en cada visita.
+CACHE_LARGO = ("/canvaskit/", "/assets/fonts/", "/assets/packages/", "/icons/")
+
+
+async def _manifiesto_fuentes(flet_app, scope, receive, send):
+    """La lista de fuentes de Flet sin las de fórmulas matemáticas (KaTeX): PlayBar no las
+    usa y el navegador bajaba ~20 archivos de más antes de mostrar la app."""
+    import json
+    partes = {"inicio": None, "cuerpo": b""}
+
+    async def guardar(mensaje):
+        if mensaje["type"] == "http.response.start":
+            partes["inicio"] = mensaje
+        elif mensaje["type"] == "http.response.body":
+            partes["cuerpo"] += mensaje.get("body", b"")
+
+    alcance = {**scope, "headers": [(k, v) for k, v in scope.get("headers", [])
+                                    if k.lower() not in (b"accept-encoding", b"if-none-match",
+                                                         b"if-modified-since")]}
+    await flet_app(alcance, receive, guardar)
+    cuerpo = partes["cuerpo"]
+    try:
+        fuentes = [f for f in json.loads(cuerpo) if "KaTeX" not in str(f.get("family", ""))]
+        cuerpo = json.dumps(fuentes).encode()
+    except Exception:
+        pass  # si no se entiende, se manda tal cual
+    estado = (partes["inicio"] or {}).get("status", 200)
+    await send({"type": "http.response.start", "status": estado, "headers": [
+        (b"content-type", b"application/json"),
+        (b"content-length", str(len(cuerpo)).encode()),
+        (b"cache-control", b"public, max-age=3600"),
+    ]})
+    await send({"type": "http.response.body", "body": cuerpo})
+
+
+def _con_cache(send):
+    async def enviar(mensaje):
+        if mensaje.get("type") == "http.response.start" and mensaje.get("status") == 200:
+            cabeceras = [(k, v) for k, v in mensaje.get("headers", []) if k.lower() != b"cache-control"]
+            cabeceras.append((b"cache-control", b"public, max-age=604800"))
+            mensaje = {**mensaje, "headers": cabeceras}
+        await send(mensaje)
+    return enviar
 
 
 def iniciar(main):

@@ -496,8 +496,11 @@ def validar_super(usuario, clave):
     if env_u and env_c and hmac.compare_digest(u.encode(), env_u.encode()) \
             and hmac.compare_digest(c.encode(), env_c.encode()):
         return True
-    for f in consultar("SELECT usuario, clave FROM admins WHERE activo AND rol = 'super'"):
-        if f["usuario"].strip().lower() == u and clave_correcta(c, f["clave"]):
+    if not u:
+        return False
+    for f in consultar("SELECT usuario, clave FROM admins WHERE activo AND rol = 'super' "
+                       "AND LOWER(TRIM(usuario)) = %s", (u,)):
+        if clave_correcta(c, f["clave"]):
             return True
     return False
 

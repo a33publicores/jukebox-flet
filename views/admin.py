@@ -104,7 +104,10 @@ def pedir_pin(page, al_entrar, codigo=None):
             clave.value = ""
             page.update()
 
-    usuario.on_submit = lambda e: clave.focus()
+    async def _a_clave(e):
+        await clave.focus()
+
+    usuario.on_submit = _a_clave
     clave.on_submit = entrar
     dlg = ft.AlertDialog(
         modal=True, bgcolor="#111827",
@@ -199,6 +202,14 @@ def admin_view(page, codigo, nombre, logo):
             page.update()
             return
         ultimo["estado"] = st["estado"]
+        # Si nada cambió desde la última vez, no se reconstruye la lista ni se manda nada al
+        # navegador (antes se rehacía la cola completa cada 6 s: lento en servidor y celular).
+        firma = (st["online"], st["estado"], st["actual"], st["siguiente"],
+                 bool(st["comando_pendiente"]),
+                 tuple((it.fila, it.titulo) for it in st["cola"][:30]))
+        if firma == ultimo.get("firma"):
+            return
+        ultimo["firma"] = firma
         punto.color = "#22c55e" if st["online"] else "#ef4444"
         estado_txt.value = (
             {"reproduciendo": "Reproduciendo", "pausado": "Pausado", "relleno": "Sonando relleno",
@@ -252,7 +263,23 @@ def admin_view(page, codigo, nombre, logo):
         # Sigue actualizando mientras la pestaña esté abierta (antes paraba a las 3 h y el
         # panel se quedaba mostrando una canción vieja). Se detiene al cerrar la pestaña.
         fin = time.time() + MAX_HORAS_PANEL * 3600
+        sin_conexion = None
         while vivo["v"] and time.time() < fin:
+            try:
+                conectada = page.session.connection is not None
+            except RuntimeError:
+                return  # la sesión ya no existe (pestaña cerrada hace rato)
+            if not conectada:
+                # pestaña cerrada o celular bloqueado: no se consulta la base; si vuelve,
+                # sigue; si no vuelve en 20 min, se termina.
+                sin_conexion = sin_conexion or time.time()
+                if time.time() - sin_conexion > 20 * 60:
+                    return
+                time.sleep(2)
+                continue
+            if sin_conexion:
+                sin_conexion = None
+                ultimo.pop("firma", None)  # al volver, se repinta todo
             try:
                 refrescar()
             except Exception as ex:
