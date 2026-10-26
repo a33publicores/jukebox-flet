@@ -147,6 +147,11 @@
   .descarga strong { display: block; font-size: 18px; }
   .descarga .detalle { display: block; margin-top: 4px; color: var(--suave); font-size: 14px; }
   .nota { margin: 16px 0 0; color: var(--tenue); font-size: 14px; line-height: 1.55; }
+  .downloader { margin-top: 18px; background: var(--tarjeta); border: 1.5px solid var(--borde); border-radius: 18px; padding: 18px 22px; }
+  .downloader h3 { margin: 0 0 8px; font-size: 17px; }
+  .downloader ol { margin: 0; padding-left: 20px; color: var(--suave); font-size: 15px; line-height: 1.6; }
+  .downloader li { margin: 4px 0; }
+  .codigo { display: inline-block; font-weight: 800; color: var(--cian); background: rgba(34, 211, 238, .1); border: 1px solid rgba(34, 211, 238, .4); border-radius: 8px; padding: 0 8px; letter-spacing: .5px; }
   .numero { color: var(--texto); font-weight: 700; }
 
   /* Clientes */
@@ -306,7 +311,16 @@
         <span><strong>Televisor Android</strong><span class="detalle">.apk para Android TV, Google TV, Fire TV y TV Box</span></span>
       </a>
     </div>
-    <p class="nota">En el televisor: activa «Fuentes desconocidas» e instala el .apk con una memoria USB o con la app Downloader, usando el enlace de arriba.</p>
+    <div class="downloader">
+      <h3>Instalar en el televisor con Downloader (sin USB)</h3>
+      <ol>
+        <li>En la tienda de apps del televisor (Google Play o Amazon) busca e instala <strong>Downloader</strong> (el ícono naranja de AFTVnews).</li>
+        <li>Abre Downloader y, donde dice «Enter a URL or Search Term», <!--DOWNLOADER-->. Toca <strong>Go</strong>.</li>
+        <li>Si el televisor lo pide, permite a Downloader «instalar apps desconocidas».</li>
+        <li>Toca <strong>Instalar</strong> y luego <strong>Abrir</strong>. Escribe el código de tu bar y tu llave. ¡Listo! Las próximas actualizaciones llegan solas.</li>
+      </ol>
+    </div>
+    <p class="nota">También puedes instalar el .apk con una memoria USB, usando el enlace de arriba.</p>
     <p class="nota"><strong>Requisitos.</strong> Computador: Windows 10 u 11, 4 GB de RAM y 5 GB libres. Televisor: Android TV, Google TV, Fire TV o TV Box con Android 7 o superior, 2 GB de RAM recomendado y 8 GB libres. En equipos con menos de 2 GB de RAM los videos se descargan en 480p para que corran fluidos. ¿Tu TV no es Android (Samsung, LG)? Conéctale un Chromecast con Google TV, un Fire TV Stick o un TV Box.</p>
   </div>
 </section>

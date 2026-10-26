@@ -25,6 +25,12 @@ CARPETA_PORTADA = AQUI / "portada"
 PLANTILLA = CARPETA_PORTADA / "index.html"
 WHATSAPP = "573016130044"
 CACHE_SEG = 60
+# play.alnovix.com/tv (o /apk): dirección corta para bajar el reproductor del TV con la app
+# Downloader. DOWNLOADER_CODIGO (variable de Railway, opcional): el número registrado en
+# Downloader (aftv.news) que apunta a esa dirección; se muestra en la portada.
+APK_TV_URL = os.getenv("TV_APK_URL",
+                       "https://github.com/a33publicores/jukebox-flet/releases/download/tv-apk/PlayBarGO_TV.apk")
+RUTAS_APK = ("/tv", "/apk", "/tv/", "/apk/")
 
 _cache = {"html": None, "hasta": 0.0}
 _lock = threading.Lock()
@@ -79,11 +85,20 @@ def _tarjetas_planes():
     return "\n".join(tarjetas)
 
 
+def _paso_downloader():
+    codigo = html.escape(os.getenv("DOWNLOADER_CODIGO", "").strip())
+    if codigo:
+        return (f'escribe el código <span class="codigo">{codigo}</span> '
+                f'(o la dirección <span class="codigo">play.alnovix.com/tv</span>)')
+    return 'escribe la dirección <span class="codigo">play.alnovix.com/tv</span>'
+
+
 def html_portada():
     with _lock:
         if _cache["html"] and time.time() < _cache["hasta"]:
             return _cache["html"]
     texto = PLANTILLA.read_text("utf-8").replace("<!--PLANES-->", _tarjetas_planes())
+    texto = texto.replace("<!--DOWNLOADER-->", _paso_downloader())
     with _lock:
         _cache.update(html=texto, hasta=time.time() + CACHE_SEG)
     return texto
@@ -114,6 +129,14 @@ def crear_app(flet_app):
             ruta = scope.get("path") or "/"
             if ruta.startswith("/portada/"):
                 await estaticos(scope, receive, send)
+                return
+            if ruta in RUTAS_APK:  # el TV baja el instalador (Downloader o navegador)
+                await send({"type": "http.response.start", "status": 302, "headers": [
+                    (b"location", APK_TV_URL.encode()),
+                    (b"cache-control", b"no-store"),
+                    (b"content-length", b"0"),
+                ]})
+                await send({"type": "http.response.body", "body": b""})
                 return
             if ruta == "/inicio" or (ruta == "/" and _es_dominio_portada(scope)):
                 await _enviar_html(send, await run_in_threadpool(html_portada))
