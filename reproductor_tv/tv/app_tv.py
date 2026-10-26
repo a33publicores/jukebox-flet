@@ -956,6 +956,8 @@ async def _una_sesion(page: ft.Page):
     calidad = descargas_tv.LIVIANA if equipo.es_basico() else 720
     descargas = descargas_tv.Descargador(CFG.CACHE, cookies=str(CFG.CARPETA / "cookies.txt"),
                                          altura_max=calidad)
+    from tv.nube_cliente import Nube
+    descargas.nube = Nube(api.nube)  # canciones en la nube (si la API la tiene activa)
     motor = Motor(BackendApi(api, cfg["cliente"]), descargas, pantalla)
     motor.info = equipo.info(page, calidad)
     print(f"📺 Equipo: {motor.info}")

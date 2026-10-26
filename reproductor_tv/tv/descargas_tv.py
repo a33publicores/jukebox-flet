@@ -84,6 +84,8 @@ class Descargador:
         self.cookies = cookies if cookies and os.path.exists(cookies) else None
         self.altura = altura_max
         self.livianos = set()  # videos que el TV no pudo reproducir: se vuelven a bajar en 480p
+        self.nube = None       # nube_cliente.Nube (la pone la app si hay llave); None = sin nube
+        self.max_nube_bytes = 3 * 1024 ** 3  # con nube: el TV guarda solo ~3 GB de canciones
         self._archivo_alt = self.carpeta / "alternativas.json"
         try:
             self._alt = json.loads(self._archivo_alt.read_text("utf-8"))
@@ -164,12 +166,34 @@ class Descargador:
         except Exception:
             return 10 ** 12
 
+    # -- nube (Cloudflare R2) -------------------------------------------
+    def _archivo_nube(self, video_id):
+        return f"{video_id}_{self.altura}.mp4"
+
+    def _de_nube(self, video_id):
+        """Si otro bar ya subió la canción (en esta calidad), se baja de la nube."""
+        if self.nube is None or video_id in self.livianos:
+            return None
+        destino = self.carpeta / f"{video_id}.mp4"
+        if self.nube.bajar(self._archivo_nube(video_id), destino):
+            return str(destino)
+        return None
+
+    def _a_nube(self, video_id, ruta):
+        """Recién bajada de YouTube: se sube a la nube para los demás (en segundo plano)."""
+        if self.nube is not None and ruta and video_id not in self.livianos:
+            self.nube.subir_luego(self._archivo_nube(video_id), ruta)
+        return ruta
+
     def liberar_espacio(self):
         """Si queda menos de 1,5 GB (antes de que salga el aviso de 1 GB): borra la MITAD de las canciones guardadas, las que hace
         más tiempo no suenan (cada vez que una suena se le actualiza la fecha). Nunca toca lo
         que sonó o se bajó en los últimos 30 minutos (la que suena y las que están listas).
         Si aun así falta espacio (otras apps llenan el TV), no vuelve a borrar hasta dentro
         de 6 horas, salvo que la memoria esté del todo llena."""
+        if self.nube is not None and not getattr(self.nube, "_apagada_hasta", 0) > time.time():
+            from tv.nube_cliente import limpiar_por_tamano
+            limpiar_por_tamano(self.carpeta, self.max_nube_bytes)
         libre = self.espacio_libre()
         if libre >= LIMPIAR_DEBAJO:
             return 0
@@ -227,10 +251,13 @@ class Descargador:
                 pass
             return ya
         self.asegurar_espacio()
+        de_nube = self._de_nube(video_id)
+        if de_nube:
+            return de_nube
         try:
             if self._partes(video_id):  # quedaron video y audio de antes: solo se unen
-                return self._unir(video_id, *self._partes(video_id))
-            return self._bajar(video_id)
+                return self._a_nube(video_id, self._unir(video_id, *self._partes(video_id)))
+            return self._a_nube(video_id, self._bajar(video_id))
         except Exception as ex:
             if es_disco_lleno(ex):
                 raise DiscoLleno(str(ex)) from ex
@@ -243,7 +270,7 @@ class Descargador:
             c for c in self.alternativas(titulo, canal, excluir={video_id}) if c != previo]
         for alt in candidatos[:4]:
             try:
-                ruta = self._ruta_directa(alt) or self._bajar(alt)
+                ruta = self._ruta_directa(alt) or self._de_nube(alt) or self._a_nube(alt, self._bajar(alt))
             except Exception as ex:
                 if es_disco_lleno(ex):
                     raise DiscoLleno(str(ex)) from ex

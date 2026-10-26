@@ -145,6 +145,14 @@ def reclamar(request, cli, cuerpo):
 
 
 @_protegido
+def nube(request, cli, cuerpo):
+    """Direcciones firmadas para bajar/subir una canción de la nube (R2).
+    {"archivo": "<video_id>_<altura>.mp4"} -> {"activo", "get", "put"}."""
+    from services import nube as N
+    return JSONResponse({"ok": True, **N.direcciones(str((cuerpo or {}).get("archivo") or ""))})
+
+
+@_protegido
 def reordenar(request, cli, cuerpo):
     d = cuerpo
     cola.reordenar(cli["codigo"], [int(x) for x in d.get("filas", [])])
@@ -245,6 +253,7 @@ app = Starlette(routes=[
     Route("/api/v1/estado", estado, methods=["POST"]),
     Route("/api/v1/reclamar", reclamar, methods=["POST"]),
     Route("/api/v1/reordenar", reordenar, methods=["POST"]),
+    Route("/api/v1/nube", nube, methods=["POST"]),
     Route("/api/v1/tabla", tabla),
     Route("/api/v1/excel", descargar_excel),
     Route("/api/v1/suscripcion", suscripcion),

@@ -79,6 +79,8 @@ class Descargador:
         self.cookies = cookies if cookies and os.path.exists(cookies) else None
         self.max_bytes = int(max_gb * 1024 ** 3)
         self.altura = altura_max
+        self.nube = None  # nube_cliente.Nube (la pone la app); None = sin nube
+        self.max_nube_bytes = 8 * 1024 ** 3  # con nube: el PC guarda solo ~8 GB de canciones
         self._archivo_revisadas = self.carpeta / "revisadas.json"
         self._lock_rev = threading.Lock()
         self._revisados = self._leer_revisadas()  # nombre -> tamaño de canciones comprobadas
@@ -213,6 +215,10 @@ class Descargador:
         """Antes de descargar. Las canciones guardadas NUNCA se borran (la biblioteca del bar
         solo crece). Solo se borran pedazos de descargas que quedaron a medias. Si el disco
         está casi lleno se avisa (DiscoLleno) para que alguien libere espacio."""
+        try:
+            self.limpiar(conservar)  # con la nube activa: tope de espacio en el PC
+        except Exception as ex:
+            print("ℹ️ limpiar:", ex)
         if self.espacio_libre() >= LIBRE_CRITICO:
             return
         for p in list(self.carpeta.iterdir()):  # pedazos (ID.f136.mp4.part…), no canciones
@@ -227,8 +233,11 @@ class Descargador:
                              "Libera espacio en el disco C: para que las canciones puedan descargarse.")
 
     def limpiar(self, conservar=()):
-        """Ya no borra canciones: la biblioteca del bar se conserva completa."""
-        return
+        """Sin nube no borra canciones (la biblioteca del bar se conserva completa). Con la
+        nube activa el PC guarda solo las recientes: lo demás se baja de la nube."""
+        if self.nube is not None and not getattr(self.nube, "_apagada_hasta", 0) > time.time():
+            from reproductor.nube_cliente import limpiar_por_tamano
+            limpiar_por_tamano(self.carpeta, self.max_nube_bytes)
 
     # -- descarga ------------------------------------------------------
     def _ffmpeg(self):
@@ -329,6 +338,24 @@ class Descargador:
                 return ya
             print(f"🔁 {video_id} estaba dañada: se vuelve a descargar")
             self._borrar(video_id)
+        if self.nube is not None:  # ¿otro bar ya la subió a la nube?
+            destino = self.carpeta / f"{video_id}.mp4"
+            if self.nube.bajar(self._archivo_nube(video_id), destino):
+                if self.tiene_audio(str(destino)):
+                    return str(destino)
+                self._borrar(video_id)
+        ruta = self._a_nube(video_id, self._bajar_sano(video_id))
+        return ruta
+
+    def _archivo_nube(self, video_id):
+        return f"{video_id}_{self.altura}.mp4"
+
+    def _a_nube(self, video_id, ruta):
+        if self.nube is not None and ruta:
+            self.nube.subir_luego(self._archivo_nube(video_id), ruta)
+        return ruta
+
+    def _bajar_sano(self, video_id):
         ruta = self._bajar(video_id, combinado=False)
         if not self.tiene_audio(ruta):
             print(f"🔁 {video_id} bajó dañada: pruebo con el formato ya combinado")

@@ -1007,6 +1007,8 @@ async def main(page: ft.Page):
         cookies=os.environ.get("YTDLP_COOKIES", str(CARPETA / "cookies.txt")),
         max_gb=float(cfg.get("cache_gb", 5)),
     )
+    from reproductor.nube_cliente import Nube
+    descargas.nube = Nube(api.nube)  # canciones en la nube (si la API la tiene activa)
     motor = Motor(BackendApi(api, cfg["cliente"]), descargas, pantalla)
     motor.info = _info_equipo(descargas)
     pantalla.motor = motor

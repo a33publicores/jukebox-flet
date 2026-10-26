@@ -105,5 +105,10 @@ class ApiCliente:
                                                "forzar": bool(forzar), "info": info or {},
                                                "espejo": True})
 
+    def nube(self, archivo):
+        """Direcciones firmadas para bajar/subir una canción de la nube ({"activo": False}
+        si la nube no está configurada)."""
+        return self._post("/api/v1/nube", {"archivo": archivo})
+
     def reordenar(self, filas):
         self._post("/api/v1/reordenar", {"filas": list(filas)})

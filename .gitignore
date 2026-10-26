@@ -24,3 +24,8 @@ instalador/Output/
 
 # llaves de los reproductores (secretas)
 llaves_bares.txt
+
+# Worker de la nube (secretos locales y caché de wrangler)
+nube_cloudflare/.dev.vars
+nube_cloudflare/.wrangler/
+nube_cloudflare/node_modules/

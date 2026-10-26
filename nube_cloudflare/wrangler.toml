@@ -1,0 +1,13 @@
+# Worker de Cloudflare: canciones de PlayBar GO en R2 (ver worker.js).
+#   npx wrangler r2 bucket create playbar-canciones      (una vez)
+#   npx wrangler secret put FIRMA                         (el mismo valor que NUBE_FIRMA en la API)
+#   npx wrangler deploy
+name = "playbar-canciones"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+keep_vars = true
+
+[[r2_buckets]]
+binding = "CANCIONES"
+bucket_name = "playbar-canciones"
