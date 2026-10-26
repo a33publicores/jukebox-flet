@@ -152,18 +152,67 @@ def plan(id_plan):
     return db.uno("SELECT * FROM planes WHERE id = %s", (int(id_plan),))
 
 
-def guardar_plan(id_plan, nombre, precio, dias, activo=True, solo_para="", orden=0):
+def guardar_plan(id_plan, nombre, precio, dias, activo=True, solo_para="", orden=0,
+                 promo_precio=0, promo_pagos=0):
+    promo_precio, promo_pagos = max(0, int(promo_precio or 0)), max(0, int(promo_pagos or 0))
+    if not (promo_precio and promo_pagos):
+        promo_precio = promo_pagos = 0
     if id_plan:
         return db.uno(
             """UPDATE planes SET nombre = %s, precio = %s, dias = %s, activo = %s,
-               solo_para = %s, orden = %s WHERE id = %s RETURNING *""",
+               solo_para = %s, orden = %s, promo_precio = %s, promo_pagos = %s
+               WHERE id = %s RETURNING *""",
             (str(nombre).strip(), int(precio), int(dias), bool(activo),
-             str(solo_para or "").replace(" ", ""), int(orden), int(id_plan)))
+             str(solo_para or "").replace(" ", ""), int(orden), promo_precio, promo_pagos,
+             int(id_plan)))
     return db.uno(
-        """INSERT INTO planes (nombre, precio, dias, activo, solo_para, orden)
-           VALUES (%s, %s, %s, %s, %s, %s) RETURNING *""",
+        """INSERT INTO planes (nombre, precio, dias, activo, solo_para, orden, promo_precio,
+                              promo_pagos)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *""",
         (str(nombre).strip(), int(precio), int(dias), bool(activo),
-         str(solo_para or "").replace(" ", ""), int(orden)))
+         str(solo_para or "").replace(" ", ""), int(orden), promo_precio, promo_pagos))
+
+
+# ---------------------------------------------------------------------------
+# Promoción: los primeros N pagos de cada bar a precio especial
+# ---------------------------------------------------------------------------
+def pagos_hechos(codigo, id_plan):
+    """Cuántos pagos aprobados de ese plan tiene el bar (para saber si sigue en promoción)."""
+    if not codigo:
+        return 0
+    f = db.uno("SELECT COUNT(*) AS n FROM pagos WHERE codigo = %s AND plan_id = %s "
+               "AND estado = 'APROBADO'", (str(codigo), int(id_plan)))
+    return int((f or {}).get("n") or 0)
+
+
+def precio_de(p, codigo=None):
+    """Precio que paga ESTE bar por el plan `p`. Devuelve una copia de `p` con:
+    precio (el que se cobra), precio_normal, en_promo, promo_quedan (pagos que le quedan a
+    precio de promoción, contando este) y promo_txt (para mostrar)."""
+    q = dict(p)
+    normal = int(p["precio"])
+    promo, n_promo = int(p.get("promo_precio") or 0), int(p.get("promo_pagos") or 0)
+    q.update(precio_normal=normal, en_promo=False, promo_quedan=0, promo_txt="")
+    if promo and n_promo and promo < normal:
+        hechos = pagos_hechos(codigo, p["id"])
+        if hechos < n_promo:
+            quedan = n_promo - hechos
+            q.update(precio=promo, en_promo=True, promo_quedan=quedan)
+            meses = "mes" if n_promo == 1 else f"{n_promo} meses"
+            q["promo_txt"] = (f"Promoción: los primeros {meses} a {_pesos_txt(promo)}, "
+                              f"luego {_pesos_txt(normal)}")
+            if hechos:
+                q["promo_txt"] += f" (te queda{'n' if quedan > 1 else ''} {quedan} a precio de promoción)"
+    return q
+
+
+def _pesos_txt(n):
+    return "$" + f"{int(n):,}".replace(",", ".")
+
+
+def planes_con_precio(codigo, lista=None):
+    """Los planes que puede comprar el bar, con el precio que le toca (promoción incluida)."""
+    return [precio_de(p, codigo) for p in (lista if lista is not None else planes_para(codigo))]
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +271,7 @@ def crear_orden(codigo, id_plan, bono=""):
         b = None if msg else bonos.reservar(bono, ref, codigo)
         if not b:
             raise ValueError(msg or "Ese código de bono ya no está disponible.")
-    monto, descuento = bonos.precio_con_bono(p["precio"], b)
+    monto, descuento = bonos.precio_con_bono(precio_de(p, codigo)["precio"], b)
     try:
         return db.uno(
             """INSERT INTO pagos (referencia, codigo, plan_id, plan_nombre, monto, dias, creado,

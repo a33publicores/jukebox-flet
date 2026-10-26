@@ -157,6 +157,10 @@ ESQUEMA = [
     # Cuántos televisores/equipos pueden tener abierto el reproductor del bar al mismo tiempo
     # (lo pone el super administrador). Con más, al siguiente le sale "Usar aquí".
     "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS televisores INTEGER NOT NULL DEFAULT 1",
+    # Promoción de un plan: los primeros `promo_pagos` pagos de cada bar cuestan `promo_precio`
+    # (0 = sin promoción). Ej.: 2 meses a $19.900 y luego el precio normal.
+    "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_precio INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_pagos INTEGER NOT NULL DEFAULT 0",
     # Los demás televisores del bar ("espejos"): siguen la canción del principal.
     """CREATE TABLE IF NOT EXISTS reproductores (
         codigo    TEXT NOT NULL,

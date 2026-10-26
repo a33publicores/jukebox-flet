@@ -724,6 +724,10 @@ def planes_view(page):
         dias_ = _campo("Días que dura", p["dias"] if p else 30, numeros=True)
         solo = _campo("Solo para estos códigos (vacío = todos)", p["solo_para"] if p else "")
         orden = _campo("Orden en la lista", p["orden"] if p else 1, numeros=True)
+        promo_precio = _campo("Promoción: precio especial (0 = sin promoción)",
+                              (p.get("promo_precio") or 0) if p else 0, numeros=True)
+        promo_pagos = _campo("Promoción: cuántos pagos a ese precio (ej. 2)",
+                             (p.get("promo_pagos") or 0) if p else 0, numeros=True)
         activo = ft.Switch(label="Activo (se puede comprar)", value=bool(p["activo"]) if p else True,
                            active_color=CYAN)
         error = ft.Text("", color="#f87171")
@@ -732,9 +736,16 @@ def planes_view(page):
             try:
                 if int(precio.value or 0) < 1500:
                     raise ValueError("Wompi no acepta pagos menores a $1.500")
+                pp, pn = int(promo_precio.value or 0), int(promo_pagos.value or 0)
+                if pp and pp < 1500:
+                    raise ValueError("Promoción: Wompi no acepta pagos menores a $1.500")
+                if pp and pp >= int(precio.value):
+                    raise ValueError("La promoción debe ser más barata que el precio normal")
+                if bool(pp) != bool(pn):
+                    raise ValueError("Promoción: pon el precio especial Y cuántos pagos (o 0 en los dos)")
                 sus.guardar_plan(p["id"] if p else None, nombre.value, int(precio.value),
                                  int(dias_.value or 30), activo.value, solo.value,
-                                 int(orden.value or 0))
+                                 int(orden.value or 0), pp, pn)
             except Exception as ex:
                 error.value = str(ex)
                 page.update()
@@ -743,7 +754,11 @@ def planes_view(page):
             planes_view(page)
 
         _dialogo(page, "Editar plan" if p else "Nuevo plan",
-                 [nombre, precio, dias_, solo, orden, activo, error],
+                 [nombre, precio, dias_, solo, orden, promo_precio, promo_pagos,
+                  ft.Text("Ej.: precio 49900, promoción 19900 por 2 pagos → cada bar paga "
+                          "$19.900 sus 2 primeros meses y después $49.900.",
+                          color="#64748b", size=12),
+                  activo, error],
                  [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
                   ft.FilledButton("Guardar", on_click=guardar)])
 
@@ -756,6 +771,8 @@ def planes_view(page):
                 ft.Text(("Activo" if p["activo"] else "Inactivo") + " · " +
                         (f"solo para {p['solo_para']}" if p["solo_para"] else "para todos"),
                         color="#94A3B8", size=13),
+                *([ft.Text(f"🔥 Promoción: {p['promo_pagos']} pago(s) a {_pesos(p['promo_precio'])}",
+                           color="#facc15", size=13)] if p.get("promo_precio") else []),
             ], expand=True, spacing=2),
             ft.OutlinedButton("Editar", icon=ft.Icons.EDIT, on_click=lambda ev, p=p: editar(p)),
         ]),

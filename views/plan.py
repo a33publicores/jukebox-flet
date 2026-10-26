@@ -44,7 +44,7 @@ def plan_view(page, codigo, nombre, logo, bono_txt=""):
 
     try:
         e = sus.estado(codigo)
-        planes = sus.planes_para(codigo)
+        planes = sus.planes_con_precio(codigo)
         historial = sus.pagos(codigo, 10)
     except Exception as ex:
         page.add(ft.Text(f"No se pudo leer el plan: {ex}", color="#f87171"))
@@ -105,6 +105,8 @@ def plan_view(page, codigo, nombre, logo, bono_txt=""):
             *([ft.Text(f"Antes {_pesos(p['precio'])} · con bono {b['codigo']}",
                        color="#4ade80", size=13)]
               if b and bonos.precio_con_bono(p["precio"], b)[1] else []),
+            *([ft.Text(f"🔥 {p['promo_txt']}", color="#facc15", size=13)]
+              if p.get("promo_txt") else []),
             ft.Text(f"{p['dias']} días de música sin límite", color="#94A3B8", size=13),
             _boton("💳 Pagar con Wompi", pagar(p), ancho=348),
         ], spacing=6),

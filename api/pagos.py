@@ -82,9 +82,10 @@ def _elegir(request):
     e = sus.estado(c["codigo"], c)
     tarjetas = "".join(f"""<div class="tarjeta"><div><b>{html.escape(p['nombre'])}</b></div>
 <div class="precio">{_pesos(p['precio'])}</div><div class="gris">{p['dias']} días de música sin límite</div>
+{f'<div class="gris">🔥 {html.escape(p["promo_txt"])}</div>' if p.get("promo_txt") else ''}
 <form method="post" action="/pago/crear"><input type="hidden" name="t" value="{html.escape(t)}">
 <input type="hidden" name="plan" value="{p['id']}"><button>Pagar con Wompi</button></form></div>"""
-                       for p in sus.planes_para(c["codigo"]))
+                       for p in sus.planes_con_precio(c["codigo"]))
     return _pagina(f"Plan de {c['nombre']}", f"""<div class="tarjeta"><b>{html.escape(e['titulo'])}</b>
 <div class="gris">{html.escape(e['mensaje'])}</div></div>{tarjetas or '<p>No hay planes disponibles.</p>'}
 <p class="gris">Pagas con tarjeta, PSE, Nequi o Bancolombia en la página segura de Wompi.

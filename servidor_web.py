@@ -61,6 +61,16 @@ def _pesos(n):
     return "$" + f"{int(n):,}".replace(",", ".")
 
 
+def _promo(p):
+    return bool(int(p.get("promo_precio") or 0) and int(p.get("promo_pagos") or 0)
+                and int(p["promo_precio"]) < int(p["precio"]))
+
+
+def _meses(p):
+    n = int(p.get("promo_pagos") or 0)
+    return "el primer mes" if n == 1 else f"los primeros {n} meses"
+
+
 def _tarjetas_planes():
     """Los planes reales de la base (los mismos de "Mi plan"). Sin base: aviso por WhatsApp."""
     try:
@@ -79,9 +89,11 @@ def _tarjetas_planes():
         clase = "plan destacado" if i == len(planes) - 1 and len(planes) > 1 else "plan"
         tarjetas.append(
             f'<div class="{clase}"><p class="plan-nombre">{html.escape(p["nombre"])}</p>'
-            f'<p class="plan-precio">{_pesos(p["precio"])}</p>'
+            f'<p class="plan-precio">{_pesos(p["promo_precio"] if _promo(p) else p["precio"])}</p>'
             f'<p class="plan-dias">{periodo}, por bar · música sin límite</p>'
-            f'<a class="boton boton-cian" href="/comprar?plan={int(p["id"])}">Comprar</a></div>')
+            + (f'<p class="plan-promo">🔥 Promoción: {_meses(p)} a {_pesos(p["promo_precio"])}, '
+               f'luego {_pesos(p["precio"])} {periodo}</p>' if _promo(p) else "")
+            + f'<a class="boton boton-cian" href="/comprar?plan={int(p["id"])}">Comprar</a></div>')
     return "\n".join(tarjetas)
 
 

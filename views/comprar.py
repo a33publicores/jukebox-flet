@@ -74,7 +74,8 @@ def _pasos(actual):
 # ---------------------------------------------------------------------------
 def comprar_view(page, plan_id=None):
     try:
-        planes = [p for p in sus.planes() if not (p.get("solo_para") or "").strip()]
+        planes = sus.planes_con_precio(None, [p for p in sus.planes()
+                                              if not (p.get("solo_para") or "").strip()])
     except Exception as ex:
         print("⚠️ comprar: planes:", ex)
         planes = []
@@ -98,9 +99,14 @@ def comprar_view(page, plan_id=None):
         ft.Container(
             width=320, padding=12, border_radius=14, bgcolor="#0b1220",
             border=ft.Border.all(1, "#334155"),
-            content=ft.Radio(value=str(p["id"]), fill_color=CYAN,
-                             label=f"{p['nombre']} · {_pesos(p['precio'])} · {p['dias']} días",
-                             label_style=ft.TextStyle(color="white", size=15)))
+            content=ft.Column(spacing=2, tight=True, controls=[
+                ft.Radio(value=str(p["id"]), fill_color=CYAN,
+                         label=f"{p['nombre']} · {_pesos(p['precio'])} · {p['dias']} días",
+                         label_style=ft.TextStyle(color="white", size=15)),
+                *([ft.Container(padding=ft.Padding.only(left=12), content=ft.Text(
+                    f"🔥 {p['promo_txt']}", color="#facc15", size=13))]
+                  if p.get("promo_txt") else []),
+            ]))
         for p in planes], spacing=8))
 
     def continuar(e=None):
@@ -166,6 +172,7 @@ def comprar_view(page, plan_id=None):
 def pago_view(page, bar, usuario, plan_id, bono_txt=""):
     codigo = bar["codigo"]
     p = sus.plan(plan_id)
+    p = sus.precio_de(p, codigo) if p else None  # con la promoción si le toca
     aviso = ft.Text("", color="#facc15", size=13, width=340, text_align=ft.TextAlign.CENTER)
     estado = {"ref": None, "vivo": True, "desde": time.time(), "bono": ""}
     linea_bono = ft.Row([], visible=False)
