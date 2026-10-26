@@ -86,7 +86,7 @@ def _tarjetas_planes():
 
 
 def _paso_downloader():
-    codigo = html.escape(os.getenv("DOWNLOADER_CODIGO", "").strip())
+    codigo = html.escape(os.getenv("DOWNLOADER_CODIGO", "1878480").strip())  # aftv.news/1878480
     if codigo:
         return (f'escribe el código <span class="codigo">{codigo}</span> '
                 f'(o la dirección <span class="codigo">play.alnovix.com/tv</span>)')
