@@ -156,6 +156,7 @@
   var COMANDO_MAX_EDAD = 120;    // comandos del admin más viejos se ignoran
   var AVISAR_SIN_RED = 45000;    // un corte corto no se muestra
   var ESPEJO_DESFASE = 3;        // televisor espejo: si va más de 3 s corrido, se empareja
+  var MEZCLA_SEG = 6;            // mezcla: la siguiente entra 6 s antes de que termine la que suena
   var ESPERA_MAX = 15 * 60000;   // una canción pedida que no llega a la nube en 15 min se descarta
   var E_COLA = "En cola", E_PLAY = "En reproduccion", E_SIGUE = "Siguiente", E_HECHO = "Reproducido",
       E_ELIM = "Eliminado", E_ERROR = "Error";
@@ -371,8 +372,14 @@
 
   var medios = {
     modo: null,
+    mezclar: false,    // la canción terminó por la mezcla: la que sale baja suave mientras entra la otra
+    saliente: null,    // reproductor que se está apagando (mezcla en curso)
+    tMezcla: null,
     detener: function () {
-      try { video.pause(); } catch (e) {}
+      if (!medios.mezclar) {
+        try { video.pause(); } catch (e) {}
+        medios.cortarMezcla();
+      }
       if (yt && yt.stopVideo) { try { yt.stopVideo(); } catch (e) {} }
       if (ytEspera) { ytEspera(false); ytEspera = null; }
       medios.modo = null;
@@ -391,7 +398,10 @@
           var viejo = video;
           video = pre.el;
           pre = { id: null, el: null };
-          soltar(viejo);
+          var mezcla = medios.mezclar && !viejo.paused;
+          medios.mezclar = false;
+          if (mezcla) medios.fundir(viejo, video);
+          else { soltar(viejo); video.volume = 1; }
           medios.modo = "video";
           video.muted = false;
           try { if (video.currentTime > 0.5) video.currentTime = 0; } catch (e) {}
@@ -400,7 +410,9 @@
           return true;
         }
         if (pre.el === otroVideo() && pre.id) { soltar(pre.el); pre = { id: null, el: null }; }
+        if (medios.mezclar) { medios.mezclar = false; medios.cortarMezcla(); }  // no estaba lista: sin mezcla
         video.muted = false;
+        video.volume = 1;
         if (await cargarVideo(d.get, video)) {
           if (token !== M.token) return false;
           medios.modo = "video";
@@ -412,6 +424,7 @@
         api.reporte("no abrió desde la nube " + id);
       }
       if (token !== M.token) return false;
+      if (medios.mezclar) { medios.mezclar = false; try { video.pause(); } catch (e) {} }  // sin mezcla con YouTube
       video.removeAttribute("src");
       // 2) el reproductor de YouTube (si en este TV funciona)
       var r = ahora() < ytRotoHasta ? false : await medios.youtube(id, token);
@@ -453,6 +466,7 @@
       return true;
     },
     pausar: function () {
+      if (medios.saliente) medios.cortarMezcla();
       if (medios.modo === "video") video.pause();
       else if (medios.modo === "yt" && yt) yt.pauseVideo();
     },
@@ -470,11 +484,33 @@
       if (medios.modo === "yt" && yt && yt.getDuration) return yt.getDuration() || 0;
       return 0;
     },
+    cortarMezcla: function () {
+      if (medios.tMezcla) { clearInterval(medios.tMezcla); medios.tMezcla = null; }
+      if (medios.saliente) { soltar(medios.saliente); medios.saliente = null; }
+      video.volume = 1;
+    },
+    // La que sale baja de volumen mientras la que entra sube (MEZCLA_SEG segundos).
+    fundir: function (sale, entra) {
+      medios.cortarMezcla();
+      medios.saliente = sale;
+      entra.volume = 0;
+      var t0 = ahora(), largo = MEZCLA_SEG * 1000;
+      medios.tMezcla = setInterval(function () {
+        var x = Math.min(1, (ahora() - t0) / largo);
+        try { sale.volume = Math.max(0, 1 - x); entra.volume = x; } catch (e) {}
+        if (x >= 1) {
+          clearInterval(medios.tMezcla); medios.tMezcla = null;
+          soltar(sale);
+          if (medios.saliente === sale) medios.saliente = null;
+        }
+      }, 100);
+    },
     // Deja cargada (callada) la próxima canción en el otro reproductor, si está en la nube.
     precargar: function (id) {
       var l = listos[id];
       if (!l || pre.id === id || (video.getAttribute("src") && medios.modo === "video" && M.actual && M.actual.video_id === id)) return;
       var el = otroVideo();
+      if (el === medios.saliente) return;  // todavía se está apagando la anterior
       soltar(el);
       el.muted = true;
       el.preload = "auto";
@@ -1015,6 +1051,18 @@
 
   function dosDigitos(n) { return (n < 10 ? "0" : "") + n; }
   function reloj(s) { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + dosDigitos(s % 60); }
+
+  // Mezcla: faltando MEZCLA_SEG segundos, si la siguiente ya está cargada, se pasa a ella
+  // (la que termina sigue sonando y baja de volumen mientras la nueva sube).
+  setInterval(function () {
+    if (!M.actual || M.pausado || M.ocupado || M.espejo || M.inactivo || M.bloqueado) return;
+    if (medios.modo !== "video" || medios.mezclar || medios.saliente) return;
+    var d = medios.dur(), p = medios.pos();
+    if (d < 40 || d - p > MEZCLA_SEG || p < 10) return;
+    if (!pre.id || !pre.el || pre.el.readyState < 3) return;
+    medios.mezclar = true;
+    motor.alTerminar(M.token);
+  }, 250);
 
   var vigilancia = { pos: -1, desde: 0 };
   setInterval(function () {

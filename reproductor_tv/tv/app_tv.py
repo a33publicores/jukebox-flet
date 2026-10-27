@@ -23,6 +23,7 @@ import flet_video as ftv
 from tv import config as CFG
 from tv import actualizador_tv, descargas_tv, dns_respaldo
 from tv.api_cliente import ApiCliente, LlaveInvalida
+from tv.fundido import Fundido
 from tv.motor import BackendApi, Motor
 from tv.version import API_POR_DEFECTO, VERSION
 
@@ -114,6 +115,7 @@ class Pantalla:
         self._salto = None
         self._entro_sola = None
         self._lock_puestos = asyncio.Lock()
+        self.fundido = Fundido(self.video)  # mezcla suave entre canciones
         self.dur = 0.0
         self.pos = 0.0
         self._ult_seg = -1
@@ -270,6 +272,7 @@ class Pantalla:
         if int(pos) == self._ult_seg:
             return
         self._ult_seg = int(pos)
+        self.fundido.posicion(pos, self.dur, bool(self.motor and self.motor.pausado))
         if self.dur <= 0:
             try:
                 self.dur = _segundos(await self.video.get_duration())
@@ -286,6 +289,7 @@ class Pantalla:
             pass
 
     def _reiniciar_tiempo(self):
+        self.fundido.nueva()  # la canción nueva entra suave
         self.dur, self.pos, self._ult_seg = 0.0, 0.0, -1
         self._t_inicio = self._t_real = time.time()
         self.t_pos.value, self.t_dur.value, self.barra.value = "0:00", "0:00", 0
@@ -448,6 +452,7 @@ class Pantalla:
         self.page.update()
 
     async def reanudar(self):
+        self.fundido.normal()
         await self.video.play()
         self.t_pausa.visible = False
         self.page.update()

@@ -21,6 +21,7 @@ import flet_video as ftv
 from reproductor import actualizador, diagnostico
 from reproductor.version import REVISAR_CADA_HORAS, VERSION
 from reproductor.descargas import Descargador
+from reproductor.fundido import Fundido
 from reproductor.motor import BackendApi, Motor
 from reproductor.version import API_POR_DEFECTO, APIS_VIEJAS
 from services.api_cliente import ApiCliente
@@ -149,6 +150,7 @@ class Pantalla:
         self._salto = None                  # puesto al que saltamos nosotros
         self._entro_sola = None             # (puesto, ruta) si la siguiente entró sola
         self._lock_puestos = asyncio.Lock()
+        self.fundido = Fundido(self.video)  # mezcla suave entre canciones
         self.dur = 0.0
         self.pos = 0.0
         self._ult_seg = -1
@@ -274,6 +276,7 @@ class Pantalla:
         if int(pos) == self._ult_seg:  # actualiza la pantalla 1 vez por segundo
             return
         self._ult_seg = int(pos)
+        self.fundido.posicion(pos, self.dur, bool(self.motor and self.motor.pausado))
         if self.dur <= 0:
             try:
                 self.dur = _segundos(await self.video.get_duration())
@@ -419,6 +422,7 @@ class Pantalla:
             await self.motor.reordenar([i.fila for i in self._cola_vista])
 
     def _reiniciar_tiempo(self):
+        self.fundido.nueva()  # la canción nueva entra suave
         self.dur, self.pos, self._ult_seg = 0.0, 0.0, -1
         self._t_inicio = self._t_real = time.time()  # "inicio" se corre al adelantar
         self.t_pos.value, self.t_dur.value, self.barra.value = "0:00", "0:00", 0
@@ -540,6 +544,7 @@ class Pantalla:
         await self.video.pause()
 
     async def reanudar(self):
+        self.fundido.normal()
         await self.video.play()
 
     async def ir_a(self, segundos):
