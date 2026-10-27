@@ -110,6 +110,12 @@ class ApiCliente:
         si la nube no está configurada)."""
         return self._post("/api/v1/nube", {"archivo": archivo})
 
+    def preparar(self, video_id, titulo="", canal=""):
+        """¿La canción está en la nube? Si no, la encarga a otro equipo.
+        {"activo", "listo", "archivo"} o {"activo", "listo": False, "estado"}"""
+        return self._post("/api/v1/preparar", {"video_id": video_id, "titulo": titulo,
+                                               "canal": canal, "pedido": True})
+
     def encargo(self, equipo=""):
         """Una canción que el reproductor del navegador necesita en la nube ({} si no hay)."""
         return self._get("/api/v1/encargo", equipo=equipo)

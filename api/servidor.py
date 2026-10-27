@@ -177,7 +177,7 @@ def preparar(request, cli, cuerpo):
         return JSONResponse({"ok": True, "activo": True, "listo": False, "estado": "fallo"})
     archivo = N.buscar(vid)
     if archivo:
-        return JSONResponse({"ok": True, "activo": True, "listo": True,
+        return JSONResponse({"ok": True, "activo": True, "listo": True, "archivo": archivo,
                              "get": N.direccion("GET", archivo)})
     estado = db.encargar(vid, d.get("titulo") or "", d.get("canal") or "", cli["codigo"],
                          pedido=d.get("pedido", True) is not False)

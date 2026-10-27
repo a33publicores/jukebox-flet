@@ -48,6 +48,12 @@ YTDLP_CADA_DIAS = 2
 def activar_ytdlp_actualizado(carpeta):
     """Si hay un yt-dlp más nuevo descargado, se usa ese (antes de importarlo)."""
     zip_ = Path(carpeta) / "yt-dlp.zip"
+    siguiente = Path(carpeta) / "yt-dlp.siguiente.zip"
+    if siguiente.is_file() and str(zip_) not in sys.path:
+        try:  # la que se bajó mientras el reproductor estaba abierto: se activa al arrancar
+            os.replace(siguiente, zip_)
+        except OSError as ex:
+            print(f"ℹ️ No se pudo activar el yt-dlp nuevo: {ex}")
     if zip_.is_file() and str(zip_) not in sys.path:
         sys.path.insert(0, str(zip_))
 
@@ -58,7 +64,9 @@ def actualizar_ytdlp(carpeta):
     import zipfile
     zip_ = Path(carpeta) / "yt-dlp.zip"
     try:
-        if zip_.is_file() and time.time() - zip_.stat().st_mtime < YTDLP_CADA_DIAS * 86400:
+        siguiente = Path(carpeta) / "yt-dlp.siguiente.zip"
+        if siguiente.is_file() or (
+                zip_.is_file() and time.time() - zip_.stat().st_mtime < YTDLP_CADA_DIAS * 86400):
             return
         import requests
         Path(carpeta).mkdir(parents=True, exist_ok=True)
@@ -71,7 +79,9 @@ def actualizar_ytdlp(carpeta):
         with zipfile.ZipFile(nuevo) as z:
             if "yt_dlp/__init__.py" not in z.namelist():
                 raise ValueError("no es yt-dlp")
-        os.replace(nuevo, zip_)
+        # El que está en uso NO se toca (si cambia mientras el reproductor lo usa, todas las
+        # descargas fallan con "bad local file header" hasta reiniciar): queda esperando.
+        os.replace(nuevo, siguiente if str(zip_) in sys.path else zip_)
         print("⬆️ yt-dlp actualizado (se usa desde el próximo arranque)")
     except Exception as ex:
         print(f"ℹ️ No se pudo actualizar yt-dlp: {ex}")
@@ -261,8 +271,8 @@ class Descargador:
         except Exception as ex:
             if es_disco_lleno(ex):
                 raise DiscoLleno(str(ex)) from ex
-            if not titulo:
-                raise
+            if not titulo or "not a bot" in str(ex).lower():
+                raise  # YouTube bloqueó la conexión: otros videos tampoco van a bajar
             print(f"⚠️ El video {video_id} no sirve ({str(ex)[:120]}): busco otro de «{titulo}»")
             error = ex
         previo = self._alt.get(video_id)

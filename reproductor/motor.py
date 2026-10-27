@@ -87,6 +87,11 @@ class BackendApi:
     def registrar(self, item):
         pass  # el historial ya queda en la base (estado2 = Reproducido)
 
+    def preparar(self, item):
+        if not hasattr(self.api, "preparar"):
+            return {}
+        return self.api.preparar(item.video_id, item.titulo or "", item.canal or "")
+
     def encargo(self, equipo=""):
         if not hasattr(self.api, "encargo"):
             return {}
@@ -177,6 +182,16 @@ class BackendApi:
 
 AVISAR_SIN_RED_SEG = 45
 AYUDA_CADA_SEG = 20  # cada cuánto se pregunta si hay canciones para subir a la nube
+YT_BLOQUEO_SEG = 30 * 60  # tras un "confirma que no eres un bot", este equipo no ayuda a la nube
+ESPERANDO_CADA_SEG = 8    # cada cuánto se revisa si ya llegaron a la nube las que se esperan
+ESPERA_NUBE_MAX_SEG = 15 * 60
+
+
+def _youtube_bloqueado(ex):
+    """YouTube pide iniciar sesión ("confirm you're not a bot"): bloqueo a la conexión del
+    equipo, no a la canción."""
+    t = str(ex).lower()
+    return "not a bot" in t or "sign in to confirm" in t
 PLAN_CADA_SEG = 60
 PLAN_BLOQUEADO_SEG = 15
 
@@ -248,6 +263,11 @@ class Motor:
         self.error = ""
         self._t_ayuda = 0.0
         self._ayudando = False
+        # YouTube bloqueó este equipo ("confirma que no eres un bot"): las canciones nuevas se
+        # piden a la nube (las sube un equipo de otro bar) en vez de marcarlas con error.
+        self._yt_bloqueado_hasta = 0.0
+        self._esperando = {}      # video_id -> (desde, item): esperando que llegue a la nube
+        self._t_esperando = 0.0
 
     # ------------------------------------------------------------------ bucle
     async def correr(self):
@@ -339,6 +359,7 @@ class Motor:
             print("ℹ️ revisar disco:", ex)
         await self._reintentar_marcas()
         self._ayudar_nube()
+        await self._revisar_esperando()
         try:
             snap = await asyncio.to_thread(self.backend.instantanea)
         except Exception:
@@ -378,7 +399,10 @@ class Motor:
         if marcada and marcada.fila in omitir:
             marcada = None
         cola = [i for i in snap.cola if i.fila not in omitir
-                and not (self.actual is not None and i.fila == self.actual.fila)]
+                and not (self.actual is not None and i.fila == self.actual.fila)
+                and i.video_id not in self._esperando]  # las que vienen de la nube esperan
+        if marcada is not None and marcada.video_id in self._esperando:
+            marcada = None
 
         if self.actual is None:
             if marcada:
@@ -420,6 +444,16 @@ class Motor:
             except Exception as ex:
                 if _disco_lleno(ex):  # culpa del PC, no del video: no se marca ni se quita
                     await self._avisar_disco(ex)
+                    return
+                if _youtube_bloqueado(ex) and hasattr(self.backend, "preparar"):
+                    # no es culpa de la canción: se pide a la nube y mientras suenan otras
+                    self._yt_bloqueado_hasta = self.ahora() + YT_BLOQUEO_SEG
+                    if item.video_id not in self._esperando:
+                        print(f"⏳ YouTube no deja bajar «{item.titulo}» en este equipo: se pide a la nube")
+                        self._esperando[item.video_id] = (self.ahora(), item)
+                        self._t_esperando = 0.0
+                    if ya_marcada and item.fila is not None:
+                        self._marcar_luego(item.fila, e2=C.E_SIGUE)  # vuelve a la cola mientras llega
                     return
                 n = self._fallos.get(item.video_id, 0) + 1
                 self._fallos[item.video_id] = n
@@ -620,7 +654,7 @@ class Motor:
         las canciones que piden y no están en la nube las baja y sube un equipo con la app.
         Este equipo ayuda solo cuando no está bajando nada suyo, de a una canción."""
         if (self.ahora() - self._t_ayuda < AYUDA_CADA_SEG or self._ayudando or self._en_curso
-                or self.bloqueado or self.inactivo
+                or self.bloqueado or self.inactivo or self.ahora() < self._yt_bloqueado_hasta
                 or getattr(self.desc, "nube", None) is None or not hasattr(self.backend, "encargo")):
             return
         self._t_ayuda = self.ahora()
@@ -645,6 +679,8 @@ class Motor:
                 except Exception as ex:
                     error = str(ex)[:300]
                     print(f"⚠️ No se pudo ayudar con {vid}: {error[:100]}")
+                    if _youtube_bloqueado(ex):
+                        self._yt_bloqueado_hasta = self.ahora() + YT_BLOQUEO_SEG
                 await asyncio.to_thread(self.backend.encargo_listo, vid, ok, error)
             except Exception as ex:
                 print(f"ℹ️ Ayuda a la nube: {type(ex).__name__}: {str(ex)[:80]}")
@@ -656,6 +692,30 @@ class Motor:
         t = asyncio.ensure_future(_hacer())
         self._marcas.add(t)
         t.add_done_callback(self._marcas.discard)
+
+    async def _revisar_esperando(self):
+        """Las canciones que YouTube no dejó bajar: si ya están en la nube se bajan de ahí
+        (y entran en el próximo turno); si en 15 min nadie las subió, se marcan con error."""
+        if not self._esperando or self.ahora() - self._t_esperando < ESPERANDO_CADA_SEG:
+            return
+        self._t_esperando = self.ahora()
+        for vid, (desde, item) in list(self._esperando.items()):
+            try:
+                r = await asyncio.to_thread(self.backend.preparar, item) or {}
+            except Exception as ex:
+                print(f"ℹ️ No se pudo preguntar a la nube por {vid}: {ex}")
+                return
+            if r.get("listo") and r.get("archivo") and getattr(self.desc, "nube", None) is not None:
+                destino = Path(self.desc.carpeta) / f"{vid}.mp4"
+                if await asyncio.to_thread(self.desc.nube.bajar, r["archivo"], destino):
+                    print(f"☁️ «{item.titulo}» llegó a la nube: entra a la cola")
+                    self._esperando.pop(vid, None)
+                    self._fallos.pop(vid, None)
+            elif r.get("estado") == "fallo" or self.ahora() - desde > ESPERA_NUBE_MAX_SEG \
+                    or not r.get("activo", True):
+                print(f"❌ «{item.titulo}» no llegó a la nube: se descarta")
+                self._esperando.pop(vid, None)
+                await self._marcar(item.fila, e2=C.E_ERROR, estado=C.E_ERROR)
 
     # ------------------------------------------------------------- comandos
     async def _comandos(self, snap):
