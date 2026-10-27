@@ -87,6 +87,20 @@ class BackendApi:
     def registrar(self, item):
         pass  # el historial ya queda en la base (estado2 = Reproducido)
 
+    def encargo(self, equipo=""):
+        if not hasattr(self.api, "encargo"):
+            return {}
+        try:
+            return self.api.encargo(equipo)
+        except Exception as ex:
+            if "404" in str(ex):  # API vieja sin encargos
+                return {}
+            raise
+
+    def encargo_listo(self, video_id, ok, error=""):
+        if hasattr(self.api, "encargo_listo"):
+            self.api.encargo_listo(video_id, ok, error)
+
     def config(self):
         if self._config is None:
             self._config = self.api.config()
@@ -162,6 +176,7 @@ class BackendApi:
 
 
 AVISAR_SIN_RED_SEG = 45
+AYUDA_CADA_SEG = 20  # cada cuánto se pregunta si hay canciones para subir a la nube
 PLAN_CADA_SEG = 60
 PLAN_BLOQUEADO_SEG = 15
 
@@ -231,6 +246,8 @@ class Motor:
         self._pub = None
         self._t_pub = 0.0
         self.error = ""
+        self._t_ayuda = 0.0
+        self._ayudando = False
 
     # ------------------------------------------------------------------ bucle
     async def correr(self):
@@ -321,6 +338,7 @@ class Motor:
         except Exception as ex:
             print("ℹ️ revisar disco:", ex)
         await self._reintentar_marcas()
+        self._ayudar_nube()
         try:
             snap = await asyncio.to_thread(self.backend.instantanea)
         except Exception:
@@ -595,6 +613,49 @@ class Motor:
             self.actual = None
             self.relleno = False
             self.token += 1
+
+    # ------------------------------------------- ayudar a llenar la nube
+    def _ayudar_nube(self):
+        """Los TV Samsung/LG usan el reproductor del navegador, que no puede bajar de YouTube:
+        las canciones que piden y no están en la nube las baja y sube un equipo con la app.
+        Este equipo ayuda solo cuando no está bajando nada suyo, de a una canción."""
+        if (self.ahora() - self._t_ayuda < AYUDA_CADA_SEG or self._ayudando or self._en_curso
+                or self.bloqueado or self.inactivo
+                or getattr(self.desc, "nube", None) is None or not hasattr(self.backend, "encargo")):
+            return
+        self._t_ayuda = self.ahora()
+        self._ayudando = True
+
+        async def _hacer():
+            vid = ""
+            try:
+                e = await asyncio.to_thread(self.backend.encargo, self.equipo)
+                vid = (e or {}).get("video_id") or ""
+                if not vid:
+                    return
+                print(f"📦 Ayudando a la nube: «{e.get('titulo', '')[:60]}»")
+                ok, error = False, ""
+                try:
+                    item = C.Item(None, e.get("titulo") or "", e.get("canal") or "", vid)
+                    ruta = await self._descargar(vid, item)
+                    # con el nombre que busca el navegador (aunque se haya usado otro video)
+                    ok = await asyncio.to_thread(self.desc.nube.subir,
+                                                 self.desc._archivo_nube(vid), ruta)
+                    error = "" if ok else "no se pudo subir"
+                except Exception as ex:
+                    error = str(ex)[:300]
+                    print(f"⚠️ No se pudo ayudar con {vid}: {error[:100]}")
+                await asyncio.to_thread(self.backend.encargo_listo, vid, ok, error)
+            except Exception as ex:
+                print(f"ℹ️ Ayuda a la nube: {type(ex).__name__}: {str(ex)[:80]}")
+            finally:
+                self._ayudando = False
+                if vid:
+                    self._t_ayuda = 0.0  # si hubo una, de una se pregunta por la siguiente
+
+        t = asyncio.ensure_future(_hacer())
+        self._marcas.add(t)
+        t.add_done_callback(self._marcas.discard)
 
     # ------------------------------------------------------------- comandos
     async def _comandos(self, snap):

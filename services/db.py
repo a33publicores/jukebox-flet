@@ -177,6 +177,21 @@ ESQUEMA = [
     "ALTER TABLE control ADD COLUMN IF NOT EXISTS siguiente_video TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE control ADD COLUMN IF NOT EXISTS actual_pos DOUBLE PRECISION NOT NULL DEFAULT 0",
     "ALTER TABLE control ADD COLUMN IF NOT EXISTS actual_ts DOUBLE PRECISION NOT NULL DEFAULT 0",
+    # Canciones que el reproductor del navegador necesita en la nube: un TV o PC con la app
+    # (que sí puede bajar de YouTube) la baja y la sube. Ver encargar() / tomar_encargo().
+    """CREATE TABLE IF NOT EXISTS encargos (
+        video_id   TEXT PRIMARY KEY,
+        titulo     TEXT NOT NULL DEFAULT '',
+        canal      TEXT NOT NULL DEFAULT '',
+        codigo     TEXT NOT NULL DEFAULT '',
+        estado     TEXT NOT NULL DEFAULT 'pendiente',
+        creado     DOUBLE PRECISION NOT NULL,
+        tomado     DOUBLE PRECISION NOT NULL DEFAULT 0,
+        tomado_por TEXT NOT NULL DEFAULT '',
+        intentos   INTEGER NOT NULL DEFAULT 0,
+        error      TEXT NOT NULL DEFAULT '',
+        prioridad  INTEGER NOT NULL DEFAULT 0
+    )""",
 ]
 
 
@@ -863,3 +878,69 @@ def leer_sesion(token):
 def borrar_sesion(token):
     if token:
         ejecutar("DELETE FROM sesiones WHERE token = %s", (str(token),))
+
+
+# ---------------------------------------------------------------------------
+# Encargos: canciones que hay que subir a la nube (las baja un TV o PC con la app)
+# ---------------------------------------------------------------------------
+ENCARGO_PLAZO_SEG = 5 * 60      # si quien la tomó no avisa en 5 min, otro la puede tomar
+ENCARGO_INTENTOS = 3
+ENCARGO_VIGENCIA_SEG = 3 * 3600  # los encargos viejos ya no se reparten
+
+
+def encargar(video_id, titulo, canal, codigo, pedido=True):
+    """Pide que la canción quede en la nube. Devuelve el estado: pendiente, tomado o fallo.
+    Las que un cliente pidió (pedido=True) van antes que las aleatorias del relleno."""
+    ahora = time.time()
+    prioridad = 1 if pedido else 0
+    f = uno("SELECT estado, tomado, creado, prioridad FROM encargos WHERE video_id = %s", (video_id,))
+    if f is None:
+        ejecutar("""INSERT INTO encargos (video_id, titulo, canal, codigo, creado, prioridad)
+                    VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (video_id) DO NOTHING""",
+                 (video_id, str(titulo)[:300], str(canal)[:200], str(codigo), ahora, prioridad))
+        return "pendiente"
+    if prioridad > int(f["prioridad"] or 0):
+        ejecutar("UPDATE encargos SET prioridad = %s WHERE video_id = %s", (prioridad, video_id))
+    estado = f["estado"]
+    # "listo" pero no está en la nube (se borró o la subida falló), o un fallo viejo, o un
+    # encargo que nadie tomó a tiempo: se vuelve a pedir.
+    viejo = ahora - float(f["creado"] or 0) > ENCARGO_VIGENCIA_SEG
+    if (estado == "listo" and ahora - float(f["tomado"] or 0) > 120) or             (estado == "fallo" and ahora - float(f["tomado"] or 0) > 6 * 3600) or             (estado in ("pendiente", "tomado") and viejo):
+        ejecutar("""UPDATE encargos SET estado = 'pendiente', intentos = 0, creado = %s, error = '',
+                    codigo = %s WHERE video_id = %s""", (ahora, str(codigo), video_id))
+        return "pendiente"
+    return "listo" if estado == "listo" else estado
+
+
+def tomar_encargo(quien):
+    """Un TV/PC con la app se ofrece a bajar una canción: se le da la más antigua pendiente
+    (o una que otro tomó y no terminó). {} si no hay."""
+    ahora = time.time()
+    ejecutar("""UPDATE encargos SET estado = 'fallo', error = 'nadie la pudo bajar'
+                WHERE estado = 'tomado' AND tomado < %s AND intentos >= %s""",
+             (ahora - ENCARGO_PLAZO_SEG, ENCARGO_INTENTOS))
+    f = consultar("""UPDATE encargos SET estado = 'tomado', tomado = %s, tomado_por = %s,
+                         intentos = intentos + 1
+                     WHERE video_id = (
+                         SELECT video_id FROM encargos
+                         WHERE (estado = 'pendiente' OR (estado = 'tomado' AND tomado < %s))
+                           AND intentos < %s AND creado > %s
+                         ORDER BY prioridad DESC, creado LIMIT 1 FOR UPDATE SKIP LOCKED)
+                     RETURNING video_id, titulo, canal""",
+                  (ahora, str(quien)[:80], ahora - ENCARGO_PLAZO_SEG, ENCARGO_INTENTOS,
+                   ahora - ENCARGO_VIGENCIA_SEG))
+    return dict(f[0]) if f else {}
+
+
+def terminar_encargo(video_id, ok, error=""):
+    if ok:
+        ejecutar("UPDATE encargos SET estado = 'listo', tomado = %s, error = '' WHERE video_id = %s",
+                 (time.time(), video_id))
+        return
+    ejecutar("""UPDATE encargos SET error = %s,
+                    estado = CASE WHEN intentos >= %s THEN 'fallo' ELSE 'pendiente' END
+                WHERE video_id = %s""", (str(error)[:300], ENCARGO_INTENTOS, video_id))
+
+
+def borrar_encargos_viejos():
+    ejecutar("DELETE FROM encargos WHERE creado < %s", (time.time() - 7 * 86400,))

@@ -86,28 +86,34 @@ class Nube:
     def _subir_en_orden(self):
         while True:
             archivo, ruta = self._cola.get()
-            try:
-                tam = os.path.getsize(ruta)
-                if tam < 50_000 or tam > MAX_SUBIR:
-                    continue
-                d = self._direcciones(archivo)
-                if not d:
-                    continue
-                t0 = time.time()
-                with open(ruta, "rb") as f:
-                    r = requests.put(d["put"], data=f, timeout=(8, 600),
-                                     headers={"content-type": "video/mp4",
-                                              "content-length": str(tam)})
-                if r.ok:
-                    ya = (r.json() or {}).get("ya") if r.headers.get("content-type", "").startswith(
-                        "application/json") else False
-                    if not ya:
-                        print(f"☁️ {archivo}: subida a la nube ({tam / 1048576:.1f} MB, "
-                              f"{time.time() - t0:.0f} s)")
-                else:
-                    print(f"ℹ️ Nube: no se pudo subir {archivo} ({r.status_code})")
-            except Exception as ex:
-                print(f"ℹ️ Nube: no se pudo subir {archivo}: {str(ex)[:100]}")
+            self.subir(archivo, ruta)
+
+    def subir(self, archivo, ruta):
+        """Sube la canción ya (bloqueante). True si quedó en la nube (o ya estaba)."""
+        try:
+            tam = os.path.getsize(ruta)
+            if tam < 50_000 or tam > MAX_SUBIR:
+                return False
+            d = self._direcciones(archivo)
+            if not d:
+                return False
+            t0 = time.time()
+            with open(ruta, "rb") as f:
+                r = requests.put(d["put"], data=f, timeout=(8, 600),
+                                 headers={"content-type": "video/mp4",
+                                          "content-length": str(tam)})
+            if r.ok:
+                ya = (r.json() or {}).get("ya") if r.headers.get("content-type", "").startswith(
+                    "application/json") else False
+                if not ya:
+                    print(f"☁️ {archivo}: subida a la nube ({tam / 1048576:.1f} MB, "
+                          f"{time.time() - t0:.0f} s)")
+                self._subidas.add(archivo)
+                return True
+            print(f"ℹ️ Nube: no se pudo subir {archivo} ({r.status_code})")
+        except Exception as ex:
+            print(f"ℹ️ Nube: no se pudo subir {archivo}: {str(ex)[:100]}")
+        return False
 
 
 def limpiar_por_tamano(carpeta, max_bytes, extensiones=(".mp4", ".webm", ".mkv", ".m4v"),

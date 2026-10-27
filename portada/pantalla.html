@@ -8,8 +8,9 @@
 <!--
   Reproductor de PlayBar GO en el navegador del TV (Samsung Tizen, LG webOS...: TV que no
   instalan apps de Android). Hace lo mismo que el reproductor de TV (reproductor_tv/tv/motor.py)
-  pero sin descargar: cada canción sale de la nube de PlayBar (si algún reproductor ya la
-  subió) o, si no está, del reproductor de YouTube.
+  pero sin descargar: cada canción sale de la nube de PlayBar. Si no está, se intenta con el
+  reproductor de YouTube y además se encarga: un TV o PC con la app la baja y la sube a la
+  nube (api/servidor.py: preparar / encargo). Mientras llega, siguen sonando otras.
 
   Habla con la misma API que los reproductores instalados (api/servidor.py, con la llave del
   bar), así que el panel del administrador, los comandos, el plan y los televisores espejo
@@ -139,7 +140,7 @@
   var COMANDO_MAX_EDAD = 120;    // comandos del admin más viejos se ignoran
   var AVISAR_SIN_RED = 45000;    // un corte corto no se muestra
   var ESPEJO_DESFASE = 3;        // televisor espejo: si va más de 3 s corrido, se empareja
-  var ALTURAS_NUBE = [720, 480]; // así guardan las canciones los TV y PC (<id>_<altura>.mp4)
+  var ESPERA_MAX = 15 * 60000;   // una canción pedida que no llega a la nube en 15 min se descarta
   var E_COLA = "En cola", E_PLAY = "En reproduccion", E_SIGUE = "Siguiente", E_HECHO = "Reproducido",
       E_ELIM = "Eliminado", E_ERROR = "Error";
 
@@ -181,7 +182,11 @@
     aleatorio: function () { return pedir("GET", "/api/v1/aleatorio?filtrar=1"); },
     suscripcion: function () { return pedir("GET", "/api/v1/suscripcion"); },
     marcar: function (fila, e2, estado) { return pedir("POST", "/api/v1/marcar", { fila: fila, estado2: e2, estado: estado }); },
-    nube: function (archivo) { return pedir("POST", "/api/v1/nube", { archivo: archivo }); },
+    preparar: function (it, pedido) {
+      return pedir("POST", "/api/v1/preparar", { video_id: it.video_id, titulo: it.titulo || "",
+        canal: it.canal || "", pedido: !!pedido });
+    },
+    reporte: function (texto) { return pedir("POST", "/api/v1/reporte", { texto: texto }).catch(function () {}); },
     estado: function (estado, actual, siguiente, ack, video) {
       return pedir("POST", "/api/v1/estado", { estado: estado, actual: actual, siguiente: siguiente, ack: ack,
         instancia: M.instancia, equipo: M.equipo, espejo: true, video: video });
@@ -248,8 +253,33 @@
 
   // ------------------------------------------------------------------ medios (nube o YouTube)
   var video = $("video");
-  var yt = null, ytListo = null, ytEspera = null;
-  var sinNube = {};  // video_id -> hora: no está en la nube (no se vuelve a preguntar en 30 min)
+  var yt = null, ytListo = null, ytEspera = null, ytCodigo = null;
+  var listos = {};     // video_id -> {get, t}: está en la nube (dirección firmada, dura 6 h)
+  var esperando = {};  // video_id -> {desde, estado}: encargada, un TV/PC la está subiendo
+  var ytFallos = 0, ytRotoHasta = 0;  // si YouTube falla seguido en este TV, no se insiste
+  var ytNoSirve = {};  // video_id -> true: YouTube no la pudo poner en este TV
+
+  // La canción no está en la nube y en este TV YouTube no la puede poner: hay que esperar a
+  // que un TV/PC con la app la suba (mientras tanto suenan otras).
+  function enEspera(id) {
+    return !!(esperando[id] && !listos[id] && (ahora() < ytRotoHasta || ytNoSirve[id]));
+  }
+
+  // ¿Está en la nube? Si no, queda encargada. Devuelve lo que dice la API (o null sin red).
+  async function preparar(it, pedido) {
+    var l = listos[it.video_id];
+    if (l && ahora() - l.t < 5 * 3600000) return { activo: true, listo: true, get: l.get };
+    var d;
+    try { d = await api.preparar(it, pedido); } catch (e) { return null; }
+    if (d.listo) {
+      listos[it.video_id] = { get: d.get, t: ahora() };
+      delete esperando[it.video_id];
+    } else if (d.activo) {
+      var e = esperando[it.video_id] || (esperando[it.video_id] = { desde: ahora() });
+      e.estado = d.estado;
+    }
+    return d;
+  }
 
   function cargarYouTube() {
     if (ytListo) return ytListo;
@@ -271,6 +301,7 @@
               if (e.data === 0 && medios.modo === "yt") motor.alTerminar(M.token);
             },
             onError: function (e) {
+              ytCodigo = e.data;
               if (ytEspera) { ytEspera(false); ytEspera = null; return; }
               if (medios.modo === "yt") motor.alError(M.token, "YouTube " + e.data);
             }
@@ -321,30 +352,42 @@
       if (ytEspera) { ytEspera(false); ytEspera = null; }
       medios.modo = null;
     },
-    poner: async function (id, token) {
+    // true: suena · "esperar": encargada a la nube (llega en un rato) · false: no sirve ·
+    // null: no hay con qué reproducir ahora (sin internet): no es culpa de la canción
+    poner: async function (it, token, pedido) {
       medios.detener();
+      var id = it.video_id;
       // 1) la nube de PlayBar: sin anuncios y sin depender de YouTube
-      var marca = sinNube[id];
-      if (!marca || ahora() - marca > 30 * 60000) {
-        for (var i = 0; i < ALTURAS_NUBE.length; i++) {
-          var d;
-          try { d = await api.nube(id + "_" + ALTURAS_NUBE[i] + ".mp4"); } catch (e) { break; }
-          if (!d.activo || token !== M.token) break;
-          if (await cargarVideo(d.get)) {
-            if (token !== M.token) return false;
-            medios.modo = "video";
-            ver(video, true);
-            intentarSonar(video.play());
-            return true;
-          }
+      var d = await preparar(it, pedido);
+      if (token !== M.token) return false;
+      if (d && d.listo) {
+        if (await cargarVideo(d.get)) {
+          if (token !== M.token) return false;
+          medios.modo = "video";
+          ver(video, true);
+          intentarSonar(video.play());
+          return true;
         }
-        sinNube[id] = ahora();
+        delete listos[id];
+        api.reporte("no abrió desde la nube " + id);
       }
       if (token !== M.token) return false;
-      // 2) el reproductor de YouTube
       video.removeAttribute("src");
-      // null = no hay con qué reproducir (sin internet, YouTube no cargó): no es culpa de la canción
-      if (!(await cargarYouTube()) || !yt || !yt.loadVideoById) return null;
+      // 2) el reproductor de YouTube (si en este TV funciona)
+      var r = ahora() < ytRotoHasta ? false : await medios.youtube(id, token);
+      if (r === true) return true;
+      if (r === false) ytNoSirve[id] = true;
+      if (d && d.activo) return d.estado === "fallo" ? false : "esperar";
+      if (d === null) return null;  // sin respuesta del servidor: no es culpa de la canción
+      return r;
+    },
+    youtube: async function (id, token) {
+      if (!(await cargarYouTube()) || !yt || !yt.loadVideoById) {
+        api.reporte("el reproductor de YouTube no cargó");
+        ytRotoHasta = ahora() + 5 * 60000;  // no se vuelve a esperar por él en cada canción
+        return null;
+      }
+      ytCodigo = null;
       var ok = await new Promise(function (listo) {
         ytEspera = listo;
         yt.loadVideoById(id);
@@ -357,7 +400,14 @@
           listo(true);
         }, 15000);
       });
-      if (!ok || token !== M.token) return false;
+      if (!ok) {
+        ytFallos += 1;
+        api.reporte("YouTube no reprodujo " + id + " (error " + ytCodigo + ", " + ytFallos + " seguidos)");
+        if (ytFallos >= 2) ytRotoHasta = ahora() + 20 * 60000;  // en este TV YouTube no sirve: 20 min sin intentar
+        return false;
+      }
+      ytFallos = 0;
+      if (token !== M.token) return false;
       medios.modo = "yt";
       ver(video, false);  // queda a la vista el de YouTube (está debajo)
       return true;
@@ -420,7 +470,29 @@
         await motor.decidir(snap);
       });
       await motor.publicar(snap);
+      await motor.precargar(snap);
       pintar();
+    },
+
+    // Apenas piden una canción se revisa si está en la nube; si no, se encarga de una vez
+    // (así un TV/PC con la app la sube mientras suenan las anteriores).
+    precargar: async function (snap) {
+      var omitir = omitidas();
+      if (M.actual && M.actual.fila !== null) omitir[M.actual.fila] = 1;
+      var cola = colaDe(snap).filter(function (i) { return !omitir[i.fila]; }).slice(0, 5);
+      for (var i = 0; i < cola.length; i++) {
+        var it = cola[i];
+        if (listos[it.video_id]) continue;
+        var e = esperando[it.video_id];
+        if (e && (e.estado === "fallo" || ahora() - e.desde > ESPERA_MAX)) {
+          api.reporte("se descarta " + it.video_id + " («" + it.titulo + "»): no llegó a la nube (" + e.estado + ")");
+          delete esperando[it.video_id];
+          await motor.marcar(it.fila, E_ERROR, E_ERROR);
+          continue;
+        }
+        var d = await preparar(it, true);
+        if (!d || !d.activo) return;  // sin red o sin nube: nada que adelantar
+      }
     },
 
     revisarPlan: async function () {
@@ -449,9 +521,14 @@
         return !omitir[i.fila] && !(M.actual && i.fila === M.actual.fila);
       });
       if (!M.actual) {
-        if (marcada) await motor.tomar(marcada, true);
-        else if (cola.length) await motor.tomar(cola[0], false);
-        else await motor.ponerRelleno();
+        var candidatas = (marcada ? [marcada] : []).concat(cola);
+        for (var i = 0; i < candidatas.length; i++) {
+          var c = candidatas[i];
+          if (enEspera(c.video_id)) continue;  // se está subiendo a la nube
+          var r = await motor.tomar(c, c === marcada);
+          if (r === true || r === null) return;
+        }
+        await motor.ponerRelleno();
       } else if (M.relleno) {
         // la pedida espera a que termine la aleatoria (no se corta)
       } else if (M.actual.fila !== null && !pend[M.actual.fila]) {
@@ -470,13 +547,18 @@
       try {
         pintarEstado("Preparando: " + item.titulo);
         var ok = await motor.reproducir(item, false);
-        if (ok === null) { pintarEstado("Conectando con el reproductor de videos…"); return; }
+        if (ok === null) { pintarEstado("Conectando con el reproductor de videos…"); return null; }
+        if (ok === "esperar") {
+          if (yaMarcada) motor.marcarLuego(item.fila, E_SIGUE);  // vuelve a la cola mientras llega
+          return "esperar";
+        }
         if (!ok) {
           console.log("No se pudo poner", item.video_id);
           await motor.marcar(item.fila, E_ERROR, E_ERROR);
-          return;
+          return false;
         }
         if (!yaMarcada) motor.marcarLuego(item.fila, E_PLAY, item.estado === "Agregado" ? null : "Agregado");
+        return true;
       } finally {
         M.ocupado = false;
       }
@@ -487,8 +569,12 @@
         try { M.pool = (await api.aleatorio()).items || []; M.tPool = ahora(); } catch (e) {}
       }
       if (!M.pool.length) return null;
-      var libres = M.pool.filter(function (i) { return M.recientes.indexOf(i.video_id) < 0; });
-      var de = libres.length ? libres : M.pool;
+      var libres = M.pool.filter(function (i) {
+        return M.recientes.indexOf(i.video_id) < 0 && !enEspera(i.video_id);
+      });
+      // primero las que ya están en la nube: entran al instante
+      var enNube = libres.filter(function (i) { return listos[i.video_id]; });
+      var de = enNube.length && Math.random() < 0.85 ? enNube : (libres.length ? libres : M.pool);
       var it = de[Math.floor(Math.random() * de.length)];
       return { fila: null, titulo: it.titulo, canal: it.canal, video_id: it.video_id };
     },
@@ -500,8 +586,8 @@
           var item = await motor.elegirRelleno();
           if (!item) { pintarEstado("Sin canciones en cola ni historial"); return; }
           var ok = await motor.reproducir(item, true);
-          if (ok || ok === null) return;
-          recordar(item.video_id);
+          if (ok === true || ok === null) return;
+          recordar(item.video_id);  // no está lista: se prueba con otra
         }
       } finally {
         M.ocupado = false;
@@ -514,9 +600,9 @@
       var token = M.token;
       recordar(item.video_id);
       pintar();
-      var ok = await medios.poner(item.video_id, token);
+      var ok = await medios.poner(item, token, !relleno);
       if (token !== M.token) return true;  // otra canción ya tomó su lugar
-      if (!ok) { M.actual = null; M.relleno = false; return ok; }
+      if (ok !== true) { M.actual = null; M.relleno = false; return ok; }
       ver("pausa", false);
       console.log("▶️ " + (relleno ? "(relleno) " : "") + item.titulo);
       pintar();
@@ -691,7 +777,9 @@
         M.relleno = false; M.token += 1;
         var token = M.token;
         pintar();
-        if (await medios.poner(vid, token) && token === M.token) {
+        if ((await medios.poner(M.actual, token, true)) !== true) {
+          M.espejoVid = "";  // todavía no está en la nube: se reintenta en la próxima revisión
+        } else if (token === M.token) {
           M.pausado = false;
           var destino = (s.pos || 0) + (ahora() - tResp) / 1000;
           if (destino > ESPEJO_DESFASE) medios.irA(destino);
@@ -782,7 +870,7 @@
       cola = M.espejo ? colaDe(M.snap) : colaDe(M.snap).filter(function (i) { return !omitir[i.fila]; });
     }
     var nueva = JSON.stringify([M.actual && M.actual.video_id, M.relleno, M.pausado, M.espejo, M.error,
-      cola.map(function (i) { return [i.fila, i.video_id]; })]);
+      cola.map(function (i) { return [i.fila, i.video_id, enEspera(i.video_id)]; })]);
     if (nueva === firma && !forzar) return;
     firma = nueva;
     var aviso = $("aviso");
@@ -807,7 +895,9 @@
     enc.appendChild(sub);
     var lista = $("lista");
     lista.innerHTML = "";
-    cola.slice(0, 15).forEach(function (it) { lista.appendChild(tarjeta(it, "", false)); });
+    cola.slice(0, 15).forEach(function (it) {
+      lista.appendChild(tarjeta(it, enEspera(it.video_id) ? "⏳ PREPARANDO…" : "", false));
+    });
     ver("pausa", M.pausado && !!M.actual);
   }
 

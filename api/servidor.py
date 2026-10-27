@@ -164,6 +164,69 @@ def nube(request, cli, cuerpo):
 
 
 @_protegido
+def preparar(request, cli, cuerpo):
+    """Reproductor del navegador: ¿la canción ya está en la nube? Si está, la dirección para
+    ponerla; si no, se encarga a un TV/PC con la app (que sí baja de YouTube).
+    {"video_id", "titulo", "canal"} -> {"activo", "listo", "get"} o {"activo", "listo": False, "estado"}"""
+    from services import nube as N
+    d = cuerpo or {}
+    vid = str(d.get("video_id") or "")
+    if not N.activa():
+        return JSONResponse({"ok": True, "activo": False})
+    if not N.archivo_valido(f"{vid}.mp4"):
+        return JSONResponse({"ok": True, "activo": True, "listo": False, "estado": "fallo"})
+    archivo = N.buscar(vid)
+    if archivo:
+        return JSONResponse({"ok": True, "activo": True, "listo": True,
+                             "get": N.direccion("GET", archivo)})
+    estado = db.encargar(vid, d.get("titulo") or "", d.get("canal") or "", cli["codigo"],
+                         pedido=d.get("pedido", True) is not False)
+    return JSONResponse({"ok": True, "activo": True, "listo": False, "estado": estado})
+
+
+_limpieza_encargos = [0.0]
+
+
+def _encargos_activos():
+    return os.getenv("ENCARGOS", "1").strip().lower() not in ("0", "no", "false")
+
+
+@_protegido
+def encargo(request, cli, cuerpo):
+    """TV/PC con la app: GET -> una canción para bajar y subir a la nube ({} si no hay).
+    POST {"video_id", "ok", "error"} -> cómo le fue."""
+    from services import nube as N
+    if request.method == "POST":
+        d = cuerpo or {}
+        db.terminar_encargo(str(d.get("video_id") or ""), bool(d.get("ok")), d.get("error") or "")
+        return JSONResponse({"ok": True})
+    if not (_encargos_activos() and N.activa()):
+        return JSONResponse({"ok": True})
+    if time.time() - _limpieza_encargos[0] > 3600:
+        _limpieza_encargos[0] = time.time()
+        db.borrar_encargos_viejos()
+    for _ in range(3):
+        e = db.tomar_encargo(f"{cli['codigo']}:{request.query_params.get('equipo', '')}")
+        if not e:
+            break
+        if N.buscar(e["video_id"]):  # otro ya la subió mientras tanto
+            db.terminar_encargo(e["video_id"], True)
+            continue
+        print(f"📦 Encargo {e['video_id']} («{e['titulo'][:50]}») para el bar {cli['codigo']}")
+        return JSONResponse({"ok": True, **e})
+    return JSONResponse({"ok": True})
+
+
+@_protegido
+def reporte(request, cli, cuerpo):
+    """Avisos del reproductor del navegador (para revisar en los registros)."""
+    texto = str((cuerpo or {}).get("texto") or "")[:300]
+    if texto:
+        print(f"📺 Pantalla {cli['codigo']}: {texto}")
+    return JSONResponse({"ok": True})
+
+
+@_protegido
 def reordenar(request, cli, cuerpo):
     d = cuerpo
     cola.reordenar(cli["codigo"], [int(x) for x in d.get("filas", [])])
@@ -265,6 +328,9 @@ app = Starlette(routes=[
     Route("/api/v1/reclamar", reclamar, methods=["POST"]),
     Route("/api/v1/reordenar", reordenar, methods=["POST"]),
     Route("/api/v1/nube", nube, methods=["POST"]),
+    Route("/api/v1/preparar", preparar, methods=["POST"]),
+    Route("/api/v1/encargo", encargo, methods=["GET", "POST"]),
+    Route("/api/v1/reporte", reporte, methods=["POST"]),
     Route("/api/v1/tabla", tabla),
     Route("/api/v1/excel", descargar_excel),
     Route("/api/v1/suscripcion", suscripcion),

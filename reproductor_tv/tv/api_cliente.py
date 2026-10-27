@@ -110,5 +110,12 @@ class ApiCliente:
         si la nube no está configurada)."""
         return self._post("/api/v1/nube", {"archivo": archivo})
 
+    def encargo(self, equipo=""):
+        """Una canción que el reproductor del navegador necesita en la nube ({} si no hay)."""
+        return self._get("/api/v1/encargo", equipo=equipo)
+
+    def encargo_listo(self, video_id, ok, error=""):
+        self._post("/api/v1/encargo", {"video_id": video_id, "ok": bool(ok), "error": str(error)[:300]})
+
     def reordenar(self, filas):
         self._post("/api/v1/reordenar", {"filas": list(filas)})
