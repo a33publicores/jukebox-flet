@@ -25,8 +25,8 @@
   .oculto { display: none !important; }
   #app { display: flex; height: 100%; }
   #escena { position: relative; flex: 7; background: #000; overflow: hidden; }
-  #video, #yt, #yt iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; background: #000; }
-  #video { z-index: 2; }
+  #video, #video2, #yt, #yt iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; background: #000; }
+  #video, #video2 { z-index: 2; }
   #tiempo, #pausa { z-index: 3; }
   #yt iframe { pointer-events: none; }
   #tiempo { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 12px; align-items: center;
@@ -98,6 +98,7 @@
 <div id="app">
   <div id="escena">
     <video id="video" playsinline preload="auto"></video>
+    <video id="video2" class="oculto" playsinline preload="auto" muted></video>
     <div id="yt"><div id="yt-lugar"></div></div>
     <div id="tiempo"><span id="t-pos">0:00</span><div id="barra"><div></div></div><span id="t-dur">0:00</span></div>
     <div id="pausa" class="oculto">⏸</div>
@@ -134,7 +135,7 @@
   // ------------------------------------------------------------------ ajustes
   var parametros = new URLSearchParams(location.search);
   var API = (parametros.get("api") || "https://api.play.alnovix.com").replace(/\/+$/, "");
-  var INTERVALO = 4000;          // entre lecturas de la cola (igual que el TV)
+  var INTERVALO = 2500;          // entre lecturas de la cola (los botones del panel llegan rápido)
   var LATIDO = 15000;            // el panel ve "en línea" con un latido cada 15 s
   var RECIENTES = 15;            // relleno: no repetir las últimas N
   var COMANDO_MAX_EDAD = 120;    // comandos del admin más viejos se ignoran
@@ -225,7 +226,7 @@
     equipo: "TV (navegador)",
     actual: null, relleno: false, pausado: false, previo: null, token: 0, ocupado: false,
     recientes: [], hechas: {}, pend: [], snap: null, ack: null, ultimoCid: null,
-    pool: [], tPool: 0, genPrevios: null,
+    pool: [], tPool: 0, genPrevios: null, proxRelleno: null,
     bloqueado: false, plan: null, tPlan: 0,
     inactivo: false, espejo: false, espejoVid: "",
     pub: null, tPub: 0, error: "", desde: null
@@ -252,7 +253,16 @@
   }
 
   // ------------------------------------------------------------------ medios (nube o YouTube)
-  var video = $("video");
+  // Dos reproductores: `video` es el que suena; el otro deja la SIGUIENTE canción cargada
+  // (callado) para que al pasar de canción entre al instante, sin esperar a que cargue.
+  var videos = [$("video"), $("video2")];
+  var video = videos[0];
+  var pre = { id: null, el: null };  // la que quedó cargada en el otro reproductor
+  function otroVideo() { return videos[0] === video ? videos[1] : videos[0]; }
+  function mostrarVideo(si) { videos.forEach(function (v) { ver(v, si && v === video); }); }
+  function soltar(el) {
+    try { el.pause(); el.removeAttribute("src"); el.load(); } catch (e) {}
+  }
   var yt = null, ytListo = null, ytEspera = null, ytCodigo = null;
   var listos = {};     // video_id -> {get, t}: está en la nube (dirección firmada, dura 6 h)
   var esperando = {};  // video_id -> {desde, estado}: encargada, un TV/PC la está subiendo
@@ -318,22 +328,22 @@
     return ytListo;
   }
 
-  function cargarVideo(url) {
+  function cargarVideo(url, el) {
     return new Promise(function (listo) {
       var hecho = false;
       function fin(ok) {
         if (hecho) return;
         hecho = true;
-        video.removeEventListener("canplay", si);
-        video.removeEventListener("error", no);
+        el.removeEventListener("canplay", si);
+        el.removeEventListener("error", no);
         listo(ok);
       }
       function si() { fin(true); }
       function no() { fin(false); }
-      video.addEventListener("canplay", si);
-      video.addEventListener("error", no);
-      video.src = url;
-      video.load();
+      el.addEventListener("canplay", si);
+      el.addEventListener("error", no);
+      el.src = url;
+      el.load();
       setTimeout(function () { fin(false); }, 20000);
     });
   }
@@ -361,10 +371,25 @@
       var d = await preparar(it, pedido);
       if (token !== M.token) return false;
       if (d && d.listo) {
-        if (await cargarVideo(d.get)) {
+        if (pre.id === id && pre.el) {
+          // ya estaba cargada en el otro reproductor: entra al instante
+          var viejo = video;
+          video = pre.el;
+          pre = { id: null, el: null };
+          soltar(viejo);
+          medios.modo = "video";
+          video.muted = false;
+          try { if (video.currentTime > 0.5) video.currentTime = 0; } catch (e) {}
+          mostrarVideo(true);
+          intentarSonar(video.play());
+          return true;
+        }
+        if (pre.el === otroVideo() && pre.id) { soltar(pre.el); pre = { id: null, el: null }; }
+        video.muted = false;
+        if (await cargarVideo(d.get, video)) {
           if (token !== M.token) return false;
           medios.modo = "video";
-          ver(video, true);
+          mostrarVideo(true);
           intentarSonar(video.play());
           return true;
         }
@@ -409,7 +434,7 @@
       ytFallos = 0;
       if (token !== M.token) return false;
       medios.modo = "yt";
-      ver(video, false);  // queda a la vista el de YouTube (está debajo)
+      mostrarVideo(false);  // queda a la vista el de YouTube (está debajo)
       return true;
     },
     pausar: function () {
@@ -430,6 +455,18 @@
       if (medios.modo === "yt" && yt && yt.getDuration) return yt.getDuration() || 0;
       return 0;
     },
+    // Deja cargada (callada) la próxima canción en el otro reproductor, si está en la nube.
+    precargar: function (id) {
+      var l = listos[id];
+      if (!l || pre.id === id || (video.getAttribute("src") && medios.modo === "video" && M.actual && M.actual.video_id === id)) return;
+      var el = otroVideo();
+      soltar(el);
+      el.muted = true;
+      el.preload = "auto";
+      el.src = l.get;
+      el.load();
+      pre = { id: id, el: el };
+    },
     irA: function (seg) {
       var d = medios.dur();
       seg = Math.max(0, d > 0 ? Math.min(seg, d - 1) : seg);
@@ -440,9 +477,14 @@
 
   window.PBGO_medios = medios;  // para revisar desde la consola del navegador
 
-  video.addEventListener("ended", function () { if (medios.modo === "video") motor.alTerminar(M.token); });
-  video.addEventListener("error", function () { if (medios.modo === "video") motor.alError(M.token, "video"); });
-  video.addEventListener("playing", function () { ver("capa-sonido", false); });
+  videos.forEach(function (el) {
+    el.addEventListener("ended", function () { if (el === video && medios.modo === "video") motor.alTerminar(M.token); });
+    el.addEventListener("error", function () {
+      if (el === video && medios.modo === "video" && el.getAttribute("src")) motor.alError(M.token, "video");
+      else if (el === pre.el) pre = { id: null, el: null };  // la precarga falló: se carga al ponerla
+    });
+    el.addEventListener("playing", function () { if (el === video) ver("capa-sonido", false); });
+  });
 
   // ------------------------------------------------------------------ el motor
   var motor = {
@@ -471,7 +513,32 @@
       });
       await motor.publicar(snap);
       await motor.precargar(snap);
+      await motor.dejarListaLaSiguiente(snap);
       pintar();
+    },
+
+    // La que va a sonar después (misma regla que decidir): la pedida que siga o, si no hay,
+    // una aleatoria escogida desde ya. Se deja cargada en el otro reproductor.
+    dejarListaLaSiguiente: async function (snap) {
+      if (!M.actual || medios.modo !== "video" || M.bloqueado || M.espejo) return;
+      if (medios.pos() < 3) return;  // primero que arranque bien la que suena
+      var omitir = omitidas();
+      if (M.actual.fila !== null) omitir[M.actual.fila] = 1;
+      var cola = colaDe(snap).filter(function (i) { return !omitir[i.fila] && !enEspera(i.video_id); });
+      if (cola.length) {
+        if (listos[cola[0].video_id]) medios.precargar(cola[0].video_id);
+        return;
+      }
+      var r = M.proxRelleno;
+      if (r && (M.recientes.indexOf(r.video_id) >= 0 || !listos[r.video_id])) r = M.proxRelleno = null;
+      for (var n = 0; !r && n < 3; n++) {
+        var it = await motor.elegirRelleno();
+        if (!it) return;
+        var d = await preparar(it, false);
+        if (d && d.listo) r = M.proxRelleno = it;
+        else recordar(it.video_id);
+      }
+      if (r) medios.precargar(r.video_id);
     },
 
     // Apenas piden una canción se revisa si está en la nube; si no, se encarga de una vez
@@ -508,7 +575,7 @@
 
     revisarGeneros: function () {
       var g = String((M.snap && M.snap.control && M.snap.control.generos) || "");
-      if (M.genPrevios !== null && g !== M.genPrevios) M.tPool = 0;  // se vuelven a pedir filtradas
+      if (M.genPrevios !== null && g !== M.genPrevios) { M.tPool = 0; M.proxRelleno = null; }  // se vuelven a pedir filtradas
       M.genPrevios = g;
     },
 
@@ -583,7 +650,9 @@
       M.ocupado = true;
       try {
         for (var n = 0; n < 3; n++) {
-          var item = await motor.elegirRelleno();
+          var item = M.proxRelleno && M.recientes.indexOf(M.proxRelleno.video_id) < 0 ? M.proxRelleno
+            : await motor.elegirRelleno();
+          M.proxRelleno = null;
           if (!item) { pintarEstado("Sin canciones en cola ni historial"); return; }
           var ok = await motor.reproducir(item, true);
           if (ok === true || ok === null) return;
