@@ -7,6 +7,8 @@ Servidor web de PlayBar GO: la app Flet de siempre + la portada pública.
     play.alnovix.com/bar/1234    clientes del bar 1234        (app Flet)
     cualquier-dominio/inicio     la portada en cualquier dominio (para revisarla)
     /portada/...                 imágenes y videos de la portada
+    play.alnovix.com/pantalla    reproductor en el navegador del TV (Samsung, LG... sin Android)
+    play.alnovix.com/tv          baja el APK; desde un TV Samsung/LG abre /pantalla
 
 En los demás dominios (jukebox-flet-production.up.railway.app, el de los QR ya impresos)
 la raíz sigue abriendo "Ingresa el código del lugar", igual que antes.
@@ -31,6 +33,31 @@ CACHE_SEG = 60
 APK_TV_URL = os.getenv("TV_APK_URL",
                        "https://github.com/a33publicores/jukebox-flet/releases/download/tv-apk/PlayBarGO_TV.apk")
 RUTAS_APK = ("/tv", "/apk", "/tv/", "/apk/")
+RUTAS_PANTALLA = ("/pantalla", "/pantalla/")
+PANTALLA = CARPETA_PORTADA / "pantalla.html"
+# Navegadores de TV que no instalan apps de Android (Samsung Tizen, LG webOS...).
+TV_SIN_ANDROID = ("tizen", "web0s", "webos", "smart-tv", "smarttv", "netcast", "hbbtv")
+
+
+def _agente(scope):
+    for nombre, valor in scope.get("headers") or []:
+        if nombre == b"user-agent":
+            return valor.decode("latin-1").lower()
+    return ""
+
+
+def _es_tv_sin_android(scope):
+    ua = _agente(scope)
+    return "android" not in ua and any(m in ua for m in TV_SIN_ANDROID)
+
+
+async def _redirigir(send, destino):
+    await send({"type": "http.response.start", "status": 302, "headers": [
+        (b"location", destino.encode()),
+        (b"cache-control", b"no-store"),
+        (b"content-length", b"0"),
+    ]})
+    await send({"type": "http.response.body", "body": b""})
 
 _cache = {"html": None, "hasta": 0.0}
 _lock = threading.Lock()
@@ -143,12 +170,11 @@ def crear_app(flet_app):
                 await estaticos(scope, receive, send)
                 return
             if ruta in RUTAS_APK:  # el TV baja el instalador (Downloader o navegador)
-                await send({"type": "http.response.start", "status": 302, "headers": [
-                    (b"location", APK_TV_URL.encode()),
-                    (b"cache-control", b"no-store"),
-                    (b"content-length", b"0"),
-                ]})
-                await send({"type": "http.response.body", "body": b""})
+                # Un TV Samsung/LG no instala el APK: se le abre el reproductor del navegador.
+                await _redirigir(send, "/pantalla" if _es_tv_sin_android(scope) else APK_TV_URL)
+                return
+            if ruta in RUTAS_PANTALLA:
+                await _enviar_html(send, await run_in_threadpool(PANTALLA.read_text, "utf-8"))
                 return
             if ruta == "/inicio" or (ruta == "/" and _es_dominio_portada(scope)):
                 await _enviar_html(send, await run_in_threadpool(html_portada))

@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlayBar GO · Pantalla</title>
+<link rel="icon" type="image/png" href="/pbgo_favicon_v8_192.png">
+<!--
+  Reproductor de PlayBar GO en el navegador del TV (Samsung Tizen, LG webOS...: TV que no
+  instalan apps de Android). Hace lo mismo que el reproductor de TV (reproductor_tv/tv/motor.py)
+  pero sin descargar: cada canción sale de la nube de PlayBar (si algún reproductor ya la
+  subió) o, si no está, del reproductor de YouTube.
+
+  Habla con la misma API que los reproductores instalados (api/servidor.py, con la llave del
+  bar), así que el panel del administrador, los comandos, el plan y los televisores espejo
+  funcionan igual. Escrito para navegadores viejos de TV (sin ?. ni ??).
+-->
+<style>
+  :root { --fondo: #020617; --panel: #0f172a; --borde: #1e293b; --texto: #f8fafc; --gris: #94a3b8;
+          --cian: #22d3ee; --violeta: #a78bfa; --rojo: #7f1d1d; --ambar: #713f12; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--fondo); color: var(--texto);
+               font-family: Arial, Helvetica, sans-serif; overflow: hidden; }
+  .oculto { display: none !important; }
+  #app { display: flex; height: 100%; }
+  #escena { position: relative; flex: 7; background: #000; overflow: hidden; }
+  #video, #yt, #yt iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; background: #000; }
+  #video { z-index: 2; }
+  #tiempo, #pausa { z-index: 3; }
+  #yt iframe { pointer-events: none; }
+  #tiempo { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 12px; align-items: center;
+            padding: 8px 16px; background: rgba(0,0,0,.7); font-size: 14px; color: #cbd5e1; }
+  #barra { flex: 1; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; }
+  #barra div { height: 100%; width: 0; background: var(--cian); }
+  #pausa { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 64px;
+           background: rgba(0,0,0,.6); border-radius: 24px; padding: 12px 36px; }
+  .capa { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(2,6,23,.94); display: flex; flex-direction: column;
+          align-items: center; justify-content: center; text-align: center; padding: 32px; gap: 14px; z-index: 5; }
+  .capa h2 { margin: 0; font-size: 30px; }
+  .capa p { margin: 0; font-size: 18px; color: #cbd5e1; max-width: 720px; line-height: 1.45; }
+  #lado { flex: 3; display: flex; flex-direction: column; gap: 8px; background: var(--fondo);
+          border-left: 1px solid var(--borde); min-width: 0; }
+  #logo { text-align: center; padding: 14px 0 6px; }
+  #logo img { height: 56px; }
+  #nombre { text-align: center; color: var(--gris); font-size: 13px; margin-top: -4px; }
+  .aviso { margin: 0 10px; padding: 8px 10px; border-radius: 10px; font-size: 13px; line-height: 1.35; }
+  #encabezado, #lista { padding: 0 10px; }
+  #lista { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
+  .tarjeta { display: flex; gap: 8px; align-items: center; padding: 6px; border-radius: 10px; background: var(--panel); }
+  .tarjeta.resaltada { background: #12203a; border: 1px solid var(--cian); }
+  .tarjeta img { width: 88px; height: 50px; object-fit: cover; border-radius: 6px; flex: none; background: #000; }
+  .tarjeta .info { min-width: 0; }
+  .etiqueta { font-size: 11px; font-weight: bold; color: var(--violeta); }
+  .tarjeta.resaltada .etiqueta { color: var(--cian); }
+  .titulo { font-size: 14px; font-weight: bold; overflow: hidden; display: -webkit-box;
+            -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .canal { font-size: 11px; color: var(--gris); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .subtitulo { font-size: 12px; font-weight: bold; color: var(--gris); margin: 8px 0 0; }
+  #ayuda { padding: 6px 10px; background: var(--panel); color: #64748b; font-size: 11px; text-align: center; }
+  /* configuración y arranque */
+  #inicio { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--fondo); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
+  #inicio img { height: 90px; }
+  #inicio p { margin: 0; color: #cbd5e1; font-size: 18px; max-width: 720px; line-height: 1.45; }
+  #form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; }
+  label { text-align: left; font-size: 15px; color: var(--gris); }
+  input { width: 100%; margin-top: 4px; font-size: 26px; padding: 10px 14px; border-radius: 12px; border: 2px solid #334155;
+          background: var(--panel); color: var(--texto); text-transform: uppercase; letter-spacing: 2px; }
+  input:focus, button:focus { outline: none; border-color: var(--cian); box-shadow: 0 0 0 4px rgba(34,211,238,.35); }
+  button { font-size: 22px; font-weight: bold; padding: 14px 28px; border-radius: 14px; border: 2px solid transparent;
+           background: linear-gradient(90deg, #06b6d4, #8b5cf6); color: #fff; cursor: pointer; }
+  button.secundario { background: var(--panel); border-color: #334155; font-size: 16px; padding: 10px 18px; }
+  #msg { min-height: 24px; color: #fca5a5; font-size: 17px; }
+</style>
+</head>
+<body>
+
+<div id="inicio">
+  <img src="/portada/logo.png" alt="PlayBar GO">
+  <div id="paso-config" class="oculto">
+    <p>Escribe el código del lugar y la llave del bar (te los da el administrador de PlayBar GO).</p>
+    <div id="form" style="margin:16px auto 0">
+      <label>Código del lugar<input id="in-codigo" inputmode="numeric" autocomplete="off" placeholder="ej. 8523"></label>
+      <label>Llave del bar<input id="in-llave" autocomplete="off" placeholder="ej. K7M4-X9P2"></label>
+      <button id="btn-guardar">Guardar y empezar</button>
+    </div>
+  </div>
+  <div id="paso-comenzar" class="oculto">
+    <p id="t-lugar"></p>
+    <p style="margin:10px 0 18px">Presiona OK para empezar la música.</p>
+    <button id="btn-comenzar">▶ Comenzar</button>
+    <div style="margin-top:18px"><button id="btn-cambiar" class="secundario">Cambiar código o llave</button></div>
+  </div>
+  <div id="msg"></div>
+</div>
+
+<div id="app">
+  <div id="escena">
+    <video id="video" playsinline preload="auto"></video>
+    <div id="yt"><div id="yt-lugar"></div></div>
+    <div id="tiempo"><span id="t-pos">0:00</span><div id="barra"><div></div></div><span id="t-dur">0:00</span></div>
+    <div id="pausa" class="oculto">⏸</div>
+    <div id="capa-sonido" class="capa oculto">
+      <h2>🔈 Presiona OK para activar el sonido</h2>
+      <p>El navegador del TV pide un toque antes de dejar sonar la música.</p>
+      <button id="btn-sonido">Activar sonido</button>
+    </div>
+    <div id="capa-otro" class="capa oculto">
+      <h2>Se está usando en otro equipo</h2>
+      <p id="t-otro"></p>
+      <button id="btn-aqui">Usar aquí</button>
+    </div>
+    <div id="capa-plan" class="capa oculto">
+      <h2 id="t-plan-titulo"></h2>
+      <p id="t-plan-msg"></p>
+      <p id="t-plan-url" style="color:#22d3ee"></p>
+    </div>
+  </div>
+  <div id="lado">
+    <div id="logo"><img src="/portada/logo.png" alt="PlayBar GO"></div>
+    <div id="nombre"></div>
+    <div id="aviso" class="aviso oculto"></div>
+    <div id="encabezado"></div>
+    <div id="lista"></div>
+    <div id="ayuda">OK pausa · ◀ ▶ anterior/siguiente</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ------------------------------------------------------------------ ajustes
+  var parametros = new URLSearchParams(location.search);
+  var API = (parametros.get("api") || "https://api.play.alnovix.com").replace(/\/+$/, "");
+  var INTERVALO = 4000;          // entre lecturas de la cola (igual que el TV)
+  var LATIDO = 15000;            // el panel ve "en línea" con un latido cada 15 s
+  var RECIENTES = 15;            // relleno: no repetir las últimas N
+  var COMANDO_MAX_EDAD = 120;    // comandos del admin más viejos se ignoran
+  var AVISAR_SIN_RED = 45000;    // un corte corto no se muestra
+  var ESPEJO_DESFASE = 3;        // televisor espejo: si va más de 3 s corrido, se empareja
+  var ALTURAS_NUBE = [720, 480]; // así guardan las canciones los TV y PC (<id>_<altura>.mp4)
+  var E_COLA = "En cola", E_PLAY = "En reproduccion", E_SIGUE = "Siguiente", E_HECHO = "Reproducido",
+      E_ELIM = "Eliminado", E_ERROR = "Error";
+
+  function $(id) { return document.getElementById(id); }
+  function ver(el, si) { (typeof el === "string" ? $(el) : el).classList.toggle("oculto", !si); }
+  function ahora() { return Date.now(); }
+  function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function guardado(clave) { try { return localStorage.getItem(clave) || ""; } catch (e) { return ""; } }
+  function guardar(clave, valor) { try { localStorage.setItem(clave, valor); } catch (e) {} }
+
+  var cfg = { codigo: guardado("pbgo_codigo"), llave: guardado("pbgo_llave") };
+
+  // ------------------------------------------------------------------ API
+  function LlaveMala(msg) { this.message = msg; this.llaveMala = true; }
+
+  function conTiempo(promesa, ms) {
+    return Promise.race([promesa, esperar(ms).then(function () { throw new Error("El servidor no responde (internet lento o caído)."); })]);
+  }
+
+  function pedir(metodo, ruta, datos, llave) {
+    var op = { method: metodo, headers: { "X-Llave": llave || cfg.llave } };
+    if (datos) { op.headers["Content-Type"] = "application/json"; op.body = JSON.stringify(datos); }
+    return conTiempo(fetch(API + ruta, op), 15000).then(function (r) {
+      if (r.status === 401) throw new LlaveMala("La llave del bar no es válida (o el negocio está inactivo).");
+      return r.json();
+    }).then(function (d) {
+      if (!d.ok) throw new Error(d.error || "Error de la API");
+      return d;
+    }, function (e) {
+      if (e && e.llaveMala) throw e;
+      if (e && /responde/.test(e.message || "")) throw e;
+      throw new Error("Sin internet o sin conexión con el servidor.");
+    });
+  }
+
+  var api = {
+    config: function (llave) { return pedir("GET", "/api/v1/config", null, llave); },
+    instantanea: function () { return pedir("GET", "/api/v1/instantanea"); },
+    aleatorio: function () { return pedir("GET", "/api/v1/aleatorio?filtrar=1"); },
+    suscripcion: function () { return pedir("GET", "/api/v1/suscripcion"); },
+    marcar: function (fila, e2, estado) { return pedir("POST", "/api/v1/marcar", { fila: fila, estado2: e2, estado: estado }); },
+    nube: function (archivo) { return pedir("POST", "/api/v1/nube", { archivo: archivo }); },
+    estado: function (estado, actual, siguiente, ack, video) {
+      return pedir("POST", "/api/v1/estado", { estado: estado, actual: actual, siguiente: siguiente, ack: ack,
+        instancia: M.instancia, equipo: M.equipo, espejo: true, video: video });
+    },
+    reclamar: function (forzar, info) {
+      return pedir("POST", "/api/v1/reclamar", { instancia: M.instancia, equipo: M.equipo, forzar: !!forzar,
+        info: info || {}, espejo: true });
+    }
+  };
+
+  // ------------------------------------------------------------------ la cola
+  function deHoy(it, snap) { return it.ts !== null && it.ts !== undefined && it.ts >= snap.inicio; }
+  function clave(it) { return it.orden !== null && it.orden !== undefined ? it.orden : (it.fila || 0); }
+  function marcadaDe(snap) {
+    for (var i = 0; i < snap.items.length; i++) {
+      var it = snap.items[i];
+      if (it.estado2 === E_PLAY && deHoy(it, snap)) return it;
+    }
+    return null;
+  }
+  function colaDe(snap) {
+    return snap.items.filter(function (it) {
+      return deHoy(it, snap) && it.estado !== E_ERROR && (it.estado2 === E_COLA || it.estado2 === E_SIGUE);
+    }).sort(function (a, b) { return clave(a) - clave(b); });
+  }
+
+  // ------------------------------------------------------------------ estado del motor
+  var M = {
+    // la misma en cada recarga de la página: así al recargar no se bloquea a sí mismo
+    // ("Se está usando en otro equipo") mientras vence la conexión anterior
+    instancia: guardado("pbgo_instancia") || (function () {
+      var id = Math.random().toString(16).slice(2) + Date.now().toString(16);
+      guardar("pbgo_instancia", id);
+      return id;
+    })(),
+    equipo: "TV (navegador)",
+    actual: null, relleno: false, pausado: false, previo: null, token: 0, ocupado: false,
+    recientes: [], hechas: {}, pend: [], snap: null, ack: null, ultimoCid: null,
+    pool: [], tPool: 0, genPrevios: null,
+    bloqueado: false, plan: null, tPlan: 0,
+    inactivo: false, espejo: false, espejoVid: "",
+    pub: null, tPub: 0, error: "", desde: null
+  };
+
+  window.PBGO = M;  // para revisar desde la consola del navegador
+
+  var candadoCola = Promise.resolve();
+  function candado(fn) {  // una sola operación de estado a la vez (como el asyncio.Lock del TV)
+    var r = candadoCola.then(fn);
+    candadoCola = r.catch(function () {});
+    return r;
+  }
+
+  function recordar(id) {
+    M.recientes.push(id);
+    while (M.recientes.length > RECIENTES) M.recientes.shift();
+  }
+  function filasPendientes() { var s = {}; M.pend.forEach(function (p) { s[p[0]] = 1; }); return s; }
+  function omitidas() {
+    var s = filasPendientes();
+    for (var f in M.hechas) s[f] = 1;
+    return s;
+  }
+
+  // ------------------------------------------------------------------ medios (nube o YouTube)
+  var video = $("video");
+  var yt = null, ytListo = null, ytEspera = null;
+  var sinNube = {};  // video_id -> hora: no está en la nube (no se vuelve a preguntar en 30 min)
+
+  function cargarYouTube() {
+    if (ytListo) return ytListo;
+    ytListo = new Promise(function (listo) {
+      window.onYouTubeIframeAPIReady = function () {
+        yt = new YT.Player("yt-lugar", {
+          width: "100%", height: "100%",
+          playerVars: { autoplay: 1, controls: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, playsinline: 1,
+                        disablekb: 1, fs: 0 },
+          events: {
+            onReady: function () {
+              var f = $("yt").querySelector("iframe");
+              if (f) f.setAttribute("tabindex", "-1");
+              listo(true);
+            },
+            onStateChange: function (e) {
+              if (e.data === 1 && ytEspera) { ytEspera(true); ytEspera = null; }
+              if (e.data === 1) ver("capa-sonido", false);
+              if (e.data === 0 && medios.modo === "yt") motor.alTerminar(M.token);
+            },
+            onError: function (e) {
+              if (ytEspera) { ytEspera(false); ytEspera = null; return; }
+              if (medios.modo === "yt") motor.alError(M.token, "YouTube " + e.data);
+            }
+          }
+        });
+      };
+      var s = document.createElement("script");
+      s.src = "https://www.youtube.com/iframe_api";
+      s.onerror = function () { listo(false); };
+      document.head.appendChild(s);
+      setTimeout(function () { listo(false); }, 20000);
+    });
+    ytListo.then(function (ok) { if (!ok) { ytListo = null; } });  // se reintenta en la próxima
+    return ytListo;
+  }
+
+  function cargarVideo(url) {
+    return new Promise(function (listo) {
+      var hecho = false;
+      function fin(ok) {
+        if (hecho) return;
+        hecho = true;
+        video.removeEventListener("canplay", si);
+        video.removeEventListener("error", no);
+        listo(ok);
+      }
+      function si() { fin(true); }
+      function no() { fin(false); }
+      video.addEventListener("canplay", si);
+      video.addEventListener("error", no);
+      video.src = url;
+      video.load();
+      setTimeout(function () { fin(false); }, 20000);
+    });
+  }
+
+  function intentarSonar(promesa) {
+    if (promesa && promesa.catch) {
+      promesa.catch(function (e) { if (e && e.name === "NotAllowedError") ver("capa-sonido", true); });
+    }
+  }
+
+  var medios = {
+    modo: null,
+    detener: function () {
+      try { video.pause(); } catch (e) {}
+      if (yt && yt.stopVideo) { try { yt.stopVideo(); } catch (e) {} }
+      if (ytEspera) { ytEspera(false); ytEspera = null; }
+      medios.modo = null;
+    },
+    poner: async function (id, token) {
+      medios.detener();
+      // 1) la nube de PlayBar: sin anuncios y sin depender de YouTube
+      var marca = sinNube[id];
+      if (!marca || ahora() - marca > 30 * 60000) {
+        for (var i = 0; i < ALTURAS_NUBE.length; i++) {
+          var d;
+          try { d = await api.nube(id + "_" + ALTURAS_NUBE[i] + ".mp4"); } catch (e) { break; }
+          if (!d.activo || token !== M.token) break;
+          if (await cargarVideo(d.get)) {
+            if (token !== M.token) return false;
+            medios.modo = "video";
+            ver(video, true);
+            intentarSonar(video.play());
+            return true;
+          }
+        }
+        sinNube[id] = ahora();
+      }
+      if (token !== M.token) return false;
+      // 2) el reproductor de YouTube
+      video.removeAttribute("src");
+      // null = no hay con qué reproducir (sin internet, YouTube no cargó): no es culpa de la canción
+      if (!(await cargarYouTube()) || !yt || !yt.loadVideoById) return null;
+      var ok = await new Promise(function (listo) {
+        ytEspera = listo;
+        yt.loadVideoById(id);
+        setTimeout(function () {
+          if (ytEspera !== listo) return;
+          ytEspera = null;
+          // sin error pero sin sonar: el navegador pide un toque para el sonido
+          var st = yt.getPlayerState ? yt.getPlayerState() : -1;
+          if (st === 5 || st === -1 || st === 2) ver("capa-sonido", true);
+          listo(true);
+        }, 15000);
+      });
+      if (!ok || token !== M.token) return false;
+      medios.modo = "yt";
+      ver(video, false);  // queda a la vista el de YouTube (está debajo)
+      return true;
+    },
+    pausar: function () {
+      if (medios.modo === "video") video.pause();
+      else if (medios.modo === "yt" && yt) yt.pauseVideo();
+    },
+    reanudar: function () {
+      if (medios.modo === "video") intentarSonar(video.play());
+      else if (medios.modo === "yt" && yt) yt.playVideo();
+    },
+    pos: function () {
+      if (medios.modo === "video") return video.currentTime || 0;
+      if (medios.modo === "yt" && yt && yt.getCurrentTime) return yt.getCurrentTime() || 0;
+      return 0;
+    },
+    dur: function () {
+      if (medios.modo === "video") return isFinite(video.duration) ? video.duration : 0;
+      if (medios.modo === "yt" && yt && yt.getDuration) return yt.getDuration() || 0;
+      return 0;
+    },
+    irA: function (seg) {
+      var d = medios.dur();
+      seg = Math.max(0, d > 0 ? Math.min(seg, d - 1) : seg);
+      if (medios.modo === "video") { try { video.currentTime = seg; } catch (e) {} }
+      else if (medios.modo === "yt" && yt) yt.seekTo(seg, true);
+    }
+  };
+
+  window.PBGO_medios = medios;  // para revisar desde la consola del navegador
+
+  video.addEventListener("ended", function () { if (medios.modo === "video") motor.alTerminar(M.token); });
+  video.addEventListener("error", function () { if (medios.modo === "video") motor.alError(M.token, "video"); });
+  video.addEventListener("playing", function () { ver("capa-sonido", false); });
+
+  // ------------------------------------------------------------------ el motor
+  var motor = {
+    tick: async function () {
+      if (M.inactivo) return;
+      if (M.espejo) { await motor.tickEspejo(); return; }
+      await motor.revisarPlan();
+      await motor.reintentarMarcas();
+      var snap;
+      try {
+        snap = await api.instantanea();
+      } catch (e) {
+        // sin servidor: si no suena nada, se sigue con la última lectura
+        await candado(async function () {
+          if (!M.actual && !M.ocupado && M.snap) await motor.decidir(M.snap);
+        });
+        throw e;
+      }
+      await candado(async function () {
+        M.snap = snap;
+        motor.revisarGeneros();
+        if (await motor.comandos(snap)) {
+          try { snap = await api.instantanea(); M.snap = snap; } catch (e) {}
+        }
+        await motor.decidir(snap);
+      });
+      await motor.publicar(snap);
+      pintar();
+    },
+
+    revisarPlan: async function () {
+      var cada = M.bloqueado ? 15000 : 60000;
+      if (ahora() - M.tPlan < cada) return;
+      M.tPlan = ahora();
+      var info;
+      try { info = await api.suscripcion(); } catch (e) { return; }  // un corte no bloquea
+      M.plan = info;
+      M.bloqueado = info.permitido === false;
+      pintarPlan();
+    },
+
+    revisarGeneros: function () {
+      var g = String((M.snap && M.snap.control && M.snap.control.generos) || "");
+      if (M.genPrevios !== null && g !== M.genPrevios) M.tPool = 0;  // se vuelven a pedir filtradas
+      M.genPrevios = g;
+    },
+
+    decidir: async function (snap) {
+      if (M.bloqueado && !M.actual) return;  // prueba terminada / plan vencido
+      var omitir = omitidas(), pend = filasPendientes();
+      var marcada = marcadaDe(snap);
+      if (marcada && omitir[marcada.fila]) marcada = null;
+      var cola = colaDe(snap).filter(function (i) {
+        return !omitir[i.fila] && !(M.actual && i.fila === M.actual.fila);
+      });
+      if (!M.actual) {
+        if (marcada) await motor.tomar(marcada, true);
+        else if (cola.length) await motor.tomar(cola[0], false);
+        else await motor.ponerRelleno();
+      } else if (M.relleno) {
+        // la pedida espera a que termine la aleatoria (no se corta)
+      } else if (M.actual.fila !== null && !pend[M.actual.fila]) {
+        var enHoja = null;
+        snap.items.forEach(function (i) { if (i.fila === M.actual.fila) enHoja = i; });
+        if (enHoja && (enHoja.estado2 === E_ELIM || enHoja.estado2 === E_ERROR)) await motor.terminar("externo");
+        else if (marcada && marcada.fila !== M.actual.fila) {
+          await motor.marcar(marcada.fila, M.hechas[marcada.fila] ? E_HECHO : E_SIGUE);
+          await motor.marcar(M.actual.fila, E_PLAY);
+        }
+      }
+    },
+
+    tomar: async function (item, yaMarcada) {
+      M.ocupado = true;
+      try {
+        pintarEstado("Preparando: " + item.titulo);
+        var ok = await motor.reproducir(item, false);
+        if (ok === null) { pintarEstado("Conectando con el reproductor de videos…"); return; }
+        if (!ok) {
+          console.log("No se pudo poner", item.video_id);
+          await motor.marcar(item.fila, E_ERROR, E_ERROR);
+          return;
+        }
+        if (!yaMarcada) motor.marcarLuego(item.fila, E_PLAY, item.estado === "Agregado" ? null : "Agregado");
+      } finally {
+        M.ocupado = false;
+      }
+    },
+
+    elegirRelleno: async function () {
+      if (!M.pool.length || ahora() - M.tPool > 15 * 60000) {
+        try { M.pool = (await api.aleatorio()).items || []; M.tPool = ahora(); } catch (e) {}
+      }
+      if (!M.pool.length) return null;
+      var libres = M.pool.filter(function (i) { return M.recientes.indexOf(i.video_id) < 0; });
+      var de = libres.length ? libres : M.pool;
+      var it = de[Math.floor(Math.random() * de.length)];
+      return { fila: null, titulo: it.titulo, canal: it.canal, video_id: it.video_id };
+    },
+
+    ponerRelleno: async function () {
+      M.ocupado = true;
+      try {
+        for (var n = 0; n < 3; n++) {
+          var item = await motor.elegirRelleno();
+          if (!item) { pintarEstado("Sin canciones en cola ni historial"); return; }
+          var ok = await motor.reproducir(item, true);
+          if (ok || ok === null) return;
+          recordar(item.video_id);
+        }
+      } finally {
+        M.ocupado = false;
+      }
+    },
+
+    reproducir: async function (item, relleno) {
+      M.actual = item; M.relleno = relleno; M.pausado = false;
+      M.token += 1;
+      var token = M.token;
+      recordar(item.video_id);
+      pintar();
+      var ok = await medios.poner(item.video_id, token);
+      if (token !== M.token) return true;  // otra canción ya tomó su lugar
+      if (!ok) { M.actual = null; M.relleno = false; return ok; }
+      ver("pausa", false);
+      console.log("▶️ " + (relleno ? "(relleno) " : "") + item.titulo);
+      pintar();
+      return true;
+    },
+
+    terminar: async function (motivo) {
+      var item = M.actual;
+      if (item && item.fila !== null && motivo !== "externo") {
+        M.hechas[item.fila] = 1;
+        motor.marcarLuego(item.fila, E_HECHO);
+      }
+      M.previo = item; M.actual = null; M.relleno = false; M.token += 1;
+      medios.detener();
+      try {
+        if (!M.snap) M.snap = await api.instantanea();
+        await motor.decidir(M.snap);
+      } catch (e) { console.log("La siguiente se decide en el próximo ciclo", e); }
+      if (M.bloqueado && !M.actual) pintarPlan();
+    },
+
+    alTerminar: function (token) {
+      if (M.inactivo || M.espejo) return;
+      candado(async function () {
+        if (token === M.token && M.actual) await motor.terminar("ok");
+      });
+    },
+
+    alError: function (token, mensaje) {
+      if (M.espejo) { M.espejoVid = ""; return; }
+      candado(async function () {
+        if (token !== M.token || !M.actual) return;
+        console.log("❌ Error de reproducción: " + mensaje);
+        var it = M.actual;
+        if (it.fila !== null) await motor.marcar(it.fila, E_ERROR, E_ERROR);
+        M.previo = null; M.actual = null; M.relleno = false; M.token += 1;
+        if (M.snap) await motor.decidir(M.snap);
+      });
+    },
+
+    // ---- comandos del administrador (y del control remoto)
+    comandos: async function (snap) {
+      var c = snap.control || {};
+      var cid = c.comando_id || "";
+      if (!cid || cid === c.ack || cid === M.ultimoCid) return false;
+      M.ultimoCid = cid;
+      var edad = ahora() / 1000 - (parseInt(String(cid).split("-")[0], 10) || ahora() / 1000);
+      var cambio = false;
+      if (edad <= COMANDO_MAX_EDAD) cambio = await motor.ejecutarCmd(c.comando || "");
+      M.ack = cid;
+      return cambio;
+    },
+
+    ejecutar: function (cmd) {
+      if (M.inactivo || M.espejo) return;
+      if (cmd === "pausar" || cmd === "reanudar") motor.ejecutarCmd(cmd).then(pintar);
+      else candado(function () { return motor.ejecutarCmd(cmd); }).then(pintar);
+    },
+
+    ejecutarCmd: async function (cmd) {
+      if (cmd === "pausar" && M.actual) { medios.pausar(); M.pausado = true; ver("pausa", true); }
+      else if (cmd === "reanudar" && M.actual) { medios.reanudar(); M.pausado = false; ver("pausa", false); }
+      else if (cmd === "siguiente") {
+        if (M.actual) await motor.terminar("saltada");
+        else if (M.snap) await motor.decidir(M.snap);
+        return true;
+      } else if (cmd === "anterior") { await motor.anterior(); return true; }
+      return false;
+    },
+
+    anterior: async function () {
+      var prev = M.previo, cur = M.actual;
+      if (!prev) return;
+      if (prev.fila !== null) delete M.hechas[prev.fila];
+      if (cur && cur.fila !== null) await motor.marcar(cur.fila, E_COLA);
+      if (prev.fila !== null) await motor.marcar(prev.fila, E_PLAY);
+      M.previo = null;
+      M.ocupado = true;
+      try { await motor.reproducir(prev, prev.fila === null); } finally { M.ocupado = false; }
+    },
+
+    // ---- marcas en la cola (si fallan se reintentan; mientras tanto cuentan como pendientes)
+    marcar: async function (fila, e2, estado) {
+      if (fila === null || fila === undefined) return;
+      try { await api.marcar(fila, e2, estado); } catch (e) { M.pend.push([fila, e2, estado || null]); }
+    },
+    marcarLuego: function (fila, e2, estado) {
+      if (fila === null || fila === undefined) return;
+      var marca = [fila, e2, estado || null];
+      M.pend.push(marca);
+      api.marcar(fila, e2, estado).then(function () {
+        var i = M.pend.indexOf(marca);
+        if (i >= 0) M.pend.splice(i, 1);
+      }, function () {});
+    },
+    reintentarMarcas: async function () {
+      var lista = M.pend.slice();
+      for (var i = 0; i < lista.length; i++) {
+        try { await api.marcar(lista[i][0], lista[i][1], lista[i][2]); } catch (e) { return; }
+        var j = M.pend.indexOf(lista[i]);
+        if (j >= 0) M.pend.splice(j, 1);
+      }
+    },
+
+    // ---- lo que ve el panel del administrador (y siguen los televisores espejo)
+    estadoTxt: function () {
+      if (!M.actual) return "esperando";
+      if (M.pausado) return "pausado";
+      return M.relleno ? "relleno" : "reproduciendo";
+    },
+
+    publicar: async function (snap) {
+      var omitir = omitidas();
+      if (M.actual && M.actual.fila !== null) omitir[M.actual.fila] = 1;
+      var cola = colaDe(snap).filter(function (i) { return !omitir[i.fila]; });
+      var actual = M.actual ? M.actual.titulo : "", sig = cola.length ? cola[0].titulo : "";
+      var vid = M.actual ? M.actual.video_id : "";
+      var claveP = JSON.stringify([motor.estadoTxt(), actual, sig, M.ack, vid]);
+      if (claveP === M.pub && ahora() - M.tPub < LATIDO) return;
+      var r = await api.estado(motor.estadoTxt(), actual, sig, M.ack, {
+        id: vid, canal: M.actual ? M.actual.canal : "", siguiente: cola.length ? cola[0].video_id : "",
+        pos: Math.round(medios.pos() * 100) / 100
+      });
+      if (r.activo === false) { motor.quedarInactivo(r.equipo); return; }
+      if (r.rol === "espejo") { motor.serEspejo(); return; }
+      M.pub = claveP; M.tPub = ahora();
+    },
+
+    // ---- un solo reproductor por bar / varios televisores (espejo)
+    reclamar: async function (forzar) {
+      var r;
+      try {
+        r = await api.reclamar(forzar, { modelo: navigator.userAgent.slice(0, 120), sistema: "Navegador del TV" });
+      } catch (e) {
+        if (e && e.llaveMala) throw e;
+        return true;  // sin red: sigue normal
+      }
+      if (r.activo === false) { motor.quedarInactivo(r.equipo); return false; }
+      if (r.rol === "espejo") motor.serEspejo();
+      else if (M.espejo) motor.dejarEspejo();
+      return true;
+    },
+
+    serEspejo: function () {
+      if (M.espejo) return;
+      M.espejo = true; M.espejoVid = ""; M.relleno = false; M.pub = null;
+      pintar();
+    },
+
+    dejarEspejo: function () {
+      if (!M.espejo) return;
+      M.espejo = false; M.espejoVid = "";
+      if (M.actual) { M.actual.fila = null; M.relleno = true; }  // termina como aleatoria
+      M.pub = null;
+      pintar();
+    },
+
+    tickEspejo: async function () {
+      var r = await api.reclamar(false, null);
+      var tResp = ahora();
+      if (r.activo === false) { motor.quedarInactivo(r.equipo); return; }
+      if (r.rol !== "espejo") { motor.dejarEspejo(); return; }
+      var s = r.sigue || {};
+      try { M.snap = await api.instantanea(); } catch (e) {}
+      var vid = s.video || "";
+      var quieto = s.estado === "pausado" || s.estado === "esperando" || !s.estado;
+      if (!vid) {
+        if (M.actual && !M.pausado) { medios.pausar(); M.pausado = true; }
+      } else if (vid !== M.espejoVid) {
+        M.espejoVid = vid;
+        M.actual = { fila: null, titulo: s.titulo || "", canal: s.canal || "", video_id: vid };
+        M.relleno = false; M.token += 1;
+        var token = M.token;
+        pintar();
+        if (await medios.poner(vid, token) && token === M.token) {
+          M.pausado = false;
+          var destino = (s.pos || 0) + (ahora() - tResp) / 1000;
+          if (destino > ESPEJO_DESFASE) medios.irA(destino);
+          if (s.estado === "pausado") { medios.pausar(); M.pausado = true; }
+        }
+      } else {
+        if (quieto && !M.pausado) { medios.pausar(); M.pausado = true; }
+        else if (!quieto && M.pausado) { medios.reanudar(); M.pausado = false; }
+        if (!quieto) {
+          var dest = (s.pos || 0) + (ahora() - tResp) / 1000;
+          if (Math.abs(medios.pos() - dest) > ESPEJO_DESFASE) medios.irA(dest);
+        }
+      }
+      ver("pausa", M.pausado && !!M.actual);
+      pintar();
+    },
+
+    quedarInactivo: function (equipo) {
+      if (M.inactivo) return;
+      M.inactivo = true;
+      if (M.actual) { medios.pausar(); M.pausado = true; }
+      $("t-otro").textContent = "Ahora está sonando en «" + (equipo || "otro equipo") + "».";
+      ver("capa-otro", true);
+      $("btn-aqui").focus();
+    },
+
+    usarAqui: async function () {
+      M.inactivo = false;  // para que reclamar pueda volver a marcarlo si falla
+      if (!(await motor.reclamar(true))) return;
+      M.pub = null;
+      ver("capa-otro", false);
+      if (M.actual && M.pausado) { medios.reanudar(); M.pausado = false; ver("pausa", false); }
+    }
+  };
+
+  async function bucle() {
+    for (;;) {
+      try {
+        await motor.tick();
+        if (M.desde !== null) { M.desde = null; if (M.error) { M.error = ""; pintar(true); } }
+      } catch (e) {
+        if (e && e.llaveMala) { pedirConfig(e.message); return; }
+        console.log("⚠️ Motor:", e && e.message);
+        if (M.desde === null) M.desde = ahora();
+        if (ahora() - M.desde >= AVISAR_SIN_RED && !M.error) { M.error = (e && e.message) || "Sin conexión"; pintar(true); }
+      }
+      await esperar(INTERVALO);
+    }
+  }
+
+  // ------------------------------------------------------------------ pantalla
+  var firma = "";
+
+  function tarjeta(item, etiqueta, resaltada) {
+    var div = document.createElement("div");
+    div.className = "tarjeta" + (resaltada ? " resaltada" : "");
+    var img = document.createElement("img");
+    img.src = "https://i.ytimg.com/vi/" + encodeURIComponent(item.video_id) + "/mqdefault.jpg";
+    img.alt = "";
+    var info = document.createElement("div");
+    info.className = "info";
+    if (etiqueta) {
+      var e = document.createElement("div");
+      e.className = "etiqueta"; e.textContent = etiqueta; info.appendChild(e);
+    }
+    var t = document.createElement("div");
+    t.className = "titulo"; t.textContent = item.titulo || ""; info.appendChild(t);
+    var c = document.createElement("div");
+    c.className = "canal"; c.textContent = item.canal || ""; info.appendChild(c);
+    div.appendChild(img); div.appendChild(info);
+    return div;
+  }
+
+  function pintarEstado(texto) {
+    if (M.actual) return;
+    var enc = $("encabezado");
+    enc.innerHTML = "";
+    var p = document.createElement("div");
+    p.className = "subtitulo"; p.textContent = texto;
+    enc.appendChild(p);
+  }
+
+  function pintar(forzar) {
+    var cola = [];
+    if (M.snap) {
+      var omitir = omitidas();
+      if (M.actual && M.actual.fila !== null) omitir[M.actual.fila] = 1;
+      cola = M.espejo ? colaDe(M.snap) : colaDe(M.snap).filter(function (i) { return !omitir[i.fila]; });
+    }
+    var nueva = JSON.stringify([M.actual && M.actual.video_id, M.relleno, M.pausado, M.espejo, M.error,
+      cola.map(function (i) { return [i.fila, i.video_id]; })]);
+    if (nueva === firma && !forzar) return;
+    firma = nueva;
+    var aviso = $("aviso");
+    if (M.error) {
+      aviso.style.background = "var(--rojo)";
+      aviso.textContent = "⚠️ " + M.error + " La música sigue sonando; los pedidos nuevos llegan solos cuando vuelva la conexión.";
+      ver(aviso, true);
+    } else pintarPlan();
+    var enc = $("encabezado");
+    enc.innerHTML = "";
+    if (M.actual) {
+      enc.appendChild(tarjeta(M.actual, M.espejo ? "EN REPRODUCCIÓN · igual que el TV principal"
+        : (M.relleno ? "RELLENO · del historial" : "EN REPRODUCCIÓN"), true));
+    } else {
+      var p = document.createElement("div");
+      p.className = "subtitulo"; p.textContent = "Esperando canciones…";
+      enc.appendChild(p);
+    }
+    var sub = document.createElement("div");
+    sub.className = "subtitulo";
+    sub.textContent = cola.length ? "SIGUE (" + cola.length + ")" : (M.actual ? "No hay más canciones en cola" : "");
+    enc.appendChild(sub);
+    var lista = $("lista");
+    lista.innerHTML = "";
+    cola.slice(0, 15).forEach(function (it) { lista.appendChild(tarjeta(it, "", false)); });
+    ver("pausa", M.pausado && !!M.actual);
+  }
+
+  function pintarPlan() {
+    var info = M.plan || {};
+    var aviso = $("aviso");
+    if (info.permitido === false && !M.actual) {
+      $("t-plan-titulo").textContent = "🔒 " + (info.titulo || "Plan no activo");
+      $("t-plan-msg").textContent = info.mensaje || "";
+      $("t-plan-url").textContent = info.url_pago || "Pídelo al administrador de PlayBar GO.";
+      ver("capa-plan", true);
+    } else ver("capa-plan", false);
+    if (M.error) return;
+    if (info.permitido === false && M.actual) {
+      aviso.style.background = "var(--rojo)";
+      aviso.textContent = "🔒 " + (info.titulo || "") + ": esta es la última canción.";
+      ver(aviso, true);
+    } else if (info.aviso) {
+      aviso.style.background = "var(--ambar)";
+      aviso.textContent = "⏳ " + (info.titulo || "") + ": " + (info.mensaje || "");
+      ver(aviso, true);
+    } else ver(aviso, false);
+  }
+
+  function dosDigitos(n) { return (n < 10 ? "0" : "") + n; }
+  function reloj(s) { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + dosDigitos(s % 60); }
+
+  var vigilancia = { pos: -1, desde: 0 };
+  setInterval(function () {
+    var pos = medios.pos(), dur = medios.dur();
+    $("t-pos").textContent = reloj(pos);
+    $("t-dur").textContent = reloj(dur);
+    $("barra").firstChild.style.width = (dur > 0 ? Math.min(100, pos / dur * 100) : 0) + "%";
+    // Seguro: si la canción lleva 90 s sin avanzar (y nadie la pausó), se pasa a la siguiente.
+    if (M.actual && !M.pausado && !M.ocupado && medios.modo && $("capa-sonido").classList.contains("oculto")) {
+      if (Math.abs(pos - vigilancia.pos) > 0.2) { vigilancia.pos = pos; vigilancia.desde = ahora(); }
+      else if (ahora() - vigilancia.desde > 90000) {
+        vigilancia.desde = ahora();
+        motor.alError(M.token, "la canción no avanza");
+      }
+    } else vigilancia.desde = ahora();
+  }, 1000);
+
+  // ------------------------------------------------------------------ control remoto
+  document.addEventListener("keydown", function (e) {
+    if (!$("inicio").classList.contains("oculto")) return;  // en la configuración escribe normal
+    var k = e.keyCode;
+    var enCapa = !$("capa-otro").classList.contains("oculto") || !$("capa-sonido").classList.contains("oculto");
+    if (enCapa) return;  // OK toca el botón de la capa
+    if (k === 13 || k === 10252 || k === 415 || k === 19 || k === 32) {
+      motor.ejecutar(M.pausado ? "reanudar" : "pausar"); e.preventDefault();
+    } else if (k === 39 || k === 417) { motor.ejecutar("siguiente"); e.preventDefault(); }
+    else if (k === 37 || k === 412) { motor.ejecutar("anterior"); e.preventDefault(); }
+  });
+  // si el foco se va al video de YouTube, vuelve a la página (para que el control remoto funcione)
+  window.addEventListener("blur", function () { setTimeout(function () { window.focus(); }, 100); });
+
+  $("btn-aqui").addEventListener("click", function () { motor.usarAqui(); });
+  $("btn-sonido").addEventListener("click", function () {
+    ver("capa-sonido", false);
+    medios.reanudar();
+    M.pausado = false; ver("pausa", false);
+  });
+
+  // ------------------------------------------------------------------ arranque
+  function pedirConfig(mensaje) {
+    ver("inicio", true); ver("paso-comenzar", false); ver("paso-config", true);
+    $("msg").textContent = mensaje || "";
+    $("in-codigo").value = cfg.codigo;
+    $("in-llave").value = cfg.llave;
+    (cfg.codigo ? $("in-llave") : $("in-codigo")).focus();
+  }
+
+  function pedirComenzar(nombre) {
+    ver("inicio", true); ver("paso-config", false); ver("paso-comenzar", true);
+    $("msg").textContent = "";
+    $("t-lugar").textContent = (nombre ? nombre + " · " : "") + "Lugar " + cfg.codigo;
+    if (nombre) $("nombre").textContent = nombre;
+    $("btn-comenzar").focus();
+  }
+
+  $("in-codigo").addEventListener("keydown", function (e) { if (e.keyCode === 13) $("in-llave").focus(); });
+  $("in-llave").addEventListener("keydown", function (e) { if (e.keyCode === 13) $("btn-guardar").click(); });
+
+  $("btn-guardar").addEventListener("click", async function () {
+    var cod = $("in-codigo").value.trim(), llave = $("in-llave").value.trim().toUpperCase();
+    if (!cod || !llave) { $("msg").textContent = "Escribe el código del lugar y la llave del bar."; return; }
+    $("msg").style.color = "#cbd5e1";
+    $("msg").textContent = "Comprobando la llave…";
+    try {
+      var d = await api.config(llave);
+      $("msg").style.color = "";
+      if (String(d.codigo) !== cod) {
+        $("msg").textContent = "Esa llave es del lugar " + d.codigo + ", no del " + cod + ".";
+        return;
+      }
+      cfg = { codigo: cod, llave: llave };
+      guardar("pbgo_codigo", cod); guardar("pbgo_llave", llave);
+      pedirComenzar(d.nombre);
+    } catch (e) {
+      $("msg").style.color = "";
+      $("msg").textContent = "No funcionó: " + ((e && e.message) || "error");
+    }
+  });
+
+  $("btn-cambiar").addEventListener("click", function () { pedirConfig(""); });
+
+  $("btn-comenzar").addEventListener("click", async function () {
+    // Este toque es el que deja sonar la música en el navegador.
+    var raiz = document.documentElement;
+    var pantallaCompleta = raiz.requestFullscreen || raiz.webkitRequestFullscreen;
+    if (pantallaCompleta) { try { var p = pantallaCompleta.call(raiz); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+    try { var v = video.play(); if (v && v.catch) v.catch(function () {}); } catch (e) {}
+    ver("inicio", false);
+    cargarYouTube();
+    try {
+      if (navigator.wakeLock) navigator.wakeLock.request("screen").catch(function () {});
+    } catch (e) {}
+    try {
+      await motor.reclamar(false);
+    } catch (e) {
+      if (e && e.llaveMala) { pedirConfig(e.message); return; }
+    }
+    bucle();
+  });
+
+  async function arrancar() {
+    if (!cfg.codigo || !cfg.llave) { pedirConfig(""); return; }
+    try {
+      var d = await api.config();
+      $("nombre").textContent = d.nombre || "";
+      pedirComenzar(d.nombre);
+    } catch (e) {
+      if (e && e.llaveMala) pedirConfig(e.message);
+      else pedirComenzar("");  // sin red ahora: igual se puede empezar y se reintenta solo
+    }
+  }
+
+  arrancar();
+})();
+</script>
+</body>
+</html>

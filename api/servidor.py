@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
+from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
@@ -95,9 +96,19 @@ def instantanea(request, cli, cuerpo):
 
 @_protegido
 def aleatorio(request, cli, cuerpo):
+    items = cola.aleatorio(cli["codigo"])
+    if request.query_params.get("filtrar") == "1":
+        # Reproductor del navegador: el filtro de géneros/artistas del admin se aplica aquí
+        # (los reproductores instalados lo aplican ellos mismos). Si no queda ninguna, todas.
+        from services import generos as G
+        texto = (db.control(cli["codigo"]) or {}).get("generos", "")
+        gen, art = G.lista(texto), G.artistas(texto)
+        if gen or art:
+            items = [i for i in items
+                     if (gen and G.clasificar(i.titulo, i.canal) in gen)
+                     or G.es_de_artistas(i.titulo, i.canal, art)] or items
     return JSONResponse({"ok": True, "items": [
-        {"video_id": i.video_id, "titulo": i.titulo, "canal": i.canal}
-        for i in cola.aleatorio(cli["codigo"])
+        {"video_id": i.video_id, "titulo": i.titulo, "canal": i.canal} for i in items
     ]})
 
 
@@ -260,6 +271,16 @@ app = Starlette(routes=[
     *pagos.RUTAS,
 ], lifespan=_vida)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+# El reproductor del navegador (play.alnovix.com/pantalla, para TV Samsung/LG sin Android)
+# llama a esta API desde la página. PANTALLA_ORIGENES (opcional): dominios permitidos.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in os.getenv(
+        "PANTALLA_ORIGENES", "https://play.alnovix.com").split(",") if o.strip()],
+    allow_methods=["GET", "POST"],
+    allow_headers=["X-Llave", "Content-Type"],
+    max_age=86400,
+)
 
 
 if __name__ == "__main__":
