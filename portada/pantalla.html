@@ -57,6 +57,16 @@
             -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .canal { font-size: 11px; color: var(--gris); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .subtitulo { font-size: 12px; font-weight: bold; color: var(--gris); margin: 8px 0 0; }
+  /* botones grandes para el puntero (mouse) del control del TV */
+  #controles { display: flex; gap: 10px; padding: 10px 10px 4px; }
+  .control { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+             font-size: 30px; line-height: 1; padding: 14px 6px 10px; border-radius: 16px;
+             background: var(--panel); border: 2px solid #334155; color: var(--texto); }
+  .control span { font-size: 14px; font-weight: bold; color: #cbd5e1; }
+  .control:hover, .control:focus { border-color: var(--cian); background: #12203a; }
+  .control:active { transform: scale(.96); }
+  .control.principal { flex: 1.3; background: linear-gradient(135deg, #06b6d4, #8b5cf6); border-color: transparent; }
+  .control.principal span { color: #fff; }
   #ayuda { padding: 6px 10px; background: var(--panel); color: #64748b; font-size: 11px; text-align: center; }
   /* configuración y arranque */
   #inicio { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--fondo); display: flex; flex-direction: column;
@@ -124,7 +134,12 @@
     <div id="aviso" class="aviso oculto"></div>
     <div id="encabezado"></div>
     <div id="lista"></div>
-    <div id="ayuda">OK pausa · ◀ ▶ anterior/siguiente</div>
+    <div id="controles">
+      <button id="btn-anterior" class="control" title="Anterior">⏮<span>Anterior</span></button>
+      <button id="btn-pausa" class="control principal" title="Pausar">⏸<span>Pausar</span></button>
+      <button id="btn-siguiente" class="control" title="Siguiente">⏭<span>Siguiente</span></button>
+    </div>
+    <div id="ayuda">Con el control: OK pausa · ◀ ▶ anterior / siguiente</div>
   </div>
 </div>
 
@@ -968,6 +983,13 @@
       lista.appendChild(tarjeta(it, enEspera(it.video_id) ? "⏳ PREPARANDO…" : "", false));
     });
     ver("pausa", M.pausado && !!M.actual);
+    pintarBotonPausa();
+  }
+
+  function pintarBotonPausa() {
+    var b = $("btn-pausa");
+    var txt = M.pausado ? "▶<span>Reanudar</span>" : "⏸<span>Pausar</span>";
+    if (b.innerHTML !== txt) b.innerHTML = txt;
   }
 
   function pintarPlan() {
@@ -999,6 +1021,7 @@
     var pos = medios.pos(), dur = medios.dur();
     $("t-pos").textContent = reloj(pos);
     $("t-dur").textContent = reloj(dur);
+    pintarBotonPausa();
     $("barra").firstChild.style.width = (dur > 0 ? Math.min(100, pos / dur * 100) : 0) + "%";
     // Seguro: si la canción lleva 90 s sin avanzar (y nadie la pausó), se pasa a la siguiente.
     if (M.actual && !M.pausado && !M.ocupado && medios.modo && $("capa-sonido").classList.contains("oculto")) {
@@ -1016,6 +1039,7 @@
     var k = e.keyCode;
     var enCapa = !$("capa-otro").classList.contains("oculto") || !$("capa-sonido").classList.contains("oculto");
     if (enCapa) return;  // OK toca el botón de la capa
+    if (e.target && e.target.tagName === "BUTTON" && (k === 13 || k === 32)) return;  // lo hace el botón
     if (k === 13 || k === 10252 || k === 415 || k === 19 || k === 32) {
       motor.ejecutar(M.pausado ? "reanudar" : "pausar"); e.preventDefault();
     } else if (k === 39 || k === 417) { motor.ejecutar("siguiente"); e.preventDefault(); }
@@ -1025,6 +1049,15 @@
   window.addEventListener("blur", function () { setTimeout(function () { window.focus(); }, 100); });
 
   $("btn-aqui").addEventListener("click", function () { motor.usarAqui(); });
+  function botonControl(id, accion) {
+    $(id).addEventListener("click", function () {
+      motor.ejecutar(typeof accion === "function" ? accion() : accion);
+      $(id).blur();  // el OK del control vuelve a pausar/reanudar
+    });
+  }
+  botonControl("btn-anterior", "anterior");
+  botonControl("btn-siguiente", "siguiente");
+  botonControl("btn-pausa", function () { return M.pausado ? "reanudar" : "pausar"; });
   $("btn-sonido").addEventListener("click", function () {
     ver("capa-sonido", false);
     medios.reanudar();
