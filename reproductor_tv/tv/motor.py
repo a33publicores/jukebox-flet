@@ -167,7 +167,7 @@ class BackendApi:
         if generos or artistas:
             from tv.generos import clasificar, es_de_artistas
             del_genero = [i for i in pool
-                          if (generos and clasificar(i.titulo, i.canal) in generos)
+                          if (generos and (getattr(i, "genero", "") or clasificar(i.titulo, i.canal)) in generos)
                           or es_de_artistas(i.titulo, i.canal, artistas or ())]
             if del_genero:
                 pool = del_genero

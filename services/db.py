@@ -206,6 +206,14 @@ ESQUEMA = [
         lufs     DOUBLE PRECISION,
         medido   DOUBLE PRECISION NOT NULL DEFAULT 0
     )""",
+    # Catálogo de canciones por género (ej. diciembre): ver services/catalogo/*.json
+    """CREATE TABLE IF NOT EXISTS catalogo (
+        video_id TEXT PRIMARY KEY,
+        titulo   TEXT NOT NULL DEFAULT '',
+        canal    TEXT NOT NULL DEFAULT '',
+        genero   TEXT NOT NULL DEFAULT '',
+        duracion INTEGER NOT NULL DEFAULT 0
+    )""",
     # Ajustes generales del sistema (clave -> valor). Ej.: tema_modo.
     """CREATE TABLE IF NOT EXISTS ajustes (
         clave TEXT PRIMARY KEY,
@@ -294,6 +302,10 @@ def asegurar():
         suscripcion.sembrar()
     except Exception as ex:
         print("⚠️ No se pudieron crear los planes:", ex)
+    try:  # catálogo de canciones por género (diciembre...)
+        sembrar_catalogo()
+    except Exception as ex:
+        print("⚠️ No se pudo cargar el catálogo:", ex)
     try:  # plantillas de ejemplo de los temas (Navidad, Halloween)
         from services import temas
         temas.sembrar()
@@ -596,7 +608,63 @@ ALEATORIO_MIN_PROPIO = int(os.getenv("ALEATORIO_MIN_PROPIO", "60"))
 ALEATORIO_COMPARTIDO = int(os.getenv("ALEATORIO_COMPARTIDO", "400"))
 
 
+CATALOGO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "catalogo")
+
+
+def sembrar_catalogo():
+    """Carga services/catalogo/<genero>.json en la tabla catalogo (solo lo que falte)."""
+    import glob
+    for ruta in glob.glob(os.path.join(CATALOGO_DIR, "*.json")):
+        genero = os.path.splitext(os.path.basename(ruta))[0]
+        with open(ruta, encoding="utf-8") as f:
+            canciones = json.load(f)
+        ya = {r["video_id"] for r in consultar("SELECT video_id FROM catalogo WHERE genero = %s", (genero,))}
+        nuevas = [c for c in canciones if c.get("video_id") and c["video_id"] not in ya]
+        for c in nuevas:
+            ejecutar("""INSERT INTO catalogo (video_id, titulo, canal, genero, duracion)
+                        VALUES (%s, %s, %s, %s, %s) ON CONFLICT (video_id) DO NOTHING""",
+                     (c["video_id"], c.get("titulo", "")[:300], c.get("canal", "")[:200], genero,
+                      int(c.get("duracion") or 0)))
+        if nuevas:
+            print(f"🎵 Catálogo {genero}: {len(nuevas)} canciones nuevas")
+
+
+def catalogo(generos):
+    """Canciones del catálogo de esos géneros (cada una con su 'genero')."""
+    generos = [g for g in generos if g]
+    if not generos:
+        return []
+    return consultar("""SELECT video_id, titulo, canal, genero, 0 AS ts FROM catalogo
+                        WHERE genero = ANY(%s)""", (generos,))
+
+
+def contar_catalogo(genero):
+    f = uno("SELECT COUNT(*) AS n FROM catalogo WHERE genero = %s", (genero,))
+    return int(f["n"]) if f else 0
+
+
+def _generos_de_temporada():
+    """Géneros del catálogo que entran solos al relleno en su temporada (diciembre: del 15 de
+    noviembre al 15 de enero), aunque el bar no los haya escogido."""
+    hoy = time.strftime("%m-%d", time.localtime(time.time() - 5 * 3600))  # hora de Colombia
+    return ["diciembre"] if (hoy >= "11-15" or hoy <= "01-15") else []
+
+
 def aleatorio(codigo, antes_de, limite=3000):
+    """Repertorio para cuando nadie pide: el de siempre (_aleatorio_bar) más las canciones del
+    catálogo de los géneros que el bar escogió (ej. Diciembre) o que están en temporada."""
+    filas = _aleatorio_bar(codigo, antes_de, limite)
+    try:
+        escogidos = [g.strip() for g in str((control(codigo) or {}).get("generos") or "").split(",")]
+        generos = set(g for g in escogidos if g == "diciembre") | set(_generos_de_temporada())
+        ya = {f["video_id"] for f in filas}
+        filas = list(filas) + [dict(c) for c in catalogo(sorted(generos)) if c["video_id"] not in ya]
+    except Exception as ex:
+        print(f"⚠️ catálogo en el relleno: {ex}")
+    return filas
+
+
+def _aleatorio_bar(codigo, antes_de, limite=3000):
     """Repertorio para cuando nadie pide, sin repetir:
     1) lo que pidieron en ESE bar en fechas anteriores;
     2) si todavía tiene poco (bar nuevo), se completa con lo más pedido en todos los bares

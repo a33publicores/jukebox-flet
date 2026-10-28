@@ -103,8 +103,12 @@ def instantanea(cliente, nombre_hoja=None):
 
 
 def aleatorio(cliente):
-    return [Item(None, f["titulo"], f["canal"], f["video_id"])
-            for f in db.aleatorio(str(cliente), ps.inicio_jornada())]
+    items = []
+    for f in db.aleatorio(str(cliente), ps.inicio_jornada()):
+        it = Item(None, f["titulo"], f["canal"], f["video_id"])
+        it.genero = f.get("genero") or ""  # catálogo (ej. diciembre)
+        items.append(it)
+    return items
 
 
 # ---------------------------------------------------------------------------

@@ -105,10 +105,11 @@ def aleatorio(request, cli, cuerpo):
         gen, art = G.lista(texto), G.artistas(texto)
         if gen or art:
             items = [i for i in items
-                     if (gen and G.clasificar(i.titulo, i.canal) in gen)
+                     if (gen and G.genero_de(i.titulo, i.canal, getattr(i, "genero", "")) in gen)
                      or G.es_de_artistas(i.titulo, i.canal, art)] or items
     return JSONResponse({"ok": True, "items": [
-        {"video_id": i.video_id, "titulo": i.titulo, "canal": i.canal} for i in items
+        {"video_id": i.video_id, "titulo": i.titulo, "canal": i.canal,
+         **({"genero": i.genero} if getattr(i, "genero", "") else {})} for i in items
     ]})
 
 

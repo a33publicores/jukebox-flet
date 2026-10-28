@@ -71,8 +71,12 @@ class ApiCliente:
         return C.desde_dict(self._get("/api/v1/instantanea"))
 
     def aleatorio(self):
-        return [C.Item(None, i["titulo"], i["canal"], i["video_id"])
-                for i in self._get("/api/v1/aleatorio").get("items", [])]
+        items = []
+        for i in self._get("/api/v1/aleatorio").get("items", []):
+            it = C.Item(None, i["titulo"], i["canal"], i["video_id"])
+            it.genero = i.get("genero") or ""  # catálogo (ej. diciembre)
+            items.append(it)
+        return items
 
     def suscripcion(self):
         """Prueba gratis / plan del negocio: {"permitido", "titulo", "mensaje", "url_pago"...}"""

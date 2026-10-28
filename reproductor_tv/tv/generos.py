@@ -24,6 +24,7 @@ GENEROS = [  # (clave, nombre en pantalla)
     ("champeta", "Champeta"),
     ("baladas", "Baladas"),
     ("rock_pop", "Rock / Pop"),
+    ("diciembre", "🎄 Diciembre"),
     ("otros", "Otros"),
 ]
 NOMBRES = dict(GENEROS)
@@ -40,6 +41,12 @@ _PALABRAS = {
     "tropical": ["tropical", "bailable", "cumbia", "porro", "crossover", "orquesta tropical",
                  "musica decembrina", "parranda"],
     "champeta": ["champeta"],
+    # Música de diciembre: por palabras del título y, sobre todo, por el catálogo de
+    # services/catalogo/diciembre.json (Pastor López, Lisandro Meza, Los Hispanos...): esas
+    # canciones vienen marcadas con su género (ver genero_de).
+    "diciembre": ["diciembre", "decembrin", "navidad", "navideñ", "navideno", "año viejo", "ano viejo",
+                  "año nuevo", "ano nuevo", "pa las doce", "pa las 12", "pa' las doce", "nochebuena",
+                  "noche buena", "aguinaldo", "villancico", "pesebre", "fin de año", "fin de ano"],
     "popular": ["musica popular", "despecho", "carrilera", "guasca", "popular colombiana"],
     "baladas": ["balada", "romanticas", "baladas"],
     "rock_pop": ["rock", "official music video", "pop"],
@@ -173,6 +180,11 @@ def clasificar(titulo, canal=""):
     if not puntos:
         return "otros"
     return max(puntos.items(), key=lambda x: x[1])[0]
+
+
+def genero_de(titulo, canal="", genero=None):
+    """El género de una canción: el que trae marcado (catálogo de diciembre) o el deducido."""
+    return genero if genero in NOMBRES else clasificar(titulo, canal)
 
 
 def lista(texto):

@@ -382,13 +382,17 @@ def admin_view(page, codigo, nombre, logo):
             from services.playbar_service import inicio_jornada
             cuantos, por_artista, nombre_de = {}, {}, {}
             for f in _db.aleatorio(codigo, inicio_jornada()):
-                g = G.clasificar(f["titulo"], f["canal"])
+                g = G.genero_de(f["titulo"], f["canal"], f.get("genero"))
                 cuantos[g] = cuantos.get(g, 0) + 1
                 a = G.artista_de(f["titulo"], f["canal"])
                 if len(a) >= 2:
                     clave = a.lower()
                     por_artista[clave] = por_artista.get(clave, 0) + 1
                     nombre_de.setdefault(clave, a)
+            try:  # las del catálogo cuentan aunque todavía no estén en el relleno del bar
+                cuantos["diciembre"] = max(cuantos.get("diciembre", 0), _db.contar_catalogo("diciembre"))
+            except Exception:
+                pass
             opciones_generos([(k, nombre, cuantos.get(k, 0)) for k, nombre in G.GENEROS])
             # un artista ya elegido conserva su nombre guardado (aunque cambien mayúsculas)
             nombre_de.update({a.lower(): a for a in artistas_elegidos})
