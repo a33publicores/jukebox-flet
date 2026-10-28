@@ -151,7 +151,15 @@ class Pantalla:
         self._salto = None                  # puesto al que saltamos nosotros
         self._entro_sola = None             # (puesto, ruta) si la siguiente entró sola
         self._lock_puestos = asyncio.Lock()
-        self.fundido = Fundido(self.video)  # mezcla suave entre canciones
+        # Mezcla: un segundo video escondido detrás del principal hace sonar la siguiente
+        # canción los últimos segundos de la que termina (ver fundido.py).
+        self.video_mezcla = ftv.Video(
+            expand=True, playlist=[], autoplay=False, controls=None, fill_color="#000000",
+            volume=0, pause_upon_entering_background_mode=False,
+            resume_upon_entering_foreground_mode=False,
+        ) if True else None
+        self.fundido = Fundido(self.video, mezcla=self.video_mezcla, siguiente=self._ruta_siguiente,
+                               saltar=self.ir_a, pos_mezcla=self._pos_mezcla)
         self.tema = TemaApp(FONDO)  # tema de temporada (Navidad, Halloween...)
         self.dur = 0.0
         self.pos = 0.0
@@ -217,8 +225,9 @@ class Pantalla:
                 await self.video.pause()  # era un sobrante: silencio hasta que el motor decida
             except Exception:
                 pass
+        nueva = self.fuente[idx] if self.anticipada[idx] else None
         self.anticipada[idx] = False
-        self._reiniciar_tiempo()
+        self._reiniciar_tiempo(nueva)
         await self._terminar_una_vez()
 
     async def _terminar_una_vez(self):
@@ -423,8 +432,16 @@ class Pantalla:
         if self.motor:
             await self.motor.reordenar([i.fila for i in self._cola_vista])
 
-    def _reiniciar_tiempo(self):
-        self.fundido.nueva()  # la canción nueva entra suave
+    def _ruta_siguiente(self):
+        """Archivo de la canción que ya quedó lista para sonar después (o None)."""
+        sig = (self.cur + 1) % PUESTOS
+        return self.fuente[sig] if self._lista_armada and self.anticipada[sig] else None
+
+    async def _pos_mezcla(self):
+        return _segundos(await self.video_mezcla.get_current_position())
+
+    def _reiniciar_tiempo(self, ruta=None):
+        self.fundido.nueva(ruta)  # la canción nueva: termina la mezcla o entra suave
         self.dur, self.pos, self._ult_seg = 0.0, 0.0, -1
         self._t_inicio = self._t_real = time.time()  # "inicio" se corre al adelantar
         self.t_pos.value, self.t_dur.value, self.barra.value = "0:00", "0:00", 0
@@ -480,7 +497,7 @@ class Pantalla:
                     raise RuntimeError("No hay puesto libre para la canción")
                 self.anticipada[destino] = False
                 self._salto = destino
-                self._reiniciar_tiempo()
+                self._reiniciar_tiempo(ruta)
                 try:
                     await self.video.jump_to(destino)
                 except Exception as ex:
@@ -517,7 +534,7 @@ class Pantalla:
             await asyncio.to_thread(self._poner_en_puesto, i, ruta)
         self.anticipada = [False] * PUESTOS
         self.cur = 0
-        self._reiniciar_tiempo()
+        self._reiniciar_tiempo(ruta)
         self.video.playlist = [ftv.VideoMedia(resource=str(p)) for p in self.puestos]
         self.video.update()
         self._lista_armada = True
@@ -543,6 +560,7 @@ class Pantalla:
         self.fuente[i] = str(ruta)
 
     async def pausar(self):
+        self.fundido.normal()  # en pausa no sigue la mezcla
         await self.video.pause()
 
     async def reanudar(self):
@@ -835,6 +853,8 @@ class Pantalla:
         video = ft.Stack(
             expand=True,
             controls=[
+                ft.Container(content=self.video_mezcla, bgcolor="#000000",
+                             left=0, right=0, top=0, bottom=0),
                 ft.GestureDetector(
                     expand=True, on_double_tap=lambda e: self.pantalla_completa(),
                     content=ft.Container(content=self.video, expand=True, bgcolor="#000000"),

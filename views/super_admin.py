@@ -786,17 +786,17 @@ def planes_view(page):
     page.update()
 
 
-def _vista_tema(t, ancho=480):
-    """Cómo se ve el tema en el reproductor (colores, adornos y mensaje)."""
+def _vista_tema(t, ancho=480, logo_bytes=None):
+    """Cómo se ve el tema en el reproductor (colores, logo, adornos y mensaje)."""
+    from services import temas
     c = t["colores"]
     return ft.Container(
         width=ancho, padding=12, border_radius=14, bgcolor=c["fondo"],
         border=ft.Border.all(2, c["acento"]),
         content=ft.Column([
             ft.Row([ft.Text(t.get("adornos") or "", size=22),
-                    ft.Image(src="/" + (t.get("logo") or "logo.png"), height=44, fit=ft.BoxFit.CONTAIN)
-                    if not (t.get("logo") or "").startswith("https://") else
-                    ft.Image(src=t["logo"], height=44, fit=ft.BoxFit.CONTAIN),
+                    ft.Image(src=logo_bytes or temas.ruta_logo(t) or "/logo.png", height=44,
+                             fit=ft.BoxFit.CONTAIN),
                     ft.Text(t.get("adornos") or "", size=22)],
                    alignment=ft.MainAxisAlignment.CENTER),
             ft.Container(padding=8, border_radius=10, bgcolor=c["panel"],
@@ -840,70 +840,163 @@ def temas_view(page):
         base = dict(t) if t else temas.limpiar({"nombre": "Nuevo tema", "colores": temas.NORMAL})
         if copia:
             base.update(clave="", nombre=f"{base['nombre']} (copia)")
-        c = base["colores"]
+        colores = dict(base["colores"])
         nombre = _campo("Nombre (ej. 💕 Amor y amistad)", base["nombre"])
         mensaje = _campo("Mensaje que se ve en la pantalla", base["mensaje"])
         adornos = _campo("Adornos junto al logo (emojis, ej. 🎄🎁⭐)", base["adornos"])
-        logos = temas.logos_disponibles()
-        logo = ft.Dropdown(label="Logo", width=340, value=base.get("logo") or "", color="white",
-                           border_color=CYAN,
-                           options=[ft.dropdown.Option("", "El de siempre (logo.png)")]
-                           + [ft.dropdown.Option(f, f) for f in logos if f != "logo.png"])
         efecto = ft.Dropdown(label="Efecto animado", width=340, value=base["efecto"], color="white",
                              border_color=CYAN,
                              options=[ft.dropdown.Option(k, v) for k, v in temas.EFECTOS.items()])
-        campos_color = {k: _campo(etq, c[k], ancho=160) for k, etq in (
-            ("fondo", "Fondo"), ("panel", "Paneles"), ("acento", "Color principal"),
-            ("acento2", "Color secundario"), ("texto", "Texto"))}
         desde = _campo("Se activa sola desde (MM-DD)", base["desde"], ancho=165)
         hasta = _campo("hasta (MM-DD)", base["hasta"], ancho=165)
         orden = _campo("Orden", base.get("orden") or 0, numeros=True, ancho=100)
-        vista = ft.Container(content=_vista_tema(base, ancho=340))
         error = ft.Text("", color="#f87171")
+
+        # --- logo: el de siempre, uno de assets o uno adjuntado desde el computador/celular
+        logo = {"valor": base.get("logo") or "", "bytes": None, "tipo": ""}
+        logos_assets = [f for f in temas.logos_disponibles() if f != "logo.png"]
+        logo_sel = ft.Dropdown(
+            label="Logo", width=340, color="white", border_color=CYAN,
+            value=logo["valor"] if logo["valor"] in logos_assets or not logo["valor"] else "subido",
+            options=[ft.dropdown.Option("", "El de siempre (PlayBar GO)")]
+            + [ft.dropdown.Option(f, f) for f in logos_assets]
+            + ([ft.dropdown.Option("subido", "El que adjunté")] if logo["valor"].startswith("subido:") else []))
+        nota_logo = ft.Text("", color="#64748b", size=12)
+
+        def elegir_logo(e):
+            if e.control.value != "subido":
+                logo.update(valor=e.control.value or "", bytes=None)
+                nota_logo.value = ""
+                ver()
+
+        logo_sel.on_select = elegir_logo
+
+        async def adjuntar(e):
+            try:
+                archivos = await ft.FilePicker().pick_files(
+                    dialog_title="Logo del tema", file_type=ft.FilePickerFileType.CUSTOM,
+                    allowed_extensions=["png", "jpg", "jpeg", "webp"], with_data=True)
+            except Exception as ex:
+                error.value = f"No se pudo abrir el selector: {ex}"
+                page.update()
+                return
+            if not archivos:
+                return
+            f = archivos[0]
+            datos_ = f.bytes or b""
+            if not datos_:
+                error.value = "No se pudo leer la imagen. Intenta de nuevo."
+            elif len(datos_) > MAX_LOGO_MB * 1024 * 1024:
+                error.value = f"La imagen pesa {len(datos_) / 1048576:.1f} MB. Máximo {MAX_LOGO_MB} MB."
+            else:
+                ext = (f.name or "").rsplit(".", 1)[-1].lower()
+                logo.update(bytes=datos_, tipo="image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext or 'png'}")
+                nota_logo.value = f"✔ {f.name} listo (se guarda al tocar Guardar). Mejor PNG sin fondo."
+                error.value = ""
+                ver()
+                return
+            page.update()
+
+        # --- colores: se escogen tocando la paleta
+        nombres_color = (("fondo", "Fondo"), ("panel", "Paneles"), ("acento", "Principal"),
+                         ("acento2", "Secundario"), ("texto", "Texto"))
+        activo = {"k": "fondo"}
+        chips = {}
+
+        def pintar_chips():
+            for k, chip in chips.items():
+                chip.content.controls[0].bgcolor = colores[k]
+                chip.border = ft.Border.all(3 if k == activo["k"] else 1,
+                                            CYAN if k == activo["k"] else "#334155")
+            titulo_paleta.value = f"Toca un color para «{dict(nombres_color)[activo['k']]}»:"
+            hex_campo.value = colores[activo["k"]]
+
+        def escoger_rol(k):
+            activo["k"] = k
+            pintar_chips()
+            page.update()
+
+        for k, etq in nombres_color:
+            chips[k] = ft.Container(
+                padding=6, border_radius=10, on_click=lambda e, k=k: escoger_rol(k),
+                content=ft.Column([
+                    ft.Container(width=46, height=26, border_radius=6, border=ft.Border.all(1, "#ffffff55")),
+                    ft.Text(etq, size=11, color="#cbd5e1"),
+                ], spacing=3, horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True))
+
+        def poner_color(hex_):
+            colores[activo["k"]] = hex_
+            pintar_chips()
+            ver()
+
+        paleta = ft.Row([
+            ft.Container(width=30, height=30, border_radius=8, bgcolor=h, tooltip=h,
+                         border=ft.Border.all(1, "#ffffff44"), on_click=lambda e, h=h: poner_color(h))
+            for h in temas.PALETA], wrap=True, spacing=6, run_spacing=6, width=340)
+        titulo_paleta = ft.Text("", color="#94A3B8", size=12)
+
+        def hex_cambiado(e):
+            v = (e.control.value or "").strip()
+            if re.match(r"^#[0-9a-fA-F]{6}$", v):
+                poner_color(v.lower())
+
+        hex_campo = _campo("u otro color (#RRGGBB)", "", ancho=160)
+        hex_campo.on_blur = hex_cambiado
+        hex_campo.on_submit = hex_cambiado
+        pintar_chips()
+
+        vista = ft.Container(content=_vista_tema(base, ancho=340))
 
         def datos():
             return {"clave": base.get("clave") or "", "nombre": nombre.value, "mensaje": mensaje.value,
                     "adornos": adornos.value, "efecto": efecto.value, "desde": desde.value,
-                    "logo": logo.value or "",
-                    "hasta": hasta.value, "orden": orden.value,
-                    "colores": {k: f.value for k, f in campos_color.items()}}
+                    "hasta": hasta.value, "orden": orden.value, "logo": logo["valor"],
+                    "colores": dict(colores)}
 
         def ver(ev=None):
-            vista.content = _vista_tema(temas.limpiar(datos()), ancho=340)
+            vista.content = _vista_tema(temas.limpiar(datos()), ancho=340, logo_bytes=logo["bytes"])
             page.update()
 
-        for f in [mensaje, adornos, *campos_color.values()]:
+        for f in [mensaje, adornos]:
             f.on_blur = ver
+        efecto.on_select = ver
 
         def guardar(ev):
             d = datos()
             fecha = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$")
-            malos = [k for k, v in d["colores"].items() if not re.match(r"^#[0-9a-fA-F]{6}$", (v or "").strip())]
-            if malos:
-                error.value = "Colores con el formato #RRGGBB (ej. #ef4444): revisa " + ", ".join(malos)
-            elif (d["desde"] or d["hasta"]) and not (fecha.match((d["desde"] or "").strip())
-                                                    and fecha.match((d["hasta"] or "").strip())):
+            if (d["desde"] or d["hasta"]) and not (fecha.match((d["desde"] or "").strip())
+                                                  and fecha.match((d["hasta"] or "").strip())):
                 error.value = "Fechas con el formato MM-DD (ej. 12-01), o deja las dos vacías."
-            else:
-                temas.guardar(d)
-                _cerrar_dialogo(page)
-                _aviso(page, "Tema guardado")
-                temas_view(page)
+                page.update()
                 return
-            page.update()
+            try:
+                guardado = temas.guardar(d)
+                if logo["bytes"]:  # el logo adjuntado se guarda con la clave del tema
+                    d["clave"] = guardado["clave"]
+                    d["logo"] = temas.guardar_logo(guardado["clave"], logo["bytes"], logo["tipo"])
+                    temas.guardar(d)
+            except Exception as ex:
+                error.value = f"No se pudo guardar: {ex}"
+                page.update()
+                return
+            _cerrar_dialogo(page)
+            _aviso(page, "Tema guardado")
+            temas_view(page)
 
         _dialogo(page, "Editar tema" if t and not copia else "Nuevo tema", [
-            vista, nombre, mensaje, adornos, efecto, logo,
-            ft.Text("Para otro logo: súbelo a la carpeta assets con un nombre que empiece por "
-                    "«logo» (ej. logonavidad.png) y aparece aquí.", color="#64748b", size=12),
-            ft.Text("Colores (formato #RRGGBB, ej. #ef4444):", color="#94A3B8", size=12),
-            ft.Row(list(campos_color.values()), wrap=True, spacing=8, run_spacing=8),
+            vista, nombre, mensaje, adornos, efecto,
+            logo_sel,
+            ft.Row([ft.OutlinedButton("📎 Adjuntar logo", on_click=adjuntar)], wrap=True),
+            nota_logo,
+            ft.Text("Colores: toca qué quieres cambiar y luego un color de la paleta.",
+                    color="#94A3B8", size=12),
+            ft.Row(list(chips.values()), wrap=True, spacing=4, run_spacing=4),
+            titulo_paleta, paleta, hex_campo,
             ft.Row([desde, hasta], wrap=True, spacing=8),
             ft.Text("Con «Automático por fechas», este tema se ve solo entre esas fechas.",
                     color="#64748b", size=12),
             orden, error,
-        ], [ft.TextButton("Ver cómo queda", on_click=ver),
-            ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
+        ], [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
             ft.FilledButton("Guardar", on_click=guardar)])
 
     def eliminar(t):

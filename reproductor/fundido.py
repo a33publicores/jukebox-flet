@@ -1,51 +1,91 @@
 """
-Mezcla suave entre canciones (reproductor de PC y de TV; este archivo es igual en los dos).
+Mezcla entre canciones (reproductor de PC y de TV; este archivo es igual en los dos).
 
-El reproductor tiene un solo video, así que la mezcla es un fundido: los últimos segundos
-de la canción bajan de volumen hasta silencio y la siguiente entra suave hasta el volumen
-normal. Si la canción es corta (menos de 40 s) o está en pausa, no se toca el volumen.
+Con mezcla (dos videos): los últimos 8 s de la canción, la SIGUIENTE ya empieza a sonar en
+un segundo video escondido detrás; la que termina baja de volumen mientras la otra sube,
+así se oyen las dos a la vez, como un DJ. Cuando la primera termina, el video principal
+pasa a la siguiente y salta justo a la parte donde iba el escondido (no se nota el cambio),
+y el escondido se calla.
+
+Sin mezcla (TV básicos, o si la siguiente no está lista): la que termina baja de volumen y
+la siguiente entra suave.
 """
 import asyncio
+import os
 
-SALIDA_SEG = 8.0   # la que termina baja de volumen sus últimos 8 s
-ENTRADA_SEG = 5.0  # la que empieza sube en 5 s
+SALIDA_SEG = 8.0   # cuánto dura la mezcla (la que termina baja en estos últimos segundos)
+ENTRADA_SEG = 5.0  # sin mezcla: la que empieza sube en 5 s
 PASO_SEG = 0.25
 
 
+def _cubica(v):
+    """`v` es cuánto se oye (0-100, en línea recta). El reproductor (mpv) baja el sonido en
+    curva: con volumen 50 ya casi no se oye. Por eso se le manda la raíz cúbica."""
+    return round(100 * (max(0.0, min(100.0, v)) / 100) ** (1 / 3), 1)
+
+
+def _mismo(a, b):
+    try:
+        return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
+    except Exception:
+        return False
+
+
 class Fundido:
-    def __init__(self, video):
+    def __init__(self, video, mezcla=None, siguiente=None, saltar=None, pos_mezcla=None):
+        """`mezcla`: segundo video (escondido) para que suenen las dos a la vez. `siguiente()`:
+        ruta del archivo de la canción que sigue (o None si no está lista). `saltar(seg)`:
+        lleva el video principal a ese segundo. `pos_mezcla()`: en qué segundo va el escondido."""
         self.video = video
+        self.mezcla = mezcla
+        self.siguiente = siguiente
+        self.saltar = saltar
+        self.pos_mezcla = pos_mezcla
         self.vol = 100
+        self.vol_mezcla = 0
         self.saliendo = False
+        self.mezclando = None  # ruta que suena en el video escondido
         self._tarea = None
 
+    # ------------------------------------------------------------ volumen
     def _poner(self, v):
-        """`v` es cuánto se oye (0-100, en línea recta). El reproductor (mpv) baja el sonido
-        en curva: con volumen 50 ya casi no se oye. Por eso se le manda la raíz cúbica, así
-        la canción baja parejo hasta el final y no de golpe en los últimos 2 segundos."""
         v = int(max(0, min(100, round(v))))
         if v == self.vol:
             return
         self.vol = v
         try:
-            self.video.volume = round(100 * (v / 100) ** (1 / 3), 1)
+            self.video.volume = _cubica(v)
             self.video.update()
         except Exception:
             pass  # el video todavía no está en pantalla
+
+    def _poner_mezcla(self, v):
+        v = int(max(0, min(100, round(v))))
+        if v == self.vol_mezcla or self.mezcla is None:
+            return
+        self.vol_mezcla = v
+        try:
+            self.mezcla.volume = _cubica(v)
+            self.mezcla.update()
+        except Exception:
+            pass
 
     def _cancelar(self):
         if self._tarea is not None and not self._tarea.done():
             self._tarea.cancel()
         self._tarea = None
 
-    def _rampa(self, hasta, segundos):
+    def _rampa(self, hasta, segundos, hasta_mezcla=None):
+        """Lleva el volumen del principal (y, si se pide, el del escondido) en `segundos`."""
         self._cancelar()
-        desde = self.vol
+        desde, desde_m = self.vol, max(0, self.vol_mezcla)
 
         async def correr():
             n = max(1, int(segundos / PASO_SEG))
             for i in range(1, n + 1):
                 self._poner(desde + (hasta - desde) * i / n)
+                if hasta_mezcla is not None:
+                    self._poner_mezcla(desde_m + (hasta_mezcla - desde_m) * i / n)
                 await asyncio.sleep(PASO_SEG)
 
         try:
@@ -53,15 +93,74 @@ class Fundido:
         except RuntimeError:  # sin bucle asyncio (no debería pasar): volumen directo
             self._poner(hasta)
 
-    def nueva(self):
-        """Empezó otra canción: entra suave."""
+    # ------------------------------------------------------------ mezcla
+    async def _empezar_mezcla(self, ruta, segundos):
+        import flet_video as ftv
+        try:
+            self.mezclando = str(ruta)
+            self.vol_mezcla = -1
+            self._poner_mezcla(0)
+            self.mezcla.playlist = [ftv.VideoMedia(resource=str(ruta))]
+            self.mezcla.update()
+            await asyncio.sleep(0.3)
+            await self.mezcla.play()
+            print(f"🎚️ Mezcla: la siguiente ya suena por debajo ({segundos:.0f} s)")
+            self._rampa(0, segundos, hasta_mezcla=100)
+        except Exception as ex:
+            print(f"⚠️ Mezcla: no se pudo arrancar la siguiente ({ex}); se hace solo fundido")
+            self.mezclando = None
+            self._rampa(0, segundos)
+
+    async def _relevo(self):
+        """Terminó la primera y el principal ya tiene la siguiente: salta a donde iba el
+        escondido, sube el volumen y calla el escondido."""
+        try:
+            seg = float(await self.pos_mezcla()) if self.pos_mezcla else 0.0
+            if seg > 0.5 and self.saltar is not None:
+                await self.saltar(seg + 0.25)
+            self._cancelar()
+            self._poner(100)
+            print(f"🎚️ Mezcla: entra completa (desde el segundo {seg:.1f})")
+        except Exception as ex:
+            print(f"⚠️ Mezcla: relevo ({ex})")
+            self._poner(100)
+        await self.parar_mezcla()
+
+    async def parar_mezcla(self):
+        self.mezclando = None
+        if self.mezcla is None:
+            return
+        try:
+            self._poner_mezcla(0)
+            await self.mezcla.pause()
+        except Exception:
+            pass
+
+    def _parar_mezcla_luego(self):
+        if self.mezclando:
+            try:
+                asyncio.ensure_future(self.parar_mezcla())
+            except RuntimeError:
+                pass
+
+    # ------------------------------------------------------------ eventos del reproductor
+    def nueva(self, ruta=None):
+        """Empezó otra canción en el principal (`ruta`: su archivo)."""
         self.saliendo = False
+        if self.mezclando and ruta and _mismo(ruta, self.mezclando):
+            try:
+                self._cancelar()
+                self._tarea = asyncio.ensure_future(self._relevo())
+                return
+            except RuntimeError:
+                pass
+        self._parar_mezcla_luego()
         self._cancelar()
         self._poner(5)
         self._rampa(100, ENTRADA_SEG)
 
     def posicion(self, pos, dur, pausado=False):
-        """Cada segundo: al acercarse el final, baja el volumen."""
+        """Cada segundo: al acercarse el final, arranca la mezcla (o el fundido)."""
         if pausado or dur < 40:
             return
         quedan = dur - pos
@@ -69,14 +168,23 @@ class Fundido:
             self.normal()  # la adelantaron hacia atrás (televisor espejo): vuelve el volumen
         elif not self.saliendo and quedan <= SALIDA_SEG and pos > 10:
             self.saliendo = True
+            segundos = max(1.0, quedan - 0.3)
+            ruta = self.siguiente() if (self.mezcla is not None and self.siguiente) else None
+            if ruta:
+                try:
+                    asyncio.ensure_future(self._empezar_mezcla(ruta, segundos))
+                    return
+                except RuntimeError:
+                    pass
             print(f"🎚️ Mezcla: baja el volumen (quedan {quedan:.1f} s de {dur:.0f} s)")
-            self._rampa(0, max(1.0, quedan - 0.3))
+            self._rampa(0, segundos)
         elif (not self.saliendo and self.vol < 100 and pos > ENTRADA_SEG + 2
               and (self._tarea is None or self._tarea.done())):
             self._poner(100)  # seguro: el volumen nunca se queda bajo a mitad de canción
 
     def normal(self):
-        """Pausa/reanudar: volumen normal de una."""
+        """Pausa/reanudar o la adelantaron: volumen normal de una y sin mezcla."""
         self.saliendo = False
         self._cancelar()
+        self._parar_mezcla_luego()
         self._poner(100)

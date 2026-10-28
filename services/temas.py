@@ -108,7 +108,8 @@ def limpiar(t):
     efecto = t.get("efecto") if t.get("efecto") in EFECTOS else "ninguno"
     desde, hasta = str(t.get("desde") or "").strip(), str(t.get("hasta") or "").strip()
     logo = str(t.get("logo") or "").strip()
-    if not (_LOGO.match(logo) or (logo.startswith("https://") and len(logo) < 300)):
+    if not (_LOGO.match(logo) or re.match(r"^subido:\d+$", logo)
+            or (logo.startswith("https://") and len(logo) < 300)):
         logo = ""
     return {
         "clave": str(t.get("clave") or "").strip()[:40],
@@ -146,7 +147,48 @@ def guardar(t):
     return t
 
 
+def ruta_logo(t):
+    """Dónde se ve el logo del tema: /logohallowen.png, /tema-logo/<clave>?v=... (subido) o ""."""
+    logo = (t or {}).get("logo") or ""
+    if logo.startswith("subido:"):
+        return f"/tema-logo/{t['clave']}?v={logo[7:]}"
+    if logo.startswith("https://"):
+        return logo
+    return f"/{logo}" if logo else ""
+
+
+def guardar_logo(clave, contenido, tipo="image/png"):
+    """El logo que el super adjunta para un tema (se guarda en la base, tabla logos)."""
+    import base64
+    ahora = int(time.time())
+    db.ejecutar(
+        """INSERT INTO logos (codigo, datos, tipo, actualizado) VALUES (%s, %s, %s, %s)
+           ON CONFLICT (codigo) DO UPDATE SET datos = EXCLUDED.datos, tipo = EXCLUDED.tipo,
+               actualizado = EXCLUDED.actualizado""",
+        (f"tema:{clave}", base64.b64encode(contenido).decode(), tipo, ahora))
+    return f"subido:{ahora}"
+
+
+def logo_subido(clave):
+    """(bytes, tipo) del logo adjuntado para el tema, o (None, None)."""
+    import base64
+    f = db.uno("SELECT datos, tipo FROM logos WHERE codigo = %s", (f"tema:{clave}",))
+    return (base64.b64decode(f["datos"]), f["tipo"]) if f else (None, None)
+
+
+# Paleta para escoger los colores en /super (oscuros para fondo y paneles, vivos para los
+# acentos, claros para el texto).
+PALETA = [
+    "#020617", "#000000", "#04140d", "#0d0716", "#1a0b0b", "#0b1a2b", "#1f1300", "#120b1f",
+    "#0f172a", "#1f2937", "#0c2a1b", "#1e1030", "#2a0f14", "#102a43", "#2b1d0e", "#1e1b4b",
+    "#ef4444", "#e11d48", "#f43f5e", "#ec4899", "#f97316", "#f59e0b", "#facc15", "#84cc16",
+    "#22c55e", "#10b981", "#14b8a6", "#22d3ee", "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7",
+    "#ffffff", "#f8fafc", "#fff7ed", "#fef3c7", "#fde2e4", "#e0f2fe", "#dcfce7", "#cbd5e1",
+]
+
+
 def borrar(clave):
+    db.ejecutar("DELETE FROM logos WHERE codigo = %s", (f"tema:{clave}",))
     db.ejecutar("DELETE FROM temas WHERE clave = %s", (clave,))
     if modo() == clave:
         poner_modo("normal")
@@ -202,11 +244,11 @@ def actual():
         elif m != "normal":
             tema = next((t for t in temas if t["clave"] == m), None)
         if tema:
-            logo = tema.get("logo") or ""
+            ruta = ruta_logo(tema)
             tema = {**tema, "figuras": FIGURAS.get(tema["efecto"], []),
                     # dirección completa para los reproductores (TV/PC la bajan de la web)
-                    "logo_url": logo if logo.startswith("https://") else (f"{web()}/{logo}" if logo else ""),
-                    "logo_ruta": "" if logo.startswith("https://") else (f"/{logo}" if logo else "")}
+                    "logo_url": ruta if ruta.startswith("https://") else (f"{web()}{ruta}" if ruta else ""),
+                    "logo_ruta": "" if ruta.startswith("https://") else ruta}
     except Exception as ex:
         print(f"⚠️ Tema: {ex}")
         tema = None

@@ -51,6 +51,25 @@ def _es_tv_sin_android(scope):
     return "android" not in ua and any(m in ua for m in TV_SIN_ANDROID)
 
 
+async def _logo_tema(send, clave):
+    from starlette.concurrency import run_in_threadpool
+    datos, tipo = None, None
+    try:
+        from services import temas
+        datos, tipo = await run_in_threadpool(temas.logo_subido, clave.split("?")[0][:40])
+    except Exception as ex:
+        print(f"⚠️ logo del tema: {ex}")
+    if not datos:
+        await _redirigir(send, "/logo.png")
+        return
+    await send({"type": "http.response.start", "status": 200, "headers": [
+        (b"content-type", (tipo or "image/png").encode()),
+        (b"content-length", str(len(datos)).encode()),
+        (b"cache-control", b"public, max-age=86400"),  # cambia la dirección (?v=) al cambiar el logo
+    ]})
+    await send({"type": "http.response.body", "body": datos})
+
+
 async def _redirigir(send, destino):
     await send({"type": "http.response.start", "status": 302, "headers": [
         (b"location", destino.encode()),
@@ -172,6 +191,9 @@ def crear_app(flet_app):
             if ruta in RUTAS_APK:  # el TV baja el instalador (Downloader o navegador)
                 # Un TV Samsung/LG no instala el APK: se le abre el reproductor del navegador.
                 await _redirigir(send, "/pantalla" if _es_tv_sin_android(scope) else APK_TV_URL)
+                return
+            if ruta.startswith("/tema-logo/"):  # logo adjuntado para un tema (/super → Temas)
+                await _logo_tema(send, ruta[len("/tema-logo/"):])
                 return
             if ruta in RUTAS_PANTALLA:
                 await _enviar_html(send, await run_in_threadpool(PANTALLA.read_text, "utf-8"))
