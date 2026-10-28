@@ -1,7 +1,7 @@
 """Versión del reproductor de TV (independiente de la del .exe del PC)."""
 import os
 
-VERSION = "0.2.5"
+VERSION = "0.2.6"
 
 # Dirección de la API de PlayBar GO (dominio propio; hoy apunta a Railway, servicio playbar-api).
 API_POR_DEFECTO = os.environ.get("PLAYBAR_API", "https://api.play.alnovix.com")
