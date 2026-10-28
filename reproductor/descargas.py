@@ -82,6 +82,18 @@ def actualizar_ytdlp(carpeta):
         print(f"ℹ️ No se pudo actualizar yt-dlp: {ex}")
 
 
+ALT_VENCE_SEG = 7 * 86400
+
+
+def _bono_duracion(dur, ref):
+    """Puntos extra (o menos) según la duración de un video que reemplaza a otro."""
+    if ref and dur:
+        return 0.3 if abs(dur - ref) <= max(20, ref * 0.15) else -0.5  # misma versión
+    if dur:
+        return 0.15 if dur >= 150 else -0.4  # menos de 2:30: casi siempre recortada
+    return 0.0
+
+
 class Descargador:
     def __init__(self, carpeta, cookies=None, max_gb=5.0, altura_max=720):
         self.carpeta = Path(carpeta)
@@ -100,6 +112,13 @@ class Descargador:
             self._alt = json.loads(self._archivo_alt.read_text("utf-8"))
         except Exception:
             self._alt = {}
+        # cuándo se escogió cada reemplazo: pasados ALT_VENCE_SEG se vuelve a probar el original
+        # (un error de YouTube puede ser pasajero y el reemplazo puede ser una versión corta)
+        self._archivo_alt_fecha = self.carpeta / "alternativas_fechas.json"
+        try:
+            self._alt_fecha = json.loads(self._archivo_alt_fecha.read_text("utf-8"))
+        except Exception:
+            self._alt_fecha = {}
         threading.Thread(target=self.revisar_cache, daemon=True).start()
 
     # -- caché ---------------------------------------------------------
@@ -107,9 +126,21 @@ class Descargador:
         """Ruta de la canción ya descargada y COMPLETA (video + audio unidos), o None.
         Si ese video no servía y se usó otro de la misma canción, devuelve el otro."""
         directa = self._ruta_directa(video_id)
-        if directa is None and video_id in self._alt:
+        if directa is None and video_id in self._alt and self._alias_vigente(video_id):
             return self._ruta_directa(self._alt[video_id])
         return directa
+
+    def _alias_vigente(self, video_id):
+        return time.time() - float(self._alt_fecha.get(video_id) or 0) < ALT_VENCE_SEG
+
+    def _guardar_alias(self, video_id, alt):
+        self._alt[video_id] = alt
+        self._alt_fecha[video_id] = time.time()
+        try:
+            self._archivo_alt.write_text(json.dumps(self._alt), "utf-8")
+            self._archivo_alt_fecha.write_text(json.dumps(self._alt_fecha), "utf-8")
+        except Exception:
+            pass
 
     def _ruta_directa(self, video_id):
         for ext in _EXT_VIDEO:
@@ -276,8 +307,9 @@ class Descargador:
             print(f"⚠️ El video {video_id} no sirve ({str(ex)[:120]}): busco otro de «{titulo}»")
             error = ex
         previo = self._alt.get(video_id)
-        candidatos = ([previo] if previo else []) + [
-            c for c in self.alternativas(titulo, canal, excluir={video_id}) if c != previo]
+        candidatos = self.alternativas(titulo, canal, excluir={video_id})
+        if previo and previo not in candidatos:
+            candidatos.append(previo)  # el de antes, solo si no hay uno mejor
         for alt in candidatos[:4]:
             try:
                 ruta = self._obtener_directo(alt)
@@ -286,11 +318,7 @@ class Descargador:
                     raise DiscoLleno(str(ex)) from ex
                 print(f"   ✗ {alt} tampoco sirve: {str(ex)[:80]}")
                 continue
-            self._alt[video_id] = alt
-            try:
-                self._archivo_alt.write_text(json.dumps(self._alt), "utf-8")
-            except Exception:
-                pass
+            self._guardar_alias(video_id, alt)
             print(f"   ✓ Uso {alt} en lugar de {video_id}")
             return ruta
         raise RuntimeError(f"Ningún video de «{titulo}» se pudo usar ({str(error)[:100]})")
@@ -324,8 +352,11 @@ class Descargador:
             return []
         buscadas = self._palabras(titulo)
         puntajes = []
-        for e in (datos or {}).get("entries") or []:
-            vid = (e or {}).get("id")
+        entradas = [e for e in (datos or {}).get("entries") or [] if e and e.get("id")]
+        # el video original suele salir en la búsqueda: su duración dice cuánto debe durar
+        ref = next((e.get("duration") for e in entradas if e["id"] in excluir and e.get("duration")), 0)
+        for e in entradas:
+            vid = e.get("id")
             if not vid or vid in excluir:
                 continue
             dur = e.get("duration") or 0
@@ -336,7 +367,7 @@ class Descargador:
             tiene = self._palabras(e.get("title"))
             parecido = len(buscadas & tiene) / max(1, len(buscadas))
             if parecido >= 0.6:  # que de verdad sea la misma canción
-                puntajes.append((parecido, vid))
+                puntajes.append((parecido + _bono_duracion(dur, ref), vid))
         puntajes.sort(key=lambda x: -x[0])
         return [vid for _, vid in puntajes[:maximo]]
 
