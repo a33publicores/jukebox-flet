@@ -7,8 +7,8 @@ normal. Si la canción es corta (menos de 40 s) o está en pausa, no se toca el 
 """
 import asyncio
 
-SALIDA_SEG = 5.0   # la que termina baja de volumen sus últimos 5 s
-ENTRADA_SEG = 3.0  # la que empieza sube en 3 s
+SALIDA_SEG = 8.0   # la que termina baja de volumen sus últimos 8 s
+ENTRADA_SEG = 5.0  # la que empieza sube en 5 s
 PASO_SEG = 0.25
 
 
@@ -20,12 +20,15 @@ class Fundido:
         self._tarea = None
 
     def _poner(self, v):
+        """`v` es cuánto se oye (0-100, en línea recta). El reproductor (mpv) baja el sonido
+        en curva: con volumen 50 ya casi no se oye. Por eso se le manda la raíz cúbica, así
+        la canción baja parejo hasta el final y no de golpe en los últimos 2 segundos."""
         v = int(max(0, min(100, round(v))))
         if v == self.vol:
             return
         self.vol = v
         try:
-            self.video.volume = v
+            self.video.volume = round(100 * (v / 100) ** (1 / 3), 1)
             self.video.update()
         except Exception:
             pass  # el video todavía no está en pantalla
@@ -54,7 +57,7 @@ class Fundido:
         """Empezó otra canción: entra suave."""
         self.saliendo = False
         self._cancelar()
-        self._poner(25)
+        self._poner(5)
         self._rampa(100, ENTRADA_SEG)
 
     def posicion(self, pos, dur, pausado=False):
@@ -66,6 +69,7 @@ class Fundido:
             self.normal()  # la adelantaron hacia atrás (televisor espejo): vuelve el volumen
         elif not self.saliendo and quedan <= SALIDA_SEG and pos > 10:
             self.saliendo = True
+            print(f"🎚️ Mezcla: baja el volumen (quedan {quedan:.1f} s de {dur:.0f} s)")
             self._rampa(0, max(1.0, quedan - 0.3))
         elif (not self.saliendo and self.vol < 100 and pos > ENTRADA_SEG + 2
               and (self._tarea is None or self._tarea.done())):
