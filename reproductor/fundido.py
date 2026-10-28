@@ -28,6 +28,20 @@ def _cubica(v):
     return round(100 * (max(0.0, min(100.0, v)) / 100) ** (1 / 3), 1)
 
 
+async def _posicion_fresca(leer, espera=1.2):
+    """(segundo, hora) de un video justo cuando su posición cambia: el reproductor la avisa a
+    saltos, y leerla en cualquier momento puede dar la de hace un rato."""
+    reloj = asyncio.get_event_loop()
+    antes = float(await leer())
+    limite = reloj.time() + espera
+    while reloj.time() < limite:
+        await asyncio.sleep(0.03)
+        valor = float(await leer())
+        if valor != antes:
+            return valor, reloj.time()
+    return antes, reloj.time()
+
+
 def _mismo(a, b):
     try:
         return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
@@ -154,15 +168,21 @@ class Fundido:
                 # dos van en el mismo punto (si no, al cruzarlos se oiría como eco).
                 adelanto = RELEVO_ADELANTO_SEG
                 await self.saltar(seg + adelanto)
-                for _ in range(3):
+                for _ in range(4):
                     await asyncio.sleep(RELEVO_ESPERA_SEG)
                     if self.pos_principal is None:
                         break
-                    dif = float(await self.pos_principal()) - float(await self.pos_mezcla())
-                    if abs(dif) <= 0.08:
+                    # El TV avisa la posición a saltos: se toma justo cuando cambia (así es
+                    # la de ese instante) y se lleva a "ahora" con el reloj, para los dos videos.
+                    pp, tp = await _posicion_fresca(self.pos_principal)
+                    pz, tz = await _posicion_fresca(self.pos_mezcla)
+                    ahora = asyncio.get_event_loop().time()
+                    dif = (pp + (ahora - tp)) - (pz + (ahora - tz))
+                    if abs(dif) <= 0.06:
                         break
                     adelanto = max(0.0, adelanto - dif)
-                    await self.saltar(float(await self.pos_mezcla()) + adelanto)
+                    pz, tz = await _posicion_fresca(self.pos_mezcla)
+                    await self.saltar(pz + (asyncio.get_event_loop().time() - tz) + adelanto)
             else:
                 await asyncio.sleep(RELEVO_ESPERA_SEG)
             self.ganancia = self.ganancia_mezcla
