@@ -177,8 +177,10 @@ def preparar(request, cli, cuerpo):
         return JSONResponse({"ok": True, "activo": True, "listo": False, "estado": "fallo"})
     archivo = N.buscar(vid)
     if archivo:
+        from services import volumen
         return JSONResponse({"ok": True, "activo": True, "listo": True, "archivo": archivo,
-                             "get": N.direccion("GET", archivo)})
+                             "get": N.direccion("GET", archivo),
+                             "volumen": volumen.factores([vid]).get(vid, 1.0)})
     estado = db.encargar(vid, d.get("titulo") or "", d.get("canal") or "", cli["codigo"],
                          pedido=d.get("pedido", True) is not False)
     return JSONResponse({"ok": True, "activo": True, "listo": False, "estado": estado})
@@ -223,6 +225,14 @@ def tema(request, cli, cuerpo):
     Los reproductores lo preguntan cada pocos minutos. Ver services/temas.py."""
     from services import temas
     return JSONResponse({"ok": True, "tema": temas.actual()})
+
+
+@_protegido
+def volumen_(request, cli, cuerpo):
+    """Volumen parejo: {video_id: factor} de las canciones ya medidas (?ids=a,b,c)."""
+    from services import volumen
+    ids = [i for i in (request.query_params.get("ids") or "").split(",") if i]
+    return JSONResponse({"ok": True, "volumen": volumen.factores(ids)})
 
 
 @_protegido
@@ -319,6 +329,8 @@ async def _vida(app):
         respaldo.iniciar_sincronizacion()
     else:
         pagos.iniciar_revisor()  # confirma solos los pagos pendientes de Wompi
+        from services import volumen
+        volumen.iniciar()  # mide qué tan duro suena cada canción (volumen parejo)
     yield
 
 
@@ -340,6 +352,7 @@ app = Starlette(routes=[
     Route("/api/v1/encargo", encargo, methods=["GET", "POST"]),
     Route("/api/v1/reporte", reporte, methods=["POST"]),
     Route("/api/v1/tema", tema),
+    Route("/api/v1/volumen", volumen_),
     Route("/api/v1/tabla", tabla),
     Route("/api/v1/excel", descargar_excel),
     Route("/api/v1/suscripcion", suscripcion),

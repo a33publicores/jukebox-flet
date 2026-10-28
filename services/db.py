@@ -200,6 +200,12 @@ ESQUEMA = [
         orden       INTEGER NOT NULL DEFAULT 0,
         actualizado DOUBLE PRECISION NOT NULL DEFAULT 0
     )""",
+    # Volumen parejo: qué tan duro suena cada canción (LUFS). Ver services/volumen.py
+    """CREATE TABLE IF NOT EXISTS volumenes (
+        video_id TEXT PRIMARY KEY,
+        lufs     DOUBLE PRECISION,
+        medido   DOUBLE PRECISION NOT NULL DEFAULT 0
+    )""",
     # Ajustes generales del sistema (clave -> valor). Ej.: tema_modo.
     """CREATE TABLE IF NOT EXISTS ajustes (
         clave TEXT PRIMARY KEY,

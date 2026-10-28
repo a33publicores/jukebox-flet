@@ -159,7 +159,9 @@ class Pantalla:
             resume_upon_entering_foreground_mode=False,
         ) if True else None
         self.fundido = Fundido(self.video, mezcla=self.video_mezcla, siguiente=self._ruta_siguiente,
-                               saltar=self.ir_a, pos_mezcla=self._pos_mezcla)
+                               saltar=self.ir_a, pos_mezcla=self._pos_mezcla,
+                               volumen_de=self._volumen_de)
+        self._volumenes = {}  # video_id -> volumen parejo (lo mide el servidor)
         self.tema = TemaApp(FONDO)  # tema de temporada (Navidad, Halloween...)
         self.dur = 0.0
         self.pos = 0.0
@@ -437,6 +439,28 @@ class Pantalla:
         sig = (self.cur + 1) % PUESTOS
         return self.fuente[sig] if self._lista_armada and self.anticipada[sig] else None
 
+    async def _volumen_de(self, video_id):
+        """Volumen parejo de una canción (1 = sin cambio). Se pregunta a la API una vez."""
+        if not video_id or self.motor is None:
+            return 1.0
+        if video_id in self._volumenes:
+            return self._volumenes[video_id]
+        try:
+            api = self.motor.backend.api
+            d = await asyncio.to_thread(api.volumen, [video_id]) if hasattr(api, "volumen") else {}
+            valor = (d.get("volumen") or {}).get(video_id)
+        except Exception:
+            valor = None
+        if valor is None:
+            return 1.0  # todavía no está medida: suena normal (se vuelve a preguntar después)
+        if len(self._volumenes) > 3000:
+            self._volumenes.clear()
+        self._volumenes[video_id] = float(valor)
+        return float(valor)
+
+    async def _ajustar_volumen(self, video_id):
+        self.fundido.poner_ganancia(await self._volumen_de(video_id))
+
     async def _pos_mezcla(self):
         return _segundos(await self.video_mezcla.get_current_position())
 
@@ -477,6 +501,7 @@ class Pantalla:
     # --------------------------------------------- interfaz que usa el Motor
     async def reproducir(self, ruta, item, token):
         self.token = token
+        self.page.run_task(self._ajustar_volumen, getattr(item, "video_id", ""))
         entro = self._entro_sola
         self._entro_sola = None
         if entro and entro[0] == self.cur and _misma(entro[1], ruta):

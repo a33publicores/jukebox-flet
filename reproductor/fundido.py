@@ -12,6 +12,7 @@ la siguiente entra suave.
 """
 import asyncio
 import os
+from pathlib import Path
 
 SALIDA_SEG = 8.0   # cuánto dura la mezcla (la que termina baja en estos últimos segundos)
 ENTRADA_SEG = 5.0  # sin mezcla: la que empieza sube en 5 s
@@ -32,7 +33,8 @@ def _mismo(a, b):
 
 
 class Fundido:
-    def __init__(self, video, mezcla=None, siguiente=None, saltar=None, pos_mezcla=None):
+    def __init__(self, video, mezcla=None, siguiente=None, saltar=None, pos_mezcla=None,
+                 volumen_de=None):
         """`mezcla`: segundo video (escondido) para que suenen las dos a la vez. `siguiente()`:
         ruta del archivo de la canción que sigue (o None si no está lista). `saltar(seg)`:
         lleva el video principal a ese segundo. `pos_mezcla()`: en qué segundo va el escondido."""
@@ -41,6 +43,10 @@ class Fundido:
         self.siguiente = siguiente
         self.saltar = saltar
         self.pos_mezcla = pos_mezcla
+        # Volumen parejo: `volumen_de(video_id)` (async) -> cuánto bajar esa canción (1 = igual)
+        self.volumen_de = volumen_de
+        self.ganancia = 1.0
+        self.ganancia_mezcla = 1.0
         self.vol = 100
         self.vol_mezcla = 0
         self.saliendo = False
@@ -53,8 +59,11 @@ class Fundido:
         if v == self.vol:
             return
         self.vol = v
+        self._aplicar()
+
+    def _aplicar(self):
         try:
-            self.video.volume = _cubica(v)
+            self.video.volume = _cubica(self.vol * self.ganancia)
             self.video.update()
         except Exception:
             pass  # el video todavía no está en pantalla
@@ -65,7 +74,7 @@ class Fundido:
             return
         self.vol_mezcla = v
         try:
-            self.mezcla.volume = _cubica(v)
+            self.mezcla.volume = _cubica(v * self.ganancia_mezcla)
             self.mezcla.update()
         except Exception:
             pass
@@ -94,9 +103,22 @@ class Fundido:
             self._poner(hasta)
 
     # ------------------------------------------------------------ mezcla
+    def poner_ganancia(self, g):
+        """Volumen parejo de la canción que suena (lo pide la app al empezar cada canción)."""
+        g = max(0.2, min(1.0, float(g or 1.0)))
+        if abs(g - self.ganancia) > 0.01:
+            self.ganancia = g
+            self._aplicar()
+
     async def _empezar_mezcla(self, ruta, segundos):
         import flet_video as ftv
         try:
+            self.ganancia_mezcla = 1.0
+            if self.volumen_de is not None:  # la siguiente también suena con su volumen parejo
+                try:
+                    self.ganancia_mezcla = max(0.2, min(1.0, float(await self.volumen_de(Path(ruta).stem))))
+                except Exception:
+                    pass
             self.mezclando = str(ruta)
             self.vol_mezcla = -1
             self._poner_mezcla(0)
@@ -119,6 +141,8 @@ class Fundido:
             if seg > 0.5 and self.saltar is not None:
                 await self.saltar(seg + 0.25)
             self._cancelar()
+            self.ganancia = self.ganancia_mezcla
+            self.vol = -1
             self._poner(100)
             print(f"🎚️ Mezcla: entra completa (desde el segundo {seg:.1f})")
         except Exception as ex:

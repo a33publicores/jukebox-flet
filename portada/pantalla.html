@@ -322,11 +322,12 @@
   // ¿Está en la nube? Si no, queda encargada. Devuelve lo que dice la API (o null sin red).
   async function preparar(it, pedido) {
     var l = listos[it.video_id];
-    if (l && ahora() - l.t < 5 * 3600000) return { activo: true, listo: true, get: l.get };
+    if (l && ahora() - l.t < 5 * 3600000) return { activo: true, listo: true, get: l.get, volumen: l.vol };
     var d;
     try { d = await api.preparar(it, pedido); } catch (e) { return null; }
     if (d.listo) {
-      listos[it.video_id] = { get: d.get, t: ahora() };
+      // volumen: cuánto bajar esta canción para que suene pareja con las demás (1 = igual)
+      listos[it.video_id] = { get: d.get, t: ahora(), vol: Math.max(0.2, Math.min(1, d.volumen || 1)) };
       delete esperando[it.video_id];
     } else if (d.activo) {
       var e = esperando[it.video_id] || (esperando[it.video_id] = { desde: ahora() });
@@ -402,6 +403,7 @@
     modo: null,
     mezclar: false,    // la canción terminó por la mezcla: la que sale baja suave mientras entra la otra
     saliente: null,    // reproductor que se está apagando (mezcla en curso)
+    base: 1,           // volumen de la canción que suena (volumen parejo)
     tMezcla: null,
     detener: function () {
       if (!medios.mezclar) {
@@ -428,8 +430,9 @@
           pre = { id: null, el: null };
           var mezcla = medios.mezclar && !viejo.paused;
           medios.mezclar = false;
-          if (mezcla) medios.fundir(viejo, video);
-          else { soltar(viejo); video.volume = 1; }
+          medios.base = d.volumen || 1;
+          if (mezcla) medios.fundir(viejo, video, medios.base);
+          else { soltar(viejo); video.volume = medios.base; }
           medios.modo = "video";
           video.muted = false;
           try { if (video.currentTime > 0.5) video.currentTime = 0; } catch (e) {}
@@ -440,7 +443,8 @@
         if (pre.el === otroVideo() && pre.id) { soltar(pre.el); pre = { id: null, el: null }; }
         if (medios.mezclar) { medios.mezclar = false; medios.cortarMezcla(); }  // no estaba lista: sin mezcla
         video.muted = false;
-        video.volume = 1;
+        medios.base = d.volumen || 1;
+        video.volume = medios.base;
         if (await cargarVideo(d.get, video)) {
           if (token !== M.token) return false;
           medios.modo = "video";
@@ -515,12 +519,13 @@
     cortarMezcla: function () {
       if (medios.tMezcla) { clearInterval(medios.tMezcla); medios.tMezcla = null; }
       if (medios.saliente) { soltar(medios.saliente); medios.saliente = null; }
-      video.volume = 1;
+      video.volume = medios.base;
     },
     // La que sale baja de volumen mientras la que entra sube (MEZCLA_SEG segundos).
-    fundir: function (sale, entra) {
+    fundir: function (sale, entra, hasta) {
       medios.cortarMezcla();
       medios.saliente = sale;
+      var desde = sale.volume;
       entra.volume = 0;
       var t0 = ahora(), largo = MEZCLA_SEG * 1000;
       diag("mezcla: empieza (entra en pausa=" + entra.paused + ", volumen entra=" + entra.volume + ")");
@@ -535,7 +540,7 @@
       var mitad = false;
       medios.tMezcla = setInterval(function () {
         var x = Math.min(1, (ahora() - t0) / largo);
-        try { sale.volume = Math.max(0, 1 - x); entra.volume = x; } catch (e) {}
+        try { sale.volume = Math.max(0, desde * (1 - x)); entra.volume = hasta * x; } catch (e) {}
         if (!mitad && x >= 0.5) {
           mitad = true;
           diag("mezcla a la mitad: sale vol=" + sale.volume.toFixed(2) + " suena=" + !sale.paused +
@@ -543,7 +548,7 @@
         }
         if (x >= 1) {
           clearInterval(medios.tMezcla); medios.tMezcla = null;
-          entra.volume = 1;
+          entra.volume = hasta;
           soltar(sale);
           if (medios.saliente === sale) medios.saliente = null;
         }

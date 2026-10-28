@@ -110,6 +110,10 @@ class ApiCliente:
         si la nube no está configurada)."""
         return self._post("/api/v1/nube", {"archivo": archivo})
 
+    def volumen(self, ids):
+        """Volumen parejo: {"volumen": {video_id: factor}} de las canciones ya medidas."""
+        return self._get("/api/v1/volumen", ids=",".join(ids))
+
     def tema(self):
         """Tema de temporada que se ve ahora (Navidad, Halloween...) o {"tema": None}."""
         return self._get("/api/v1/tema")

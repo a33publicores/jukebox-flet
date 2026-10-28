@@ -9,3 +9,4 @@ psycopg-pool
 openpyxl
 gspread
 google-auth
+imageio-ffmpeg
