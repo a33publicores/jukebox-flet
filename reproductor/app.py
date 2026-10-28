@@ -162,7 +162,7 @@ class Pantalla:
         ) if True else None
         self.fundido = Fundido(self.video, mezcla=self.video_mezcla, siguiente=self._ruta_siguiente,
                                saltar=self.ir_a, pos_mezcla=self._pos_mezcla,
-                               volumen_de=self._volumen_de)
+                               volumen_de=self._volumen_de, pos_principal=self._pos_principal)
         self._volumenes = {}  # video_id -> volumen parejo (lo mide el servidor)
         self.tema = TemaApp(FONDO)  # tema de temporada (Navidad, Halloween...)
         self.dur = 0.0
@@ -462,6 +462,9 @@ class Pantalla:
 
     async def _ajustar_volumen(self, video_id):
         self.fundido.poner_ganancia(await self._volumen_de(video_id))
+
+    async def _pos_principal(self):
+        return _segundos(await self.video.get_current_position())
 
     async def _pos_mezcla(self):
         return _segundos(await self.video_mezcla.get_current_position())

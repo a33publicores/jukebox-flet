@@ -17,6 +17,9 @@ from pathlib import Path
 SALIDA_SEG = 8.0   # cuánto dura la mezcla (la que termina baja en estos últimos segundos)
 ENTRADA_SEG = 5.0  # sin mezcla: la que empieza sube en 5 s
 PASO_SEG = 0.25
+RELEVO_ADELANTO_SEG = 0.7  # el principal salta este poco más adelante que el escondido...
+RELEVO_ESPERA_SEG = 0.8    # ...y en este tiempo ya está sonando justo donde va el escondido
+RELEVO_CRUCE_SEG = 0.6     # luego se cruzan: el principal sube y el escondido baja
 
 
 def _cubica(v):
@@ -34,7 +37,7 @@ def _mismo(a, b):
 
 class Fundido:
     def __init__(self, video, mezcla=None, siguiente=None, saltar=None, pos_mezcla=None,
-                 volumen_de=None):
+                 volumen_de=None, pos_principal=None):
         """`mezcla`: segundo video (escondido) para que suenen las dos a la vez. `siguiente()`:
         ruta del archivo de la canción que sigue (o None si no está lista). `saltar(seg)`:
         lleva el video principal a ese segundo. `pos_mezcla()`: en qué segundo va el escondido."""
@@ -43,6 +46,7 @@ class Fundido:
         self.siguiente = siguiente
         self.saltar = saltar
         self.pos_mezcla = pos_mezcla
+        self.pos_principal = pos_principal  # async: en qué segundo va el principal
         # Volumen parejo: `volumen_de(video_id)` (async) -> cuánto bajar esa canción (1 = igual)
         self.volumen_de = volumen_de
         self.ganancia = 1.0
@@ -134,16 +138,39 @@ class Fundido:
             self._rampa(0, segundos)
 
     async def _relevo(self):
-        """Terminó la primera y el principal ya tiene la siguiente: salta a donde iba el
-        escondido, sube el volumen y calla el escondido."""
+        """Terminó la primera y el principal ya tiene la siguiente. El escondido SIGUE sonando
+        mientras el principal (callado) salta a donde va el escondido y arranca; después se
+        cruzan en medio segundo (uno sube, el otro baja). Así no se oye el salto como una pausa."""
         try:
+            # (la rampa anterior ya la canceló nueva(); aquí NO se llama _cancelar(): esta
+            # misma tarea es self._tarea y se cancelaría a sí misma)
+            self.mezclando = None  # el relevo ya está en curso (no se repite)
+            self.vol = -1
+            self._poner(0)  # el principal empieza callado: lo que se oye es el escondido
             seg = float(await self.pos_mezcla()) if self.pos_mezcla else 0.0
             if seg > 0.5 and self.saltar is not None:
-                await self.saltar(seg + 0.25)
-            self._cancelar()
+                # Se apunta un poco adelante (lo que tarda en saltar y volver a sonar) y,
+                # mientras el principal sigue callado, se mide y se corrige hasta que los
+                # dos van en el mismo punto (si no, al cruzarlos se oiría como eco).
+                adelanto = RELEVO_ADELANTO_SEG
+                await self.saltar(seg + adelanto)
+                for _ in range(3):
+                    await asyncio.sleep(RELEVO_ESPERA_SEG)
+                    if self.pos_principal is None:
+                        break
+                    dif = float(await self.pos_principal()) - float(await self.pos_mezcla())
+                    if abs(dif) <= 0.08:
+                        break
+                    adelanto = max(0.0, adelanto - dif)
+                    await self.saltar(float(await self.pos_mezcla()) + adelanto)
+            else:
+                await asyncio.sleep(RELEVO_ESPERA_SEG)
             self.ganancia = self.ganancia_mezcla
-            self.vol = -1
-            self._poner(100)
+            n = max(1, int(RELEVO_CRUCE_SEG / 0.1))
+            for i in range(1, n + 1):
+                self._poner(100 * i / n)
+                self._poner_mezcla(100 * (1 - i / n))
+                await asyncio.sleep(0.1)
             print(f"🎚️ Mezcla: entra completa (desde el segundo {seg:.1f})")
         except Exception as ex:
             print(f"⚠️ Mezcla: relevo ({ex})")
