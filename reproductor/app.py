@@ -157,6 +157,8 @@ class Pantalla:
             expand=True, playlist=[], autoplay=False, controls=None, fill_color="#000000",
             volume=0, pause_upon_entering_background_mode=False,
             resume_upon_entering_foreground_mode=False,
+            # solo el sonido (no decodifica la imagen): mucho más liviano, sirve en TV sencillos
+            configuration=ftv.VideoConfiguration(mpv_properties={"vid": "no"}),
         ) if True else None
         self.fundido = Fundido(self.video, mezcla=self.video_mezcla, siguiente=self._ruta_siguiente,
                                saltar=self.ir_a, pos_mezcla=self._pos_mezcla,

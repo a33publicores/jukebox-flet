@@ -28,13 +28,17 @@ from tv.tema_app import TemaApp
 
 
 def _mezcla_en_este_tv():
-    """Dos videos a la vez (mezcla) solo en equipos con memoria suficiente; en los básicos
-    se hace solo el fundido para que no se trabe."""
+    """Mezcla (la siguiente suena por debajo los últimos segundos). El reproductor escondido
+    solo decodifica el sonido, así que sirve hasta en TV de 2 GB (que reportan ~1,9 GB);
+    solo en equipos con muy poca memoria (menos de 1,2 GB) se hace el fundido simple."""
     try:
         from tv import equipo
-        return not equipo.es_basico()
+        ram = equipo.ram_gb()
+        activa = not (0 < ram < 1.2)
+        print(f"🎚️ Mezcla entre canciones: {'activa' if activa else 'solo fundido'} ({ram:g} GB de RAM)")
+        return activa
     except Exception:
-        return False
+        return True
 from tv.motor import BackendApi, Motor
 from tv.version import API_POR_DEFECTO, VERSION
 
@@ -132,6 +136,8 @@ class Pantalla:
             expand=True, playlist=[], autoplay=False, controls=None, fill_color="#000000",
             volume=0, pause_upon_entering_background_mode=False,
             resume_upon_entering_foreground_mode=False,
+            # solo el sonido (no decodifica la imagen): mucho más liviano, sirve en TV sencillos
+            configuration=ftv.VideoConfiguration(mpv_properties={"vid": "no"}),
         ) if _mezcla_en_este_tv() else None
         self.fundido = Fundido(self.video, mezcla=self.video_mezcla, siguiente=self._ruta_siguiente,
                                saltar=self.ir_a, pos_mezcla=self._pos_mezcla,
