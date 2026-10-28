@@ -46,9 +46,16 @@ _HEAD_EXTRA = f"""
     html, body {{ background: {BG}; }}
     #pbgo-splash {{
       position: fixed; inset: 0; z-index: 2147483647;
-      display: flex; align-items: center; justify-content: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
       background: {BG};
     }}
+    /* círculo que gira debajo del logo mientras carga */
+    #pbgo-splash .rueda {{
+      width: 44px; height: 44px; margin-top: 18px; border-radius: 50%;
+      border: 4px solid rgba(34, 211, 238, .18); border-top-color: #22d3ee; border-right-color: #a855f7;
+      animation: pbgo-gira .9s linear infinite;
+    }}
+    @keyframes pbgo-gira {{ to {{ transform: rotate(360deg); }} }}
     #pbgo-splash img {{
       width: 300px; height: 220px; max-width: 80vw; object-fit: contain;
       animation: pbgo-in .65s cubic-bezier(.215,.61,.355,1) both;
@@ -80,10 +87,12 @@ _HEAD_EXTRA = f"""
         po.observe({{ type: 'resource', buffered: true }});
       }} catch (e) {{}}
       // Respaldos para que la capa nunca se quede pegada.
+      // Largos a propósito: si la conexión tarda, mejor el logo cargando que el
+      // "Working..." en blanco de Flet.
       window.addEventListener('flutter-first-frame', function () {{
-        setTimeout(hide, 9000);
+        setTimeout(hide, 45000);
       }}, {{ once: true }});
-      setTimeout(hide, 20000);
+      setTimeout(hide, 60000);
     }})();
   </script>
   <script>
@@ -143,7 +152,7 @@ _HEAD_EXTRA = f"""
 
 _BODY_OVERLAY = (
     '\n  <div id="pbgo-splash" role="status" aria-label="PlayBar GO">'
-    '<img src="logo.png" alt="PlayBar GO"></div>\n'
+    '<img src="logo.png" alt="PlayBar GO"><div class="rueda"></div></div>\n'
 )
 
 

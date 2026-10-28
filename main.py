@@ -154,6 +154,17 @@ async def main(page: ft.Page):
 
     page.title = "PlayBar GO"
 
+    if ruta.startswith("/s/"):
+        # Dirección de una sesión que ya venció o se cerró (el navegador la ofrece desde el
+        # historial al escribir play.alnovix.com): se va a la página principal, no a
+        # "Ingresa el código del lugar".
+        from views.acceso import ir_a_portada
+        try:
+            await ir_a_portada()
+            return
+        except Exception as ex:
+            print(f"⚠️ No se pudo ir a la portada: {ex}")
+
     from views.codigo import codigo_view
 
     await asyncio.to_thread(codigo_view, page)

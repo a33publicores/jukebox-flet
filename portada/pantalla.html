@@ -174,7 +174,12 @@
   var COMANDO_MAX_EDAD = 120;    // comandos del admin más viejos se ignoran
   var AVISAR_SIN_RED = 45000;    // un corte corto no se muestra
   var ESPEJO_DESFASE = 3;        // televisor espejo: si va más de 3 s corrido, se empareja
-  var MEZCLA_SEG = 6;            // mezcla: la siguiente entra 6 s antes de que termine la que suena
+  var MEZCLA_SEG = 6;
+  // Navegadores de TV (Samsung Tizen, LG webOS): muchos solo pueden sonar UN video a la vez,
+  // así que en vez de mezclar dos videos se hace fundido: la que termina baja sus últimos
+  // 6 s y la siguiente entra suave. En el computador sí se mezclan las dos.
+  var ES_TV = /SMART-TV|SmartTV|Tizen|Web0S|webOS|NetCast|HbbTV/i.test(navigator.userAgent);
+  var ENTRADA_SEG = 3;            // mezcla: la siguiente entra 6 s antes de que termine la que suena
   var ESPERA_MAX = 15 * 60000;   // una canción pedida que no llega a la nube en 15 min se descarta
   var E_COLA = "En cola", E_PLAY = "En reproduccion", E_SIGUE = "Siguiente", E_HECHO = "Reproducido",
       E_ELIM = "Eliminado", E_ERROR = "Error";
@@ -433,6 +438,8 @@
           medios.base = d.volumen || 1;
           if (mezcla) medios.fundir(viejo, video, medios.base);
           else { soltar(viejo); video.volume = medios.base; }
+          if (!mezcla && medios.entrarSuave) subirSuave(video, medios.base);
+          medios.entrarSuave = false;
           medios.modo = "video";
           video.muted = false;
           try { if (video.currentTime > 0.5) video.currentTime = 0; } catch (e) {}
@@ -445,6 +452,8 @@
         video.muted = false;
         medios.base = d.volumen || 1;
         video.volume = medios.base;
+        if (medios.entrarSuave) subirSuave(video, medios.base);
+        medios.entrarSuave = false;
         if (await cargarVideo(d.get, video)) {
           if (token !== M.token) return false;
           medios.modo = "video";
@@ -533,6 +542,7 @@
       setTimeout(function () {
         if (medios.saliente === sale && entra.currentTime - t0Entra < 0.3) {
           diag("mezcla: la que entra no arrancó con la otra sonando; se corta la anterior");
+          medios.soloFundido = true;  // este equipo no suena dos a la vez: de ahí en adelante, fundido
           medios.cortarMezcla();
           intentarSonar(entra.play());
         }
@@ -1153,6 +1163,15 @@
     if (medios.modo !== "video" || medios.mezclar || medios.saliente) return;
     var d = medios.dur(), p = medios.pos();
     if (d < 40 || d - p > MEZCLA_SEG || p < 10) return;
+    if (ES_TV || medios.soloFundido) {
+      if (medios.salida !== M.token) {
+        medios.salida = M.token;
+        medios.entrarSuave = true;
+        diag("fundido de salida (un solo video): quedan " + Math.round(d - p) + " s");
+        bajarHastaElFinal(video, M.token);
+      }
+      return;
+    }
     if (!pre.id || !pre.el || pre.el.readyState < 1) {
       if (diagMezcla !== M.token) {
         diagMezcla = M.token;
@@ -1177,6 +1196,30 @@
          " otro=" + o.readyState + "/" + o.networkState + " src=" + (o.getAttribute("src") ? "sí" : "no") +
          " · ocupado=" + M.ocupado + " pausado=" + M.pausado + " relleno=" + M.relleno + " espejo=" + M.espejo);
   }, 30000);
+
+  // Fundido con un solo video: baja el volumen de `el` hasta silencio justo al final.
+  function bajarHastaElFinal(el, token) {
+    var desde = el.volume;
+    var tm = setInterval(function () {
+      if (token !== M.token || el !== video) { clearInterval(tm); return; }
+      if (M.pausado) { clearInterval(tm); el.volume = medios.base; medios.salida = null; return; }
+      var quedan = medios.dur() - medios.pos();
+      el.volume = Math.max(0, desde * Math.min(1, quedan / MEZCLA_SEG));
+      if (quedan <= 0.05) clearInterval(tm);
+    }, 100);
+  }
+
+  // La siguiente entra suave (después de un fundido de salida).
+  function subirSuave(el, hasta) {
+    el.volume = 0;
+    var t0 = ahora();
+    var tm = setInterval(function () {
+      if (el !== video) { clearInterval(tm); return; }
+      var x = Math.min(1, (ahora() - t0) / (ENTRADA_SEG * 1000));
+      el.volume = hasta * x;
+      if (x >= 1) clearInterval(tm);
+    }, 100);
+  }
 
   var vigilancia = { pos: -1, desde: 0 };
   setInterval(function () {
