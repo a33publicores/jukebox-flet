@@ -1160,6 +1160,19 @@
     motor.alTerminar(M.token);
   }, 250);
 
+  // Diagnóstico: cada 30 s (las primeras 12 veces) cómo va el reproductor, para ver en los
+  // registros por qué no mezcla en un TV.
+  var estadosN = 0;
+  setInterval(function () {
+    if (estadosN >= 12 || !M.actual) return;
+    estadosN++;
+    var o = otroVideo();
+    diag("estado: modo=" + medios.modo + " dur=" + video.duration + " pos=" + Math.round(medios.pos()) +
+         " listo=" + video.readyState + " pausa=" + video.paused + " · siguiente=" + (pre.id || "-") +
+         " otro=" + o.readyState + "/" + o.networkState + " src=" + (o.getAttribute("src") ? "sí" : "no") +
+         " · ocupado=" + M.ocupado + " pausado=" + M.pausado + " relleno=" + M.relleno + " espejo=" + M.espejo);
+  }, 30000);
+
   var vigilancia = { pos: -1, desde: 0 };
   setInterval(function () {
     var pos = medios.pos(), dur = medios.dur();
