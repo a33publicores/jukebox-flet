@@ -268,6 +268,10 @@
     return s;
   }
 
+  // Diagnóstico (se ve en los registros de la API): solo las primeras veces, para no llenarlos.
+  var diagN = 0;
+  function diag(texto) { if (diagN++ < 40) api.reporte(texto); }
+
   // ------------------------------------------------------------------ medios (nube o YouTube)
   // Dos reproductores: `video` es el que suena; el otro deja la SIGUIENTE canción cargada
   // (callado) para que al pasar de canción entre al instante, sin esperar a que cargue.
@@ -495,9 +499,16 @@
       medios.saliente = sale;
       entra.volume = 0;
       var t0 = ahora(), largo = MEZCLA_SEG * 1000;
+      diag("mezcla: empieza (entra en pausa=" + entra.paused + ", volumen entra=" + entra.volume + ")");
+      var mitad = false;
       medios.tMezcla = setInterval(function () {
         var x = Math.min(1, (ahora() - t0) / largo);
         try { sale.volume = Math.max(0, 1 - x); entra.volume = x; } catch (e) {}
+        if (!mitad && x >= 0.5) {
+          mitad = true;
+          diag("mezcla a la mitad: sale vol=" + sale.volume.toFixed(2) + " suena=" + !sale.paused +
+               " · entra vol=" + entra.volume.toFixed(2) + " suena=" + !entra.paused + " t=" + entra.currentTime.toFixed(1));
+        }
         if (x >= 1) {
           clearInterval(medios.tMezcla); medios.tMezcla = null;
           soltar(sale);
@@ -529,7 +540,13 @@
   window.PBGO_medios = medios;  // para revisar desde la consola del navegador
 
   videos.forEach(function (el) {
-    el.addEventListener("ended", function () { if (el === video && medios.modo === "video") motor.alTerminar(M.token); });
+    el.addEventListener("ended", function () {
+      if (el === video && medios.modo === "video") {
+        diag("terminó sin mezcla: siguiente=" + (pre.id || "ninguna") + " lista=" + (pre.el ? pre.el.readyState : "-") +
+             " dur=" + Math.round(medios.dur()));
+        motor.alTerminar(M.token);
+      }
+    });
     el.addEventListener("error", function () {
       if (el === video && medios.modo === "video" && el.getAttribute("src")) motor.alError(M.token, "video");
       else if (el === pre.el) pre = { id: null, el: null };  // la precarga falló: se carga al ponerla
@@ -1162,6 +1179,12 @@
     if (pantallaCompleta) { try { var p = pantallaCompleta.call(raiz); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
     try { var v = video.play(); if (v && v.catch) v.catch(function () {}); } catch (e) {}
     ver("inicio", false);
+    try {
+      videos[1].volume = 0.3;
+      diag("arranque: " + navigator.userAgent.slice(0, 110) + " · volumen se puede cambiar=" +
+           (Math.abs(videos[1].volume - 0.3) < 0.01));
+      videos[1].volume = 1;
+    } catch (e) { diag("arranque: volumen da error " + e); }
     cargarYouTube();
     try {
       if (navigator.wakeLock) navigator.wakeLock.request("screen").catch(function () {});
