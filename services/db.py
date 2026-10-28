@@ -192,6 +192,19 @@ ESQUEMA = [
         error      TEXT NOT NULL DEFAULT '',
         prioridad  INTEGER NOT NULL DEFAULT 0
     )""",
+    # Temas por temporada (Navidad, Halloween...): ver services/temas.py
+    """CREATE TABLE IF NOT EXISTS temas (
+        clave       TEXT PRIMARY KEY,
+        nombre      TEXT NOT NULL,
+        datos       TEXT NOT NULL DEFAULT '{}',
+        orden       INTEGER NOT NULL DEFAULT 0,
+        actualizado DOUBLE PRECISION NOT NULL DEFAULT 0
+    )""",
+    # Ajustes generales del sistema (clave -> valor). Ej.: tema_modo.
+    """CREATE TABLE IF NOT EXISTS ajustes (
+        clave TEXT PRIMARY KEY,
+        valor TEXT NOT NULL DEFAULT ''
+    )""",
 ]
 
 
@@ -275,6 +288,11 @@ def asegurar():
         suscripcion.sembrar()
     except Exception as ex:
         print("⚠️ No se pudieron crear los planes:", ex)
+    try:  # plantillas de ejemplo de los temas (Navidad, Halloween)
+        from services import temas
+        temas.sembrar()
+    except Exception as ex:
+        print("⚠️ No se pudieron crear los temas de ejemplo:", ex)
 
 
 def consultar(sql, params=()):

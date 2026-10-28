@@ -218,6 +218,14 @@ def encargo(request, cli, cuerpo):
 
 
 @_protegido
+def tema(request, cli, cuerpo):
+    """Tema de temporada que se ve ahora (Navidad, Halloween...) o null (el normal).
+    Los reproductores lo preguntan cada pocos minutos. Ver services/temas.py."""
+    from services import temas
+    return JSONResponse({"ok": True, "tema": temas.actual()})
+
+
+@_protegido
 def reporte(request, cli, cuerpo):
     """Avisos del reproductor del navegador (para revisar en los registros)."""
     texto = str((cuerpo or {}).get("texto") or "")[:300]
@@ -331,6 +339,7 @@ app = Starlette(routes=[
     Route("/api/v1/preparar", preparar, methods=["POST"]),
     Route("/api/v1/encargo", encargo, methods=["GET", "POST"]),
     Route("/api/v1/reporte", reporte, methods=["POST"]),
+    Route("/api/v1/tema", tema),
     Route("/api/v1/tabla", tabla),
     Route("/api/v1/excel", descargar_excel),
     Route("/api/v1/suscripcion", suscripcion),

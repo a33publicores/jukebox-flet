@@ -198,6 +198,7 @@ def super_inicio(page):
             _boton("🧪 Prueba 2 días", lambda e: _form_prueba(page)),
             _boton("👥 Super admins", lambda e: admins_view(page, None), apagado=True),
             _boton("💳 Planes", lambda e: planes_view(page), apagado=True),
+            _boton("🎨 Temas", lambda e: temas_view(page), apagado=True),
             _boton("🎁 Bonos", lambda e: bonos_view(page), apagado=True),
             _boton("🧾 Pagos", lambda e: pagos_view(page), apagado=True),
             _boton("Salir", salir, apagado=True),
@@ -781,6 +782,171 @@ def planes_view(page):
         _encabezado(page, "💳 Planes", volver=super_inicio),
         _boton("➕ Nuevo plan", lambda ev: editar(None)),
         *tarjetas,
+    ], spacing=14)))
+    page.update()
+
+
+def _vista_tema(t, ancho=480):
+    """Cómo se ve el tema en el reproductor (colores, adornos y mensaje)."""
+    c = t["colores"]
+    return ft.Container(
+        width=ancho, padding=12, border_radius=14, bgcolor=c["fondo"],
+        border=ft.Border.all(2, c["acento"]),
+        content=ft.Column([
+            ft.Row([ft.Text(t.get("adornos") or "", size=22),
+                    ft.Image(src="/" + (t.get("logo") or "logo.png"), height=44, fit=ft.BoxFit.CONTAIN)
+                    if not (t.get("logo") or "").startswith("https://") else
+                    ft.Image(src=t["logo"], height=44, fit=ft.BoxFit.CONTAIN),
+                    ft.Text(t.get("adornos") or "", size=22)],
+                   alignment=ft.MainAxisAlignment.CENTER),
+            ft.Container(padding=8, border_radius=10, bgcolor=c["panel"],
+                         border=ft.Border.all(1, c["acento2"]),
+                         content=ft.Text(t.get("mensaje") or "(sin mensaje)", color=c["texto"], size=13,
+                                         text_align=ft.TextAlign.CENTER)),
+            ft.Row([ft.Container(width=26, height=14, border_radius=4, bgcolor=c[k],
+                                 border=ft.Border.all(1, "#ffffff33"), tooltip=k)
+                    for k in ("fondo", "panel", "acento", "acento2", "texto")], spacing=6,
+                   alignment=ft.MainAxisAlignment.CENTER),
+        ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+    )
+
+
+def temas_view(page):
+    """🎨 Temas por temporada: plantillas que cambian el visual de los reproductores."""
+    if not _es_super(page):
+        return super_login_view(page)
+    from services import temas
+    _preparar(page)
+    lista = temas.lista()
+    modo = temas.modo()
+
+    def cambiar_modo(e):
+        temas.poner_modo(e.control.value)
+        _aviso(page, "Listo: los reproductores lo cambian en máximo 3 minutos.")
+        temas_view(page)
+
+    selector = ft.Dropdown(
+        label="Tema que se ve en todos los bares", width=480, value=modo, color="white",
+        border_color=CYAN, on_select=cambiar_modo,
+        options=[ft.dropdown.Option("normal", "Normal (sin tema)"),
+                 ft.dropdown.Option("auto", "📅 Automático por fechas")]
+        + [ft.dropdown.Option(x["clave"], f"Siempre: {x['nombre']}") for x in lista],
+    )
+    ahora = temas.actual()
+    estado = ft.Text("Ahora se ve: " + (ahora["nombre"] if ahora else "el normal (sin tema)"),
+                     color="#22d3ee", size=14, weight=ft.FontWeight.BOLD)
+
+    def editar(t=None, copia=False):
+        base = dict(t) if t else temas.limpiar({"nombre": "Nuevo tema", "colores": temas.NORMAL})
+        if copia:
+            base.update(clave="", nombre=f"{base['nombre']} (copia)")
+        c = base["colores"]
+        nombre = _campo("Nombre (ej. 💕 Amor y amistad)", base["nombre"])
+        mensaje = _campo("Mensaje que se ve en la pantalla", base["mensaje"])
+        adornos = _campo("Adornos junto al logo (emojis, ej. 🎄🎁⭐)", base["adornos"])
+        logos = temas.logos_disponibles()
+        logo = ft.Dropdown(label="Logo", width=340, value=base.get("logo") or "", color="white",
+                           border_color=CYAN,
+                           options=[ft.dropdown.Option("", "El de siempre (logo.png)")]
+                           + [ft.dropdown.Option(f, f) for f in logos if f != "logo.png"])
+        efecto = ft.Dropdown(label="Efecto animado", width=340, value=base["efecto"], color="white",
+                             border_color=CYAN,
+                             options=[ft.dropdown.Option(k, v) for k, v in temas.EFECTOS.items()])
+        campos_color = {k: _campo(etq, c[k], ancho=160) for k, etq in (
+            ("fondo", "Fondo"), ("panel", "Paneles"), ("acento", "Color principal"),
+            ("acento2", "Color secundario"), ("texto", "Texto"))}
+        desde = _campo("Se activa sola desde (MM-DD)", base["desde"], ancho=165)
+        hasta = _campo("hasta (MM-DD)", base["hasta"], ancho=165)
+        orden = _campo("Orden", base.get("orden") or 0, numeros=True, ancho=100)
+        vista = ft.Container(content=_vista_tema(base, ancho=340))
+        error = ft.Text("", color="#f87171")
+
+        def datos():
+            return {"clave": base.get("clave") or "", "nombre": nombre.value, "mensaje": mensaje.value,
+                    "adornos": adornos.value, "efecto": efecto.value, "desde": desde.value,
+                    "logo": logo.value or "",
+                    "hasta": hasta.value, "orden": orden.value,
+                    "colores": {k: f.value for k, f in campos_color.items()}}
+
+        def ver(ev=None):
+            vista.content = _vista_tema(temas.limpiar(datos()), ancho=340)
+            page.update()
+
+        for f in [mensaje, adornos, *campos_color.values()]:
+            f.on_blur = ver
+
+        def guardar(ev):
+            d = datos()
+            fecha = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$")
+            malos = [k for k, v in d["colores"].items() if not re.match(r"^#[0-9a-fA-F]{6}$", (v or "").strip())]
+            if malos:
+                error.value = "Colores con el formato #RRGGBB (ej. #ef4444): revisa " + ", ".join(malos)
+            elif (d["desde"] or d["hasta"]) and not (fecha.match((d["desde"] or "").strip())
+                                                    and fecha.match((d["hasta"] or "").strip())):
+                error.value = "Fechas con el formato MM-DD (ej. 12-01), o deja las dos vacías."
+            else:
+                temas.guardar(d)
+                _cerrar_dialogo(page)
+                _aviso(page, "Tema guardado")
+                temas_view(page)
+                return
+            page.update()
+
+        _dialogo(page, "Editar tema" if t and not copia else "Nuevo tema", [
+            vista, nombre, mensaje, adornos, efecto, logo,
+            ft.Text("Para otro logo: súbelo a la carpeta assets con un nombre que empiece por "
+                    "«logo» (ej. logonavidad.png) y aparece aquí.", color="#64748b", size=12),
+            ft.Text("Colores (formato #RRGGBB, ej. #ef4444):", color="#94A3B8", size=12),
+            ft.Row(list(campos_color.values()), wrap=True, spacing=8, run_spacing=8),
+            ft.Row([desde, hasta], wrap=True, spacing=8),
+            ft.Text("Con «Automático por fechas», este tema se ve solo entre esas fechas.",
+                    color="#64748b", size=12),
+            orden, error,
+        ], [ft.TextButton("Ver cómo queda", on_click=ver),
+            ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
+            ft.FilledButton("Guardar", on_click=guardar)])
+
+    def eliminar(t):
+        def si(ev):
+            temas.borrar(t["clave"])
+            _cerrar_dialogo(page)
+            temas_view(page)
+        _dialogo(page, f"¿Eliminar {t['nombre']}?", [ft.Text("La plantilla se borra.", color="white")],
+                 [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
+                  ft.FilledButton("Eliminar", on_click=si)])
+
+    def activar(t):
+        temas.poner_modo(t["clave"])
+        _aviso(page, f"{t['nombre']} activado en todos los bares (en máximo 3 minutos).")
+        temas_view(page)
+
+    def tarjeta(t):
+        fechas = f"📅 {t['desde']} a {t['hasta']}" if t["desde"] and t["hasta"] else "📅 sin fechas"
+        return ft.Container(
+            width=520, padding=14, border_radius=16, bgcolor=PANEL, border=ft.Border.all(1, "#1e293b"),
+            content=ft.Column([
+                ft.Text(t["nombre"], size=17, color="white", weight=ft.FontWeight.BOLD),
+                ft.Text(f"{fechas} · {temas.EFECTOS.get(t['efecto'], '')}", color="#94A3B8", size=13),
+                _vista_tema(t),
+                ft.Row([
+                    ft.OutlinedButton("Activar ya", icon=ft.Icons.PLAY_ARROW,
+                                      on_click=lambda e, t=t: activar(t)),
+                    ft.OutlinedButton("Editar", icon=ft.Icons.EDIT, on_click=lambda e, t=t: editar(t)),
+                    ft.OutlinedButton("Duplicar", icon=ft.Icons.COPY,
+                                      on_click=lambda e, t=t: editar(t, copia=True)),
+                    ft.OutlinedButton("Eliminar", icon=ft.Icons.DELETE, style=ft.ButtonStyle(color="#f87171"),
+                                      on_click=lambda e, t=t: eliminar(t)),
+                ], wrap=True, spacing=8, run_spacing=8),
+            ], spacing=8),
+        )
+
+    page.add(ft.Container(width=560, padding=16, content=ft.Column([
+        _encabezado(page, "🎨 Temas por temporada", volver=super_inicio),
+        ft.Text("Cambian el visual de los reproductores (TV, PC y navegador) y de la página de los "
+                "clientes: colores, mensaje, adornos y un efecto animado.", color="#94A3B8", size=13),
+        selector, estado,
+        _boton("➕ Nuevo tema", lambda e: editar(None)),
+        *[tarjeta(t) for t in lista],
     ], spacing=14)))
     page.update()
 

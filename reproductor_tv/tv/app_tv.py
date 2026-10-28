@@ -24,6 +24,7 @@ from tv import config as CFG
 from tv import actualizador_tv, descargas_tv, dns_respaldo
 from tv.api_cliente import ApiCliente, LlaveInvalida
 from tv.fundido import Fundido
+from tv.tema_app import TemaApp
 from tv.motor import BackendApi, Motor
 from tv.version import API_POR_DEFECTO, VERSION
 
@@ -116,6 +117,7 @@ class Pantalla:
         self._entro_sola = None
         self._lock_puestos = asyncio.Lock()
         self.fundido = Fundido(self.video)  # mezcla suave entre canciones
+        self.tema = TemaApp(FONDO)  # tema de temporada (Navidad, Halloween...)
         self.dur = 0.0
         self.pos = 0.0
         self._ult_seg = -1
@@ -549,8 +551,7 @@ class Pantalla:
         # El logo de PlayBar GO SIEMPRE visible encima de la playlist.
         logo = ft.Container(
             padding=ft.Padding.only(top=12, bottom=8),
-            content=ft.Row([ft.Image(src="/logo.png", height=56, fit=ft.BoxFit.CONTAIN)],
-                           alignment=ft.MainAxisAlignment.CENTER),
+            content=self.tema.logo(ft.Image(src="/logo.png", height=56, fit=ft.BoxFit.CONTAIN)),
         )
         ayuda = ft.Container(
             padding=ft.Padding.symmetric(horizontal=10, vertical=6), bgcolor=PANEL,
@@ -560,12 +561,13 @@ class Pantalla:
         derecha = ft.Container(
             expand=3, bgcolor=FONDO,
             border=ft.Border.only(left=ft.BorderSide(1, "#1e293b")),
-            content=ft.Column(spacing=6, controls=[
-                logo, self.aviso_act, self.aviso_plan,
+            content=self.tema.envolver(ft.Column(spacing=6, controls=[
+                logo, self.tema.mensaje, self.aviso_act, self.aviso_plan,
                 ft.Container(content=self.encabezado, padding=ft.Padding.symmetric(horizontal=10)),
                 self.lista, ayuda,
-            ]),
+            ])),
         )
+        self.tema.panel = derecha
         return ft.Row([video, derecha], expand=True, spacing=0)
 
 
@@ -1008,6 +1010,7 @@ async def _una_sesion(page: ft.Page):
     tareas = [asyncio.ensure_future(motor.correr()),
               asyncio.ensure_future(pantalla.vigilar_final()),
               asyncio.ensure_future(confirmar()),
+              asyncio.ensure_future(pantalla.tema.vigilar(api, page)),
               asyncio.ensure_future(actualizador_tv.vigilar(
                   motor, pantalla.aviso_actualizacion, aplicar_actualizacion))]
     try:

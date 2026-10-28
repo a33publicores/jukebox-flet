@@ -110,6 +110,10 @@ class ApiCliente:
         si la nube no está configurada)."""
         return self._post("/api/v1/nube", {"archivo": archivo})
 
+    def tema(self):
+        """Tema de temporada que se ve ahora (Navidad, Halloween...) o {"tema": None}."""
+        return self._get("/api/v1/tema")
+
     def preparar(self, video_id, titulo="", canal=""):
         """¿La canción está en la nube? Si no, la encarga a otro equipo.
         {"activo", "listo", "archivo"} o {"activo", "listo": False, "estado"}"""

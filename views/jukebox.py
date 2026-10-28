@@ -77,8 +77,13 @@ def jukebox_view(
     # Los logos tienen un ancho fijo: así el centro (nombre y botón) siempre cabe,
     # aunque el logo del bar sea ancho y el celular angosto.
     ANCHO_LOGO = 64
+    try:  # tema de temporada (Navidad, Halloween...): /super → 🎨 Temas
+        from services import temas
+        tema = temas.actual()
+    except Exception:
+        tema = None
     logo_playbar = ft.Image(
-        src="/logohallowen.png",
+        src=(tema or {}).get("logo_ruta") or "/logo.png",
         width=ANCHO_LOGO,
         height=56,
         fit=ft.BoxFit.CONTAIN,
@@ -445,6 +450,13 @@ def jukebox_view(
                 spacing=10,
                 controls=[
                     encabezado,
+                    *([ft.Container(
+                        width=ancho_tarjeta() + 20, padding=8, border_radius=14,
+                        bgcolor=tema["colores"]["panel"],
+                        border=ft.Border.all(1, tema["colores"]["acento"]),
+                        content=ft.Text(tema["mensaje"], color=tema["colores"]["texto"], size=13,
+                                        weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+                    )] if tema and tema.get("mensaje") else []),
                     ultima_cancion,
                     barra_busqueda,
                     estado_busqueda,

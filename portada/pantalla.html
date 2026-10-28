@@ -48,7 +48,7 @@
   #encabezado, #lista { padding: 0 10px; }
   #lista { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
   .tarjeta { display: flex; gap: 8px; align-items: center; padding: 6px; border-radius: 10px; background: var(--panel); }
-  .tarjeta.resaltada { background: #12203a; border: 1px solid var(--cian); }
+  .tarjeta.resaltada { background: var(--panel); border: 1px solid var(--cian); }
   .tarjeta img { width: 88px; height: 50px; object-fit: cover; border-radius: 6px; flex: none; background: #000; }
   .tarjeta .info { min-width: 0; }
   .etiqueta { font-size: 11px; font-weight: bold; color: var(--violeta); }
@@ -65,8 +65,20 @@
   .control span { font-size: 14px; font-weight: bold; color: #cbd5e1; }
   .control:hover, .control:focus { border-color: var(--cian); background: #12203a; }
   .control:active { transform: scale(.96); }
-  .control.principal { flex: 1.3; background: linear-gradient(135deg, #06b6d4, #8b5cf6); border-color: transparent; }
+  .control.principal { flex: 1.3; background: linear-gradient(135deg, var(--cian), var(--violeta)); border-color: transparent; }
   .control.principal span { color: #fff; }
+  /* tema de temporada (Navidad, Halloween...): ver services/temas.py */
+  #lado { position: relative; overflow: hidden; }
+  #tema-msg { margin: 0 10px; padding: 8px 10px; border-radius: 12px; text-align: center; font-size: 14px;
+              font-weight: bold; background: var(--panel); border: 1px solid var(--violeta); color: var(--texto); }
+  .adorno { font-size: 20px; vertical-align: middle; margin: 0 6px; }
+  #efecto { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+  #efecto span { position: absolute; top: -40px; opacity: .85; animation-name: caer; animation-timing-function: linear;
+                 animation-iteration-count: infinite; }
+  @keyframes caer { 0% { transform: translateY(-40px) rotate(0deg); }
+                    100% { transform: translateY(110vh) rotate(260deg); } }
+  #lado > * { position: relative; z-index: 2; }
+  #lado > #efecto { position: absolute; z-index: 1; }
   #ayuda { padding: 6px 10px; background: var(--panel); color: #64748b; font-size: 11px; text-align: center; }
   /* configuración y arranque */
   #inicio { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--fondo); display: flex; flex-direction: column;
@@ -129,8 +141,10 @@
     </div>
   </div>
   <div id="lado">
-    <div id="logo"><img src="/portada/logo.png" alt="PlayBar GO"></div>
+    <div id="efecto"></div>
+    <div id="logo"><span class="adorno" id="adorno-izq"></span><img id="logo-img" src="/portada/logo.png" alt="PlayBar GO"><span class="adorno" id="adorno-der"></span></div>
     <div id="nombre"></div>
+    <div id="tema-msg" class="oculto"></div>
     <div id="aviso" class="aviso oculto"></div>
     <div id="encabezado"></div>
     <div id="lista"></div>
@@ -203,6 +217,7 @@
       return pedir("POST", "/api/v1/preparar", { video_id: it.video_id, titulo: it.titulo || "",
         canal: it.canal || "", pedido: !!pedido });
     },
+    tema: function () { return pedir("GET", "/api/v1/tema"); },
     reporte: function (texto) { return pedir("POST", "/api/v1/reporte", { texto: texto }).catch(function () {}); },
     estado: function (estado, actual, siguiente, ack, video) {
       return pedir("POST", "/api/v1/estado", { estado: estado, actual: actual, siguiente: siguiente, ack: ack,
@@ -952,6 +967,45 @@
     }
   };
 
+  // ------------------------------------------------------------------ tema de temporada
+  var temaFirma = "";
+  var NORMAL = { fondo: "#020617", panel: "#0f172a", acento: "#22d3ee", acento2: "#a78bfa", texto: "#f8fafc" };
+
+  function ponerTema(tema) {
+    var firma = JSON.stringify(tema || null);
+    if (firma === temaFirma) return;
+    temaFirma = firma;
+    var c = (tema && tema.colores) || NORMAL;
+    var raiz = document.documentElement.style;
+    raiz.setProperty("--fondo", c.fondo);
+    raiz.setProperty("--panel", c.panel);
+    raiz.setProperty("--cian", c.acento);
+    raiz.setProperty("--violeta", c.acento2);
+    raiz.setProperty("--texto", c.texto);
+    $("logo-img").src = (tema && tema.logo_ruta) || "/portada/logo.png";
+    var adornos = (tema && tema.adornos) || "";
+    $("adorno-izq").textContent = adornos;
+    $("adorno-der").textContent = adornos;
+    $("tema-msg").textContent = (tema && tema.mensaje) || "";
+    ver("tema-msg", !!(tema && tema.mensaje));
+    var efecto = $("efecto");
+    efecto.innerHTML = "";
+    var figuras = (tema && tema.figuras) || [];
+    for (var i = 0; figuras.length && i < 16; i++) {
+      var s = document.createElement("span");
+      s.textContent = figuras[i % figuras.length];
+      s.style.left = Math.round(Math.random() * 92) + "%";
+      s.style.fontSize = (14 + Math.round(Math.random() * 16)) + "px";
+      s.style.animationDuration = (7 + Math.random() * 7).toFixed(1) + "s";
+      s.style.animationDelay = (-Math.random() * 12).toFixed(1) + "s";
+      efecto.appendChild(s);
+    }
+  }
+
+  async function revisarTema() {
+    try { ponerTema((await api.tema()).tema); } catch (e) {}  // sin red: se queda el que estaba
+  }
+
   async function bucle() {
     for (;;) {
       try {
@@ -1194,6 +1248,8 @@
     } catch (e) {
       if (e && e.llaveMala) { pedirConfig(e.message); return; }
     }
+    revisarTema();
+    setInterval(revisarTema, 3 * 60000);
     bucle();
   });
 

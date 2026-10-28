@@ -22,6 +22,7 @@ from reproductor import actualizador, diagnostico
 from reproductor.version import REVISAR_CADA_HORAS, VERSION
 from reproductor.descargas import Descargador
 from reproductor.fundido import Fundido
+from reproductor.tema_app import TemaApp
 from reproductor.motor import BackendApi, Motor
 from reproductor.version import API_POR_DEFECTO, APIS_VIEJAS
 from services.api_cliente import ApiCliente
@@ -151,6 +152,7 @@ class Pantalla:
         self._entro_sola = None             # (puesto, ruta) si la siguiente entró sola
         self._lock_puestos = asyncio.Lock()
         self.fundido = Fundido(self.video)  # mezcla suave entre canciones
+        self.tema = TemaApp(FONDO)  # tema de temporada (Navidad, Halloween...)
         self.dur = 0.0
         self.pos = 0.0
         self._ult_seg = -1
@@ -859,19 +861,19 @@ class Pantalla:
         izquierda = ft.Column([zona_video], expand=True, spacing=0)
         self.logo_lista = ft.Container(
             padding=16,
-            content=ft.Row([
-                ft.Image(src="/logo.png", height=48, fit=ft.BoxFit.CONTAIN),
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            content=self.tema.logo(ft.Image(src="/logo.png", height=48, fit=ft.BoxFit.CONTAIN)),
         )
         self.zona_controles = ft.Container(padding=8, content=controles, bgcolor=PANEL)
         derecha = ft.Container(
             width=390, bgcolor=FONDO,
             border=ft.Border.only(left=ft.BorderSide(1, "#1e293b")),
-            content=ft.Column(
+            content=self.tema.envolver(ft.Column(
                 spacing=0,
-                controls=[self.logo_lista, self.aviso_plan, self.lista, self.zona_controles],
-            ),
+                controls=[self.logo_lista, self.tema.mensaje, self.aviso_plan, self.lista,
+                          self.zona_controles],
+            )),
         )
+        self.tema.panel = derecha
         return ft.Row([izquierda, derecha], expand=True, spacing=0)
 
 
@@ -1045,6 +1047,7 @@ async def main(page: ft.Page):
     page.run_task(_vigilar_actualizaciones, page)
     page.run_task(pantalla.vigilar_final)
     page.run_task(pantalla.vigilar_barra)
+    page.run_task(pantalla.tema.vigilar, api, page)
     print(f"🎬 Reproductor PlayBar GO para el cliente {cfg['cliente']}")
     await motor.correr()
 
