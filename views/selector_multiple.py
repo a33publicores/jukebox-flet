@@ -1,10 +1,10 @@
 """
 Lista desplegable con selección múltiple (panel del administrador: géneros y artistas).
 
-Cerrada ocupa una línea con el resumen; al tocarla se abre debajo con casillas. Lo que se
-marca queda en "borrador" hasta tocar ✔ Aplicar (ahí se guarda y se cierra); Cancelar deja
-todo como estaba. Cada toque actualiza SOLO esta lista (no la página entera): así responde
-rápido aunque el panel tenga una cola larga.
+Cerrada ocupa una línea con el resumen; al tocarla se abre una ventana en el centro con
+casillas (antes se abría debajo y, en pantallas bajitas, quedaba fuera de la vista: parecía
+que no abría). Lo que se marca queda en "borrador" hasta tocar ✔ Aplicar (ahí se guarda y
+se cierra); Cancelar deja todo como estaba. Cada toque actualiza SOLO esta lista.
 """
 import unicodedata
 
@@ -67,22 +67,38 @@ def selector(todos_txt, elegidos, al_aplicar, buscador=False, ancho=320, vacio_t
                 "Nada coincide con la búsqueda.", color="#94A3B8", size=13)))
         filas.controls = controles
         caja_filas.height = min(340, 40 * len(controles) + 4)
-        panel.visible = estado["abierta"]
         flecha.icon = ft.Icons.ARROW_DROP_UP if estado["abierta"] else ft.Icons.ARROW_DROP_DOWN
         resumen.value = ", ".join(nombres_elegidos()) if elegidos else todos_txt
 
     def refrescar():
         pintar()
+        for c in (control, ventana):
+            try:
+                c.update()
+            except Exception:
+                pass  # todavía no está en pantalla (o la ventana está cerrada)
+
+    def cerrar_ventana():
+        estado["abierta"] = False
         try:
-            control.update()
+            ventana.open = False
+            ventana.update()
         except Exception:
-            pass  # todavía no está en pantalla
+            pass
 
     def abrir(e=None):
-        estado["abierta"] = not estado["abierta"]
+        estado["abierta"] = True
         borrador.clear()
         borrador.update(elegidos)
         estado["filtro"] = campo.value = ""
+        pintar()
+        try:
+            (e.page if e is not None and getattr(e, "page", None) else control.page).show_dialog(ventana)
+        except Exception as ex:
+            print(f"⚠️ selector: no se pudo abrir ({ex})")
+
+    def cancelar(e=None):
+        cerrar_ventana()
         refrescar()
 
     def tocar(clave):
@@ -101,36 +117,33 @@ def selector(todos_txt, elegidos, al_aplicar, buscador=False, ancho=320, vacio_t
     def aplicar(e=None):
         elegidos.clear()
         elegidos.update(borrador)
-        estado["abierta"] = False
+        cerrar_ventana()
         refrescar()
         al_aplicar()
 
     campo.on_change = buscar
-    panel = ft.Container(
-        visible=False, width=ancho, bgcolor="#1e293b", border_radius=12,
-        border=ft.Border.all(1, "#334155"), padding=ft.Padding.symmetric(vertical=6),
-        content=ft.Column(spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER, controls=[
-            campo,
-            caja_filas,
-            ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=10, controls=[
-                ft.TextButton(content=ft.Text("Cancelar", color="#CBD5E1", size=14),
-                              on_click=abrir),
-                ft.Container(
-                    width=150, height=40, border_radius=12,
-                    gradient=ft.LinearGradient(colors=["#00D4FF", "#B44CFF"]),
-                    content=ft.TextButton(
-                        content=ft.Text("✔ Aplicar", color="white", size=15,
-                                        weight=ft.FontWeight.BOLD),
-                        on_click=aplicar)),
-            ]),
-        ]))
+    ventana = ft.AlertDialog(
+        modal=True, bgcolor="#111827",
+        title=ft.Text(todos_txt.replace("Todos los ", "").capitalize(), color="#22d3ee",
+                      weight=ft.FontWeight.BOLD, size=18),
+        content=ft.Column(spacing=8, tight=True, width=ancho,
+                          horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                          controls=[campo, caja_filas]),
+        actions=[
+            ft.TextButton(content=ft.Text("Cancelar", color="#CBD5E1", size=14), on_click=cancelar),
+            ft.Container(
+                width=150, height=40, border_radius=12,
+                gradient=ft.LinearGradient(colors=["#00D4FF", "#B44CFF"]),
+                content=ft.TextButton(
+                    content=ft.Text("✔ Aplicar", color="white", size=15, weight=ft.FontWeight.BOLD),
+                    on_click=aplicar)),
+        ])
     control = ft.Column(spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER, controls=[
         ft.Container(
             width=ancho, bgcolor="#0f172a", border_radius=12, border=ft.Border.all(1, "#334155"),
             padding=ft.Padding.symmetric(horizontal=14, vertical=10), ink=True,
             on_click=abrir,
             content=ft.Row([resumen, flecha], spacing=6)),
-        panel,
     ])
 
     def poner_opciones(opciones):
