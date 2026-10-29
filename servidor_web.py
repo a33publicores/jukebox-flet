@@ -51,6 +51,20 @@ def _es_tv_sin_android(scope):
     return "android" not in ua and any(m in ua for m in TV_SIN_ANDROID)
 
 
+async def _diagnostico(scope, receive, send):
+    """Avisos del navegador (ej. el vigilante tuvo que reconectar) para los registros."""
+    cuerpo = b""
+    while True:
+        m = await receive()
+        cuerpo += m.get("body", b"")[:400]
+        if not m.get("more_body") or len(cuerpo) >= 400:
+            break
+    ip = next((v.decode("latin-1") for k, v in scope.get("headers") or [] if k == b"x-forwarded-for"), "")
+    print(f"🩺 Navegador {ip.split(',')[0][:20]}: {cuerpo.decode('utf-8', 'replace')[:200]}")
+    await send({"type": "http.response.start", "status": 204, "headers": [(b"content-length", b"0")]})
+    await send({"type": "http.response.body", "body": b""})
+
+
 async def _logo_tema(send, clave):
     from starlette.concurrency import run_in_threadpool
     datos, tipo = None, None
@@ -183,6 +197,9 @@ def crear_app(flet_app):
     estaticos = Starlette(routes=[Mount("/portada", StaticFiles(directory=str(CARPETA_PORTADA)))])
 
     async def app(scope, receive, send):
+        if scope["type"] == "http" and scope.get("path") == "/pbgo-diag":
+            await _diagnostico(scope, receive, send)
+            return
         if scope["type"] == "http" and scope.get("method") in ("GET", "HEAD"):
             ruta = scope.get("path") or "/"
             if ruta.startswith("/portada/"):

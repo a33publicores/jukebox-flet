@@ -281,7 +281,10 @@ def admin_view(page, codigo, nombre, logo):
                 sin_conexion = None
                 ultimo.pop("firma", None)  # al volver, se repinta todo
             try:
+                t0 = time.time()
                 refrescar()
+                if time.time() - t0 > 1.5:  # diagnóstico: el panel se sentía pegado
+                    print(f"🐢 Panel {codigo}: actualizar tardó {time.time() - t0:.1f} s")
             except Exception as ex:
                 texto = str(ex).lower()
                 if "session closed" in texto or "destroyed" in texto or "disconnected" in texto:
@@ -377,6 +380,7 @@ def admin_view(page, codigo, nombre, logo):
 
     def contar_generos():
         """Cuántas canciones del historial hay de cada género y de cada artista."""
+        t_inicio = time.time()
         try:
             from services import db as _db
             from services.playbar_service import inicio_jornada
@@ -404,6 +408,8 @@ def admin_view(page, codigo, nombre, logo):
             opciones_artistas(opciones)
         except Exception as ex:
             print("⚠️ contar géneros:", ex)
+        if time.time() - t_inicio > 1.5:
+            print(f"🐢 Panel {codigo}: contar géneros tardó {time.time() - t_inicio:.1f} s")
             opciones_artistas([(a, a, 0) for a in sorted(artistas_elegidos)])
 
     async def salir(e):

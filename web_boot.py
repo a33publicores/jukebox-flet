@@ -106,6 +106,9 @@ _HEAD_EXTRA = f"""
       var W = window.WebSocket;
       if (!W) return;
       var actual = null, tocado = 0, cerrado = 0;
+      function avisar(texto) {{  // queda en los registros del servidor (diagnóstico)
+        try {{ navigator.sendBeacon('/pbgo-diag', texto + ' · ' + location.pathname.slice(0, 40)); }} catch (e) {{}}
+      }}
       function esToque(d) {{
         // trama de Flet: [0x00][msgpack [accion, cuerpo]]; accion 3 = evento de un control
         try {{
@@ -135,12 +138,14 @@ _HEAD_EXTRA = f"""
         var ahora = Date.now();
         if (cerrado && ahora - cerrado > 10000) {{
           console.log('PBGO: sin respuesta tras reconectar, se recarga');
+          avisar('recarga: sin respuesta tras reconectar');
           cerrado = 0;
           location.reload();
           return;
         }}
         if (tocado && !cerrado && actual && ahora - tocado > 15000) {{
           console.log('PBGO: conexión sin respuesta, se reconecta');
+          avisar('reconecta: un toque sin respuesta en 15 s');
           tocado = 0;
           cerrado = ahora;
           try {{ actual.close(); }} catch (e) {{ location.reload(); }}
