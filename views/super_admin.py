@@ -1045,7 +1045,7 @@ def temas_view(page):
     page.update()
 
 
-def canciones_view(page, buscar=""):
+def canciones_view(page, buscar="", ver_eliminadas=False):
     """🎵 Las canciones que ya están en la nube, con el nombre claro (en Cloudflare solo se ve
     el código del video). Salen las que el servidor ya midió para el volumen parejo."""
     if not _es_super(page):
@@ -1061,6 +1061,26 @@ def canciones_view(page, buscar=""):
         return
     campo = _campo("Buscar por canción o artista", buscar, ancho=360)
     campo.on_submit = lambda e: canciones_view(page, campo.value or "")
+    eliminadas = db.canciones_eliminadas()
+
+    def eliminar(f):
+        def si(ev):
+            db.eliminar_cancion(f["video_id"], f["titulo"], f["canal"])
+            _cerrar_dialogo(page)
+            _aviso(page, "Canción eliminada: ya no suena ni se puede pedir. Se borra de la nube en un momento.")
+            canciones_view(page, buscar)
+        _dialogo(page, "🗑️ ¿Eliminar esta canción?", [
+            ft.Text(f["titulo"] or f["video_id"], color="white", weight=ft.FontWeight.BOLD),
+            ft.Text("Deja de sonar como relleno en todos los bares, no sale en la búsqueda de los "
+                    "clientes ni se puede pedir, y se borra de la nube. Si te arrepientes, la puedes "
+                    "restaurar en «Canciones eliminadas».", color="#cbd5e1", size=13),
+        ], [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
+            ft.FilledButton("Eliminar", on_click=si, style=ft.ButtonStyle(bgcolor="#b91c1c"))])
+
+    def restaurar(f):
+        db.restaurar_cancion(f["video_id"])
+        _aviso(page, "Canción restaurada: se puede volver a pedir (se baja de nuevo la primera vez).")
+        canciones_view(page, buscar, ver_eliminadas=True)
 
     def fila(f):
         fac = volumen.factor(f["lufs"])
@@ -1080,6 +1100,23 @@ def canciones_view(page, buscar=""):
                 ], spacing=2, expand=True),
                 ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, icon_color="#22d3ee", tooltip="Ver en YouTube",
                               url=f"https://youtu.be/{f['video_id']}"),
+                ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="#f87171", tooltip="Eliminar (no sirve)",
+                              on_click=lambda e, f=f: eliminar(f)),
+            ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        )
+
+    def fila_eliminada(f):
+        return ft.Container(
+            width=520, padding=8, border_radius=12, bgcolor="#1f0f12", border=ft.Border.all(1, "#7f1d1d"),
+            content=ft.Row([
+                ft.Column([
+                    ft.Text(f["titulo"] or f["video_id"], color="white", size=13, max_lines=2,
+                            overflow=ft.TextOverflow.ELLIPSIS),
+                    ft.Text((f"{f['canal']} · " if f["canal"] else "") +
+                            ("borrada de la nube" if f["borrada_nube"] else "se está borrando de la nube"),
+                            color="#94A3B8", size=11),
+                ], spacing=2, expand=True),
+                ft.OutlinedButton("Restaurar", icon=ft.Icons.RESTORE, on_click=lambda e, f=f: restaurar(f)),
             ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
         )
 
@@ -1090,6 +1127,9 @@ def canciones_view(page, buscar=""):
                 color="#94A3B8", size=13),
         ft.Row([campo, _boton("Buscar", lambda e: canciones_view(page, campo.value or ""))],
                wrap=True, spacing=8),
+        ft.TextButton(f"🗑️ Canciones eliminadas ({len(eliminadas)})" + (" ▲" if ver_eliminadas else " ▼"),
+                      on_click=lambda e: canciones_view(page, buscar, not ver_eliminadas)),
+        *([fila_eliminada(f) for f in eliminadas] if ver_eliminadas else []),
         ft.Text(f"{len(filas)} resultado(s)" + (f" para «{buscar}»" if buscar else " · las más recientes"),
                 color="#64748b", size=12),
         *[fila(f) for f in filas],

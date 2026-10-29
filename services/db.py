@@ -214,6 +214,15 @@ ESQUEMA = [
         genero   TEXT NOT NULL DEFAULT '',
         duracion INTEGER NOT NULL DEFAULT 0
     )""",
+    # Canciones eliminadas por el super administrador (no sirven): no suenan de relleno, no
+    # salen en la búsqueda ni se pueden pedir, y la API borra su archivo de la nube.
+    """CREATE TABLE IF NOT EXISTS eliminadas (
+        video_id     TEXT PRIMARY KEY,
+        titulo       TEXT NOT NULL DEFAULT '',
+        canal        TEXT NOT NULL DEFAULT '',
+        cuando       DOUBLE PRECISION NOT NULL,
+        borrada_nube BOOLEAN NOT NULL DEFAULT FALSE
+    )""",
     # Ajustes generales del sistema (clave -> valor). Ej.: tema_modo.
     """CREATE TABLE IF NOT EXISTS ajustes (
         clave TEXT PRIMARY KEY,
@@ -648,6 +657,39 @@ def canciones_nube(buscar="", limite=300):
         ORDER BY v.medido DESC LIMIT %s""", (*params, int(limite)))
 
 
+_eliminadas_cache = {"ids": None, "hasta": 0.0}
+
+
+def ids_eliminadas():
+    """Conjunto de video_id eliminados (se relee cada 60 s)."""
+    if _eliminadas_cache["ids"] is None or time.time() > _eliminadas_cache["hasta"]:
+        try:
+            _eliminadas_cache["ids"] = {f["video_id"] for f in consultar("SELECT video_id FROM eliminadas")}
+        except Exception:
+            _eliminadas_cache["ids"] = _eliminadas_cache["ids"] or set()
+        _eliminadas_cache["hasta"] = time.time() + 60
+    return _eliminadas_cache["ids"]
+
+
+def eliminar_cancion(video_id, titulo="", canal=""):
+    """El super la elimina: deja de sonar, de salir en la búsqueda y se borra de la nube."""
+    ejecutar("""INSERT INTO eliminadas (video_id, titulo, canal, cuando) VALUES (%s, %s, %s, %s)
+                ON CONFLICT (video_id) DO UPDATE SET cuando = EXCLUDED.cuando, borrada_nube = FALSE""",
+             (video_id, str(titulo)[:300], str(canal)[:200], time.time()))
+    for tabla in ("catalogo", "volumenes", "encargos"):
+        ejecutar(f"DELETE FROM {tabla} WHERE video_id = %s", (video_id,))
+    _eliminadas_cache["hasta"] = 0
+
+
+def restaurar_cancion(video_id):
+    ejecutar("DELETE FROM eliminadas WHERE video_id = %s", (video_id,))
+    _eliminadas_cache["hasta"] = 0
+
+
+def canciones_eliminadas():
+    return consultar("SELECT video_id, titulo, canal, cuando, borrada_nube FROM eliminadas ORDER BY cuando DESC")
+
+
 def contar_canciones_nube():
     f = uno("SELECT COUNT(*) AS n FROM volumenes WHERE lufs IS NOT NULL")
     return int(f["n"]) if f else 0
@@ -685,7 +727,8 @@ def aleatorio(codigo, antes_de, limite=3000):
         filas = list(filas) + [dict(c) for c in catalogo(sorted(generos)) if c["video_id"] not in ya]
     except Exception as ex:
         print(f"⚠️ catálogo en el relleno: {ex}")
-    return filas
+    fuera = ids_eliminadas()
+    return [f for f in filas if f["video_id"] not in fuera] if fuera else filas
 
 
 def _aleatorio_bar(codigo, antes_de, limite=3000):

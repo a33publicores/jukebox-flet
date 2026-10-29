@@ -109,6 +109,11 @@ def _bucle():
     while True:
         try:
             if nube.activa():
+                for f in db.consultar("SELECT video_id FROM eliminadas WHERE NOT borrada_nube LIMIT 5"):
+                    if nube.borrar(f["video_id"]):
+                        db.ejecutar("UPDATE eliminadas SET borrada_nube = TRUE WHERE video_id = %s",
+                                    (f["video_id"],))
+                        print(f"🗑️ Nube: {f['video_id']} borrada (la eliminó el super)")
                 vid = _pendiente()
                 if vid:
                     try:

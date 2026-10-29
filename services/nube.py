@@ -51,6 +51,26 @@ _VISTA_SI_SEG = 3600
 _VISTA_NO_SEG = 8
 
 
+def borrar(video_id):
+    """Borra de la nube todas las calidades guardadas de esa canción. True si quedó borrada."""
+    import requests
+    if not activa():
+        return False
+    ok = True
+    for h in ALTURAS + (1080, 360):
+        archivo = f"{video_id}_{h}.mp4"
+        if not archivo_valido(archivo):
+            continue
+        try:
+            r = requests.delete(direccion("DELETE", archivo), timeout=10)
+            ok = ok and r.status_code in (200, 204, 404)
+        except Exception as ex:
+            print(f"⚠️ Nube: no se pudo borrar {archivo}: {ex}")
+            ok = False
+    _vistas.pop(video_id, None)
+    return ok
+
+
 def existe(archivo):
     import requests
     try:

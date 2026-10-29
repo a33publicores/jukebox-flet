@@ -6,6 +6,7 @@
 //
 //   GET/HEAD /v/<archivo>.mp4?exp=<epoch>&sig=<firma>   baja la canción (acepta Range)
 //   PUT      /v/<archivo>.mp4?exp=<epoch>&sig=<firma>   la sube (si ya existe, no la cambia)
+//   DELETE   /v/<archivo>.mp4?exp=<epoch>&sig=<firma>   la borra (canción eliminada en /super)
 //   GET      /salud                                       {"ok": true}
 //
 // Las direcciones las firma la API de PlayBar GO (solo a reproductores con llave válida):
@@ -107,6 +108,12 @@ export default {
             await env.CANCIONES.put(clave, request.body, {
                 httpMetadata: { contentType: "video/mp4" },
             });
+            return Response.json({ ok: true });
+        }
+
+        if (metodo === "DELETE") {
+            // el super administrador eliminó la canción (no sirve): la API firma el borrado
+            await env.CANCIONES.delete(clave);
             return Response.json({ ok: true });
         }
 
