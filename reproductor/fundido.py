@@ -71,6 +71,8 @@ class Fundido:
         self.vol_mezcla = 0
         self.saliendo = False
         self.mezclando = None  # ruta que suena en el video escondido
+        self.mezcla_sonando = False  # el escondido está sonando (mezcla o relevo en curso)
+        self._vuelta = 0  # cambia con cada canción: una mezcla que llega tarde ya no arranca
         self._tarea = None
 
     # ------------------------------------------------------------ volumen
@@ -132,6 +134,7 @@ class Fundido:
 
     async def _empezar_mezcla(self, ruta, segundos):
         import flet_video as ftv
+        vuelta = self._vuelta
         try:
             self.ganancia_mezcla = 1.0
             if self.volumen_de is not None:  # la siguiente también suena con su volumen parejo
@@ -139,12 +142,18 @@ class Fundido:
                     self.ganancia_mezcla = max(0.2, min(1.0, float(await self.volumen_de(Path(ruta).stem))))
                 except Exception:
                     pass
+            if vuelta != self._vuelta:
+                return  # mientras tanto la cambiaron: no se mezcla nada
             self.mezclando = str(ruta)
             self.vol_mezcla = -1
             self._poner_mezcla(0)
             self.mezcla.playlist = [ftv.VideoMedia(resource=str(ruta))]
             self.mezcla.update()
             await asyncio.sleep(0.3)
+            if vuelta != self._vuelta:  # la cambiaron justo ahora: el escondido no arranca
+                self.mezclando = None
+                return
+            self.mezcla_sonando = True
             await self.mezcla.play()
             print(f"🎚️ Mezcla: la siguiente ya suena por debajo ({segundos:.0f} s)")
             self._rampa(0, segundos, hasta_mezcla=100)
@@ -210,6 +219,7 @@ class Fundido:
 
     async def parar_mezcla(self):
         self.mezclando = None
+        self.mezcla_sonando = False
         if self.mezcla is None:
             return
         try:
@@ -219,7 +229,7 @@ class Fundido:
             pass
 
     def _parar_mezcla_luego(self):
-        if self.mezclando:
+        if self.mezclando or self.mezcla_sonando:
             try:
                 asyncio.ensure_future(self.parar_mezcla())
             except RuntimeError:
@@ -229,6 +239,7 @@ class Fundido:
     def nueva(self, ruta=None):
         """Empezó otra canción en el principal (`ruta`: su archivo)."""
         self.saliendo = False
+        self._vuelta += 1
         if self.mezclando and ruta and _mismo(ruta, self.mezclando):
             try:
                 self._cancelar()
@@ -236,8 +247,10 @@ class Fundido:
                 return
             except RuntimeError:
                 pass
-        self._parar_mezcla_luego()
+        # Otra canción (la pasaron a mano, o la siguiente no era la que se mezclaba): se corta
+        # todo lo de antes, incluido un relevo a medias, para que no siga sonando por debajo.
         self._cancelar()
+        self._parar_mezcla_luego()
         self._poner(5)
         self._rampa(100, ENTRADA_SEG)
 
@@ -267,6 +280,7 @@ class Fundido:
     def normal(self):
         """Pausa/reanudar o la adelantaron: volumen normal de una y sin mezcla."""
         self.saliendo = False
+        self._vuelta += 1
         self._cancelar()
         self._parar_mezcla_luego()
         self._poner(100)
