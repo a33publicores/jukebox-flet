@@ -24,7 +24,9 @@ OBJETIVO_LUFS = -14.0  # nivel al que se llevan las canciones duras (el de YouTu
 MINIMO = 0.35          # nunca se baja más de esto (por si una medición sale rara)
 CADA_SEG = 15          # una medición cada 15 s como mucho (no cargar el servidor)
 REINTENTAR_SEG = 6 * 3600
+LISTA_CADA_SEG = 20 * 60  # cada cuánto se copia la lista de lo que hay en la nube
 _iniciado = {"v": False}
+_lista = {"proxima": 0.0}
 
 
 def factor(lufs):
@@ -114,6 +116,11 @@ def _bucle():
                         db.ejecutar("UPDATE eliminadas SET borrada_nube = TRUE WHERE video_id = %s",
                                     (f["video_id"],))
                         print(f"🗑️ Nube: {f['video_id']} borrada (la eliminó el super)")
+                if time.time() >= _lista["proxima"]:
+                    _lista["proxima"] = time.time() + LISTA_CADA_SEG
+                    archivos = nube.lista()
+                    if archivos is not None:
+                        db.guardar_lista_nube(archivos)
                 vid = _pendiente()
                 if vid:
                     try:

@@ -71,6 +71,28 @@ def borrar(video_id):
     return ok
 
 
+def lista():
+    """Todo lo que hay en la nube: [{nombre, bytes, subido}] (None si no se pudo leer)."""
+    import requests
+    if not activa():
+        return None
+    base = os.getenv("NUBE_URL", "").strip().rstrip("/")
+    todo, cursor = [], ""
+    for _ in range(200):  # 1000 por página
+        exp = int(time.time()) + 600
+        r = requests.get(f"{base}/lista", params={"exp": exp, "sig": _firmar("LISTA", "todo", exp),
+                                                  **({"cursor": cursor} if cursor else {})}, timeout=20)
+        if r.status_code != 200:
+            print(f"⚠️ Nube: no se pudo leer la lista ({r.status_code})")
+            return None
+        d = r.json()
+        todo += d.get("archivos") or []
+        cursor = d.get("cursor") or ""
+        if not cursor:
+            return todo
+    return todo
+
+
 def existe(archivo):
     import requests
     try:

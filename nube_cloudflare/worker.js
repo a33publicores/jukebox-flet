@@ -7,6 +7,8 @@
 //   GET/HEAD /v/<archivo>.mp4?exp=<epoch>&sig=<firma>   baja la canción (acepta Range)
 //   PUT      /v/<archivo>.mp4?exp=<epoch>&sig=<firma>   la sube (si ya existe, no la cambia)
 //   DELETE   /v/<archivo>.mp4?exp=<epoch>&sig=<firma>   la borra (canción eliminada en /super)
+//   GET      /lista?exp=<epoch>&sig=<firma>[&cursor=..]  lo que hay guardado (1000 por página);
+//                                                        la firma es de "LISTA:todo:<exp>"
 //   GET      /salud                                       {"ok": true}
 //
 // Las direcciones las firma la API de PlayBar GO (solo a reproductores con llave válida):
@@ -56,6 +58,21 @@ export default {
         const url = new URL(request.url);
         if (url.pathname === "/salud") {
             return Response.json({ ok: true });
+        }
+        if (url.pathname === "/lista") {
+            // la API copia la lista para que /super muestre las canciones con su nombre
+            if (!(await autorizado(env, "LISTA", "todo", url))) {
+                return new Response("Firma no válida o vencida", { status: 403 });
+            }
+            const r = await env.CANCIONES.list({
+                prefix: "v/", limit: 1000, cursor: url.searchParams.get("cursor") || undefined,
+            });
+            return Response.json({
+                archivos: r.objects.map((o) => ({
+                    nombre: o.key.slice(2), bytes: o.size, subido: o.uploaded.getTime() / 1000,
+                })),
+                cursor: r.truncated ? r.cursor : null,
+            });
         }
         const m = /^\/v\/([^/]+)$/.exec(url.pathname);
         if (!m || !ARCHIVO.test(m[1])) {

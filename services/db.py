@@ -214,14 +214,22 @@ ESQUEMA = [
         genero   TEXT NOT NULL DEFAULT '',
         duracion INTEGER NOT NULL DEFAULT 0
     )""",
-    # Canciones eliminadas por el super administrador (no sirven): no suenan de relleno, no
-    # salen en la búsqueda ni se pueden pedir, y la API borra su archivo de la nube.
+    # Canciones eliminadas por el super administrador: dejan de sonar de relleno (y salen de
+    # los géneros) y la API borra su archivo de la nube. Los clientes sí la pueden pedir: si
+    # alguien la pide, vuelve (se borra de aquí).
     """CREATE TABLE IF NOT EXISTS eliminadas (
         video_id     TEXT PRIMARY KEY,
         titulo       TEXT NOT NULL DEFAULT '',
         canal        TEXT NOT NULL DEFAULT '',
         cuando       DOUBLE PRECISION NOT NULL,
         borrada_nube BOOLEAN NOT NULL DEFAULT FALSE
+    )""",
+    # Lo que de verdad hay en la nube (Cloudflare R2): la API lo copia cada rato.
+    """CREATE TABLE IF NOT EXISTS nube_archivos (
+        archivo  TEXT PRIMARY KEY,
+        video_id TEXT NOT NULL,
+        bytes    BIGINT NOT NULL DEFAULT 0,
+        subido   DOUBLE PRECISION NOT NULL DEFAULT 0
     )""",
     # Ajustes generales del sistema (clave -> valor). Ej.: tema_modo.
     """CREATE TABLE IF NOT EXISTS ajustes (
@@ -638,23 +646,50 @@ def sembrar_catalogo():
             print(f"🎵 Catálogo {genero}: {len(nuevas)} canciones nuevas")
 
 
+def guardar_lista_nube(archivos):
+    """Reemplaza la copia de lo que hay en la nube (lista de {nombre, bytes, subido})."""
+    vistos = set()
+    for a in archivos:
+        nombre = str(a.get("nombre") or "")
+        if not nombre.endswith(".mp4"):
+            continue
+        vistos.add(nombre)
+        ejecutar("""INSERT INTO nube_archivos (archivo, video_id, bytes, subido) VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (archivo) DO UPDATE SET bytes = EXCLUDED.bytes, subido = EXCLUDED.subido""",
+                 (nombre, nombre[:-4].rsplit("_", 1)[0], int(a.get("bytes") or 0), float(a.get("subido") or 0)))
+    for f in consultar("SELECT archivo FROM nube_archivos"):
+        if f["archivo"] not in vistos:
+            ejecutar("DELETE FROM nube_archivos WHERE archivo = %s", (f["archivo"],))
+
+
+def _base_nube():
+    """De dónde salen las canciones de la nube: la lista real de Cloudflare (si la API ya la
+    copió) o, mientras tanto, las que el servidor ya midió."""
+    if uno("SELECT 1 AS si FROM nube_archivos LIMIT 1"):
+        return """SELECT n.video_id, MAX(n.subido) AS cuando, SUM(n.bytes) AS bytes
+                  FROM nube_archivos n GROUP BY n.video_id"""
+    return """SELECT video_id, medido AS cuando, 0 AS bytes FROM volumenes WHERE lufs IS NOT NULL"""
+
+
 def canciones_nube(buscar="", limite=300):
-    """Canciones que están en la nube (las que el servidor ya midió), con su nombre claro:
-    título, canal, cuántas veces la han pedido, género del catálogo y volumen parejo."""
+    """Canciones que están en la nube, con su nombre claro: título, canal, cuántas veces la
+    han pedido, género del catálogo, tamaño y volumen parejo. Sin las eliminadas."""
     filtro, params = "", []
     if buscar.strip():
-        filtro = "AND (COALESCE(p.titulo, c.titulo, '') ILIKE %s OR COALESCE(p.canal, c.canal, '') ILIKE %s)"
-        params = [f"%{buscar.strip()}%"] * 2
+        filtro = ("AND (COALESCE(p.titulo, c.titulo, '') ILIKE %s OR COALESCE(p.canal, c.canal, '') ILIKE %s "
+                  "OR b.video_id = %s)")
+        params = [f"%{buscar.strip()}%"] * 2 + [buscar.strip()]
     return consultar(f"""
-        SELECT v.video_id, v.lufs, v.medido,
+        SELECT b.video_id, b.cuando, b.bytes, v.lufs,
                COALESCE(p.titulo, c.titulo, '') AS titulo, COALESCE(p.canal, c.canal, '') AS canal,
                COALESCE(p.veces, 0) AS veces, COALESCE(c.genero, '') AS genero
-        FROM volumenes v
+        FROM ({_base_nube()}) b
+        LEFT JOIN volumenes v ON v.video_id = b.video_id
         LEFT JOIN (SELECT video_id, MAX(titulo) AS titulo, MAX(canal) AS canal, COUNT(*) AS veces
-                   FROM pedidos GROUP BY video_id) p ON p.video_id = v.video_id
-        LEFT JOIN catalogo c ON c.video_id = v.video_id
-        WHERE v.lufs IS NOT NULL {filtro}
-        ORDER BY v.medido DESC LIMIT %s""", (*params, int(limite)))
+                   FROM pedidos GROUP BY video_id) p ON p.video_id = b.video_id
+        LEFT JOIN catalogo c ON c.video_id = b.video_id
+        WHERE b.video_id NOT IN (SELECT video_id FROM eliminadas) {filtro}
+        ORDER BY b.cuando DESC LIMIT %s""", (*params, int(limite)))
 
 
 _eliminadas_cache = {"ids": None, "hasta": 0.0}
@@ -672,7 +707,8 @@ def ids_eliminadas():
 
 
 def eliminar_cancion(video_id, titulo="", canal=""):
-    """El super la elimina: deja de sonar, de salir en la búsqueda y se borra de la nube."""
+    """El super la elimina: deja de sonar de relleno, sale de los géneros y se borra de la
+    nube. Si un cliente la vuelve a pedir, vuelve (ver playbar_service.agregar_cancion)."""
     ejecutar("""INSERT INTO eliminadas (video_id, titulo, canal, cuando) VALUES (%s, %s, %s, %s)
                 ON CONFLICT (video_id) DO UPDATE SET cuando = EXCLUDED.cuando, borrada_nube = FALSE""",
              (video_id, str(titulo)[:300], str(canal)[:200], time.time()))
@@ -691,8 +727,10 @@ def canciones_eliminadas():
 
 
 def contar_canciones_nube():
-    f = uno("SELECT COUNT(*) AS n FROM volumenes WHERE lufs IS NOT NULL")
-    return int(f["n"]) if f else 0
+    """(canciones, megas) en la nube, sin las eliminadas."""
+    f = uno(f"""SELECT COUNT(*) AS n, COALESCE(SUM(b.bytes), 0) AS bytes FROM ({_base_nube()}) b
+                WHERE b.video_id NOT IN (SELECT video_id FROM eliminadas)""")
+    return (int(f["n"]), int(f["bytes"]) // (1024 * 1024)) if f else (0, 0)
 
 
 def catalogo(generos):

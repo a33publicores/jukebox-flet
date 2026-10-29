@@ -201,20 +201,6 @@ def buscar_youtube(query, page_token=None):
 
 
 def buscar(query, page_token=None):
-    """Búsqueda de canciones sin las que el super eliminó (ver db.eliminar_cancion)."""
-    data = _buscar(query, page_token)
-    try:
-        from services import db
-        fuera = db.ids_eliminadas()
-    except Exception:
-        fuera = set()
-    if fuera and data.get("items"):
-        data = {**data, "items": [i for i in data["items"]
-                                  if (i.get("id") or {}).get("videoId") not in fuera]}
-    return data
-
-
-def _buscar(query, page_token=None):
     from services import db
     query = _normalizar_query(query)
     if len(query) < 3:
@@ -266,7 +252,7 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
     if not permitido:  # prueba gratis terminada o plan vencido
         return {"ok": False, "error": "PLAN", "mensaje": mensaje}
     if str(video_id) in db.ids_eliminadas():
-        return {"ok": False, "error": "Esa canción no está disponible. Busca otra versión."}
+        db.restaurar_cancion(str(video_id))  # un cliente la pidió: vuelve (se baja de nuevo)
     try:
         # candado por negocio (evita duplicados por doble toque) sin frenar a los demás bares
         with _candado_de(str(cliente)):

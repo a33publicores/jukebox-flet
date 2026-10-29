@@ -1046,15 +1046,15 @@ def temas_view(page):
 
 
 def canciones_view(page, buscar="", ver_eliminadas=False):
-    """🎵 Las canciones que ya están en la nube, con el nombre claro (en Cloudflare solo se ve
-    el código del video). Salen las que el servidor ya midió para el volumen parejo."""
+    """🎵 Las canciones que están en la nube (Cloudflare), con el nombre claro (allá solo se ve
+    el código del video)."""
     if not _es_super(page):
         return super_login_view(page)
     from services import volumen
     _preparar(page)
     try:
         filas = db.canciones_nube(buscar)
-        total = db.contar_canciones_nube()
+        total, megas = db.contar_canciones_nube()
     except Exception as ex:
         page.add(ft.Text(f"No se pudo leer: {ex}", color="#f87171"))
         page.update()
@@ -1067,26 +1067,28 @@ def canciones_view(page, buscar="", ver_eliminadas=False):
         def si(ev):
             db.eliminar_cancion(f["video_id"], f["titulo"], f["canal"])
             _cerrar_dialogo(page)
-            _aviso(page, "Canción eliminada: ya no suena ni se puede pedir. Se borra de la nube en un momento.")
+            _aviso(page, "Canción eliminada: ya no suena de relleno. Se borra de la nube en un momento.")
             canciones_view(page, buscar)
         _dialogo(page, "🗑️ ¿Eliminar esta canción?", [
             ft.Text(f["titulo"] or f["video_id"], color="white", weight=ft.FontWeight.BOLD),
-            ft.Text("Deja de sonar como relleno en todos los bares, no sale en la búsqueda de los "
-                    "clientes ni se puede pedir, y se borra de la nube. Si te arrepientes, la puedes "
-                    "restaurar en «Canciones eliminadas».", color="#cbd5e1", size=13),
+            ft.Text("Deja de sonar como relleno en todos los bares (y sale de los géneros) y se "
+                    "borra de la nube. Los clientes sí la pueden pedir: si alguien la pide, vuelve. "
+                    "También la puedes restaurar en «Canciones eliminadas».", color="#cbd5e1", size=13),
         ], [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
             ft.FilledButton("Eliminar", on_click=si, style=ft.ButtonStyle(bgcolor="#b91c1c"))])
 
     def restaurar(f):
         db.restaurar_cancion(f["video_id"])
-        _aviso(page, "Canción restaurada: se puede volver a pedir (se baja de nuevo la primera vez).")
+        _aviso(page, "Canción restaurada: vuelve al relleno cuando la pidan (se baja de nuevo).")
         canciones_view(page, buscar, ver_eliminadas=True)
 
     def fila(f):
         fac = volumen.factor(f["lufs"])
         detalles = [f"{f['canal']}" if f["canal"] else "",
+                    f"{f['bytes'] / 1048576:.0f} MB" if f["bytes"] else "",
                     f"pedida {f['veces']} {'vez' if f['veces'] == 1 else 'veces'}" if f["veces"] else "",
                     "🎄 Diciembre" if f["genero"] == "diciembre" else "",
+                    "🔊 sin medir" if f["lufs"] is None else
                     f"🔊 se baja al {int(fac * 100)}%" if fac < 0.99 else "🔊 volumen normal"]
         return ft.Container(
             width=520, padding=8, border_radius=12, bgcolor=PANEL,
@@ -1122,8 +1124,10 @@ def canciones_view(page, buscar="", ver_eliminadas=False):
 
     page.add(ft.Container(width=560, padding=16, content=ft.Column([
         _encabezado(page, "🎵 Canciones en la nube", volver=super_inicio),
-        ft.Text(f"{total} canciones guardadas en la nube (las ven todos los bares sin bajarlas de "
-                "YouTube). En Cloudflare solo aparece el código del video; aquí está el nombre.",
+        ft.Text(f"{total} canciones guardadas en la nube" + (f" ({megas / 1024:.1f} GB)" if megas else "") +
+                ". Las ven todos los bares sin bajarlas de YouTube. En Cloudflare solo aparece el "
+                "código del video; aquí está el nombre. Si eliminas una, sale del relleno y de los "
+                "géneros, pero los clientes la pueden volver a pedir.",
                 color="#94A3B8", size=13),
         ft.Row([campo, _boton("Buscar", lambda e: canciones_view(page, campo.value or ""))],
                wrap=True, spacing=8),
