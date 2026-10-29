@@ -89,6 +89,11 @@ def _pendiente():
                     AND (v.video_id IS NULL OR (v.lufs IS NULL AND v.medido < %s))
                   GROUP BY p.video_id ORDER BY MAX(p.ts) DESC LIMIT 1""",
                (time.time() - 90 * 86400, time.time() - REINTENTAR_SEG))
+    if not f:  # después, las del catálogo (diciembre...) que ya hayan subido a la nube
+        f = db.uno("""SELECT c.video_id FROM catalogo c
+                      LEFT JOIN volumenes v ON v.video_id = c.video_id
+                      WHERE v.video_id IS NULL OR (v.lufs IS NULL AND v.medido < %s)
+                      LIMIT 1""", (time.time() - REINTENTAR_SEG,))
     return f["video_id"] if f else None
 
 

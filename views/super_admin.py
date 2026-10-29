@@ -199,6 +199,7 @@ def super_inicio(page):
             _boton("👥 Super admins", lambda e: admins_view(page, None), apagado=True),
             _boton("💳 Planes", lambda e: planes_view(page), apagado=True),
             _boton("🎨 Temas", lambda e: temas_view(page), apagado=True),
+            _boton("🎵 Canciones", lambda e: canciones_view(page), apagado=True),
             _boton("🎁 Bonos", lambda e: bonos_view(page), apagado=True),
             _boton("🧾 Pagos", lambda e: pagos_view(page), apagado=True),
             _boton("Salir", salir, apagado=True),
@@ -1041,6 +1042,58 @@ def temas_view(page):
         _boton("➕ Nuevo tema", lambda e: editar(None)),
         *[tarjeta(t) for t in lista],
     ], spacing=14)))
+    page.update()
+
+
+def canciones_view(page, buscar=""):
+    """🎵 Las canciones que ya están en la nube, con el nombre claro (en Cloudflare solo se ve
+    el código del video). Salen las que el servidor ya midió para el volumen parejo."""
+    if not _es_super(page):
+        return super_login_view(page)
+    from services import volumen
+    _preparar(page)
+    try:
+        filas = db.canciones_nube(buscar)
+        total = db.contar_canciones_nube()
+    except Exception as ex:
+        page.add(ft.Text(f"No se pudo leer: {ex}", color="#f87171"))
+        page.update()
+        return
+    campo = _campo("Buscar por canción o artista", buscar, ancho=360)
+    campo.on_submit = lambda e: canciones_view(page, campo.value or "")
+
+    def fila(f):
+        fac = volumen.factor(f["lufs"])
+        detalles = [f"{f['canal']}" if f["canal"] else "",
+                    f"pedida {f['veces']} {'vez' if f['veces'] == 1 else 'veces'}" if f["veces"] else "",
+                    "🎄 Diciembre" if f["genero"] == "diciembre" else "",
+                    f"🔊 se baja al {int(fac * 100)}%" if fac < 0.99 else "🔊 volumen normal"]
+        return ft.Container(
+            width=520, padding=8, border_radius=12, bgcolor=PANEL,
+            content=ft.Row([
+                ft.Image(src=f"https://i.ytimg.com/vi/{f['video_id']}/mqdefault.jpg", width=96, height=54,
+                         fit=ft.BoxFit.COVER, border_radius=6),
+                ft.Column([
+                    ft.Text(f["titulo"] or f["video_id"], color="white", size=13, weight=ft.FontWeight.BOLD,
+                            max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
+                    ft.Text(" · ".join(d for d in detalles if d), color="#94A3B8", size=11, max_lines=2),
+                ], spacing=2, expand=True),
+                ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, icon_color="#22d3ee", tooltip="Ver en YouTube",
+                              url=f"https://youtu.be/{f['video_id']}"),
+            ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        )
+
+    page.add(ft.Container(width=560, padding=16, content=ft.Column([
+        _encabezado(page, "🎵 Canciones en la nube", volver=super_inicio),
+        ft.Text(f"{total} canciones guardadas en la nube (las ven todos los bares sin bajarlas de "
+                "YouTube). En Cloudflare solo aparece el código del video; aquí está el nombre.",
+                color="#94A3B8", size=13),
+        ft.Row([campo, _boton("Buscar", lambda e: canciones_view(page, campo.value or ""))],
+               wrap=True, spacing=8),
+        ft.Text(f"{len(filas)} resultado(s)" + (f" para «{buscar}»" if buscar else " · las más recientes"),
+                color="#64748b", size=12),
+        *[fila(f) for f in filas],
+    ], spacing=10)))
     page.update()
 
 

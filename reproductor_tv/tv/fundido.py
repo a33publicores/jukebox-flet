@@ -19,7 +19,8 @@ ENTRADA_SEG = 5.0  # sin mezcla: la que empieza sube en 5 s
 PASO_SEG = 0.25
 RELEVO_ADELANTO_SEG = 0.7  # el principal salta este poco más adelante que el escondido...
 RELEVO_ESPERA_SEG = 0.8    # ...y en este tiempo ya está sonando justo donde va el escondido
-RELEVO_CRUCE_SEG = 0.6     # luego se cruzan: el principal sube y el escondido baja
+RELEVO_CRUCE_SEG = 0.2     # luego se cruzan (casi al instante: van en el mismo punto)
+RELEVO_TOLERANCIA_SEG = 0.04  # diferencia máxima entre los dos antes de cruzarlos
 
 
 def _cubica(v):
@@ -51,7 +52,7 @@ def _mismo(a, b):
 
 class Fundido:
     def __init__(self, video, mezcla=None, siguiente=None, saltar=None, pos_mezcla=None,
-                 volumen_de=None, pos_principal=None):
+                 volumen_de=None, pos_principal=None, informar=None):
         """`mezcla`: segundo video (escondido) para que suenen las dos a la vez. `siguiente()`:
         ruta del archivo de la canción que sigue (o None si no está lista). `saltar(seg)`:
         lleva el video principal a ese segundo. `pos_mezcla()`: en qué segundo va el escondido."""
@@ -61,6 +62,7 @@ class Fundido:
         self.saltar = saltar
         self.pos_mezcla = pos_mezcla
         self.pos_principal = pos_principal  # async: en qué segundo va el principal
+        self.informar = informar  # informar(texto): aviso a los registros del servidor
         # Volumen parejo: `volumen_de(video_id)` (async) -> cuánto bajar esa canción (1 = igual)
         self.volumen_de = volumen_de
         self.ganancia = 1.0
@@ -161,6 +163,7 @@ class Fundido:
             self.mezclando = None  # el relevo ya está en curso (no se repite)
             self.vol = -1
             self._poner(0)  # el principal empieza callado: lo que se oye es el escondido
+            dif, intentos = None, 0
             seg = float(await self.pos_mezcla()) if self.pos_mezcla else 0.0
             if seg > 0.5 and self.saltar is not None:
                 # Se apunta un poco adelante (lo que tarda en saltar y volver a sonar) y,
@@ -168,7 +171,9 @@ class Fundido:
                 # dos van en el mismo punto (si no, al cruzarlos se oiría como eco).
                 adelanto = RELEVO_ADELANTO_SEG
                 await self.saltar(seg + adelanto)
-                for _ in range(4):
+                dif, intentos = None, 0
+                for _ in range(5):
+                    intentos += 1
                     await asyncio.sleep(RELEVO_ESPERA_SEG)
                     if self.pos_principal is None:
                         break
@@ -178,7 +183,7 @@ class Fundido:
                     pz, tz = await _posicion_fresca(self.pos_mezcla)
                     ahora = asyncio.get_event_loop().time()
                     dif = (pp + (ahora - tp)) - (pz + (ahora - tz))
-                    if abs(dif) <= 0.06:
+                    if abs(dif) <= RELEVO_TOLERANCIA_SEG:
                         break
                     adelanto = max(0.0, adelanto - dif)
                     pz, tz = await _posicion_fresca(self.pos_mezcla)
@@ -192,6 +197,12 @@ class Fundido:
                 self._poner_mezcla(100 * (1 - i / n))
                 await asyncio.sleep(0.1)
             print(f"🎚️ Mezcla: entra completa (desde el segundo {seg:.1f})")
+            if self.informar is not None and seg > 0.5:
+                try:  # para revisar en los registros cómo quedan los cambios en cada equipo
+                    self.informar(f"mezcla: relevo con diferencia {dif if dif is None else round(dif, 3)} s "
+                                  f"en {intentos} intento(s)")
+                except Exception:
+                    pass
         except Exception as ex:
             print(f"⚠️ Mezcla: relevo ({ex})")
             self._poner(100)

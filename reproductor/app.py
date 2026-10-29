@@ -162,7 +162,8 @@ class Pantalla:
         ) if True else None
         self.fundido = Fundido(self.video, mezcla=self.video_mezcla, siguiente=self._ruta_siguiente,
                                saltar=self.ir_a, pos_mezcla=self._pos_mezcla,
-                               volumen_de=self._volumen_de, pos_principal=self._pos_principal)
+                               volumen_de=self._volumen_de, pos_principal=self._pos_principal,
+                               informar=self._informar)
         self._volumenes = {}  # video_id -> volumen parejo (lo mide el servidor)
         self.tema = TemaApp(FONDO)  # tema de temporada (Navidad, Halloween...)
         self.dur = 0.0
@@ -462,6 +463,18 @@ class Pantalla:
 
     async def _ajustar_volumen(self, video_id):
         self.fundido.poner_ganancia(await self._volumen_de(video_id))
+
+    def _informar(self, texto):
+        """Manda un aviso a los registros del servidor sin frenar nada."""
+        async def _ir():
+            try:
+                api = self.motor.backend.api
+                if hasattr(api, "reporte"):
+                    await asyncio.to_thread(api.reporte, texto)
+            except Exception:
+                pass
+        if self.motor is not None:
+            self.page.run_task(_ir)
 
     async def _pos_principal(self):
         return _segundos(await self.video.get_current_position())

@@ -629,6 +629,30 @@ def sembrar_catalogo():
             print(f"🎵 Catálogo {genero}: {len(nuevas)} canciones nuevas")
 
 
+def canciones_nube(buscar="", limite=300):
+    """Canciones que están en la nube (las que el servidor ya midió), con su nombre claro:
+    título, canal, cuántas veces la han pedido, género del catálogo y volumen parejo."""
+    filtro, params = "", []
+    if buscar.strip():
+        filtro = "AND (COALESCE(p.titulo, c.titulo, '') ILIKE %s OR COALESCE(p.canal, c.canal, '') ILIKE %s)"
+        params = [f"%{buscar.strip()}%"] * 2
+    return consultar(f"""
+        SELECT v.video_id, v.lufs, v.medido,
+               COALESCE(p.titulo, c.titulo, '') AS titulo, COALESCE(p.canal, c.canal, '') AS canal,
+               COALESCE(p.veces, 0) AS veces, COALESCE(c.genero, '') AS genero
+        FROM volumenes v
+        LEFT JOIN (SELECT video_id, MAX(titulo) AS titulo, MAX(canal) AS canal, COUNT(*) AS veces
+                   FROM pedidos GROUP BY video_id) p ON p.video_id = v.video_id
+        LEFT JOIN catalogo c ON c.video_id = v.video_id
+        WHERE v.lufs IS NOT NULL {filtro}
+        ORDER BY v.medido DESC LIMIT %s""", (*params, int(limite)))
+
+
+def contar_canciones_nube():
+    f = uno("SELECT COUNT(*) AS n FROM volumenes WHERE lufs IS NOT NULL")
+    return int(f["n"]) if f else 0
+
+
 def catalogo(generos):
     """Canciones del catálogo de esos géneros (cada una con su 'genero')."""
     generos = [g for g in generos if g]

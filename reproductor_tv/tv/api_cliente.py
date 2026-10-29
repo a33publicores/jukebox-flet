@@ -114,6 +114,10 @@ class ApiCliente:
         si la nube no está configurada)."""
         return self._post("/api/v1/nube", {"archivo": archivo})
 
+    def reporte(self, texto):
+        """Aviso para los registros del servidor (diagnóstico)."""
+        self._post("/api/v1/reporte", {"texto": str(texto)[:300]})
+
     def volumen(self, ids):
         """Volumen parejo: {"volumen": {video_id: factor}} de las canciones ya medidas."""
         return self._get("/api/v1/volumen", ids=",".join(ids))
