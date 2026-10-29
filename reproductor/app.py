@@ -462,7 +462,19 @@ class Pantalla:
         return float(valor)
 
     async def _ajustar_volumen(self, video_id):
-        self.fundido.poner_ganancia(await self._volumen_de(video_id))
+        """Pone el volumen parejo de la canción antes de que suene (si la API tarda más de
+        2 s, suena normal: nunca se frena la canción por esto)."""
+        try:
+            self.fundido.poner_ganancia(await asyncio.wait_for(self._volumen_de(video_id), 2.0))
+        except Exception:
+            pass
+
+    async def _volumen_luego(self, ruta):
+        """Pregunta de antemano el volumen parejo de la siguiente (así ya viene ajustada)."""
+        try:
+            await self._volumen_de(os.path.splitext(os.path.basename(str(ruta)))[0])
+        except Exception:
+            pass
 
     def _informar(self, texto):
         """Manda un aviso a los registros del servidor sin frenar nada."""
@@ -519,7 +531,10 @@ class Pantalla:
     # --------------------------------------------- interfaz que usa el Motor
     async def reproducir(self, ruta, item, token):
         self.token = token
-        self.page.run_task(self._ajustar_volumen, getattr(item, "video_id", ""))
+        entro = self._entro_sola
+        if not (entro and entro[0] == self.cur and _misma(entro[1], ruta)):
+            # (si entró sola por la mezcla, ya viene con su volumen parejo)
+            await self._ajustar_volumen(getattr(item, "video_id", ""))
         entro = self._entro_sola
         self._entro_sola = None
         if entro and entro[0] == self.cur and _misma(entro[1], ruta):
@@ -555,6 +570,7 @@ class Pantalla:
 
     async def preparar_siguiente(self, ruta):
         """Deja en el puesto siguiente la próxima canción (el motor la conoce de antemano)."""
+        self.page.run_task(self._volumen_luego, ruta)
         if not self._lista_armada:
             return
         async with self._lock_puestos:

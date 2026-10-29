@@ -22,9 +22,10 @@ from services import db
 
 OBJETIVO_LUFS = -14.0  # nivel al que se llevan las canciones duras (el de YouTube)
 MINIMO = 0.35          # nunca se baja más de esto (por si una medición sale rara)
-CADA_SEG = 15          # una medición cada 15 s como mucho (no cargar el servidor)
-REINTENTAR_SEG = 6 * 3600
+CADA_SEG = 5           # cada cuánto se revisa si hay canciones nuevas por medir
+REINTENTAR_SEG = 10 * 60  # la pidieron y todavía no está en la nube: se vuelve a mirar
 LISTA_CADA_SEG = 20 * 60  # cada cuánto se copia la lista de lo que hay en la nube
+REINTENTAR_CATALOGO_SEG = 6 * 3600  # las del catálogo que nadie ha bajado: sin afán
 _iniciado = {"v": False}
 _lista = {"proxima": 0.0}
 
@@ -95,7 +96,7 @@ def _pendiente():
         f = db.uno("""SELECT c.video_id FROM catalogo c
                       LEFT JOIN volumenes v ON v.video_id = c.video_id
                       WHERE v.video_id IS NULL OR (v.lufs IS NULL AND v.medido < %s)
-                      LIMIT 1""", (time.time() - REINTENTAR_SEG,))
+                      LIMIT 1""", (time.time() - REINTENTAR_CATALOGO_SEG,))
     return f["video_id"] if f else None
 
 
@@ -124,8 +125,9 @@ def _bucle():
                 vid = _pendiente()
                 if vid:
                     try:
-                        if not medir(vid):
-                            _marcar_intento(vid)  # no está en la nube todavía: se reintenta luego
+                        if medir(vid):
+                            continue  # medida: de una con la siguiente pendiente
+                        _marcar_intento(vid)  # no está en la nube todavía: se reintenta luego
                     except Exception as ex:
                         print(f"⚠️ Volumen {vid}: {type(ex).__name__}: {ex}")
                         _marcar_intento(vid)
