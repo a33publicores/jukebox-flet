@@ -629,14 +629,20 @@ CATALOGO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "catalog
 
 
 def sembrar_catalogo():
-    """Carga services/catalogo/<genero>.json en la tabla catalogo (solo lo que falte)."""
+    """Deja la tabla catalogo igual a services/catalogo/<genero>.json: agrega lo que falte y
+    quita lo que ya no está en el archivo (sin volver a meter las que el super eliminó)."""
     import glob
+    fuera = {r["video_id"] for r in consultar("SELECT video_id FROM eliminadas")}
     for ruta in glob.glob(os.path.join(CATALOGO_DIR, "*.json")):
         genero = os.path.splitext(os.path.basename(ruta))[0]
         with open(ruta, encoding="utf-8") as f:
             canciones = json.load(f)
+        ids = [c["video_id"] for c in canciones if c.get("video_id")]
+        sobran = ejecutar("DELETE FROM catalogo WHERE genero = %s AND NOT (video_id = ANY(%s))", (genero, ids))
+        if sobran:
+            print(f"🎵 Catálogo {genero}: {sobran} canciones quitadas (ya no están en el archivo)")
         ya = {r["video_id"] for r in consultar("SELECT video_id FROM catalogo WHERE genero = %s", (genero,))}
-        nuevas = [c for c in canciones if c.get("video_id") and c["video_id"] not in ya]
+        nuevas = [c for c in canciones if c.get("video_id") and c["video_id"] not in ya | fuera]
         for c in nuevas:
             ejecutar("""INSERT INTO catalogo (video_id, titulo, canal, genero, duracion)
                         VALUES (%s, %s, %s, %s, %s) ON CONFLICT (video_id) DO NOTHING""",
