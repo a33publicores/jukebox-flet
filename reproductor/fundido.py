@@ -21,6 +21,8 @@ RELEVO_ADELANTO_SEG = 0.7  # el principal salta este poco más adelante que el e
 RELEVO_ESPERA_SEG = 0.8    # ...y en este tiempo ya está sonando justo donde va el escondido
 RELEVO_CRUCE_SEG = 0.2     # luego se cruzan (casi al instante: van en el mismo punto)
 RELEVO_TOLERANCIA_SEG = 0.04  # diferencia máxima entre los dos antes de cruzarlos
+RELEVO_AJUSTE = 0.25          # al afinar, el principal va 25% más rápido o más lento...
+RELEVO_MAX_VELOCIDAD_SEG = 2.5  # ...si la diferencia es menor que esto (si no, otro salto)
 
 
 def _cubica(v):
@@ -177,26 +179,29 @@ class Fundido:
             if seg > 0.5 and self.saltar is not None:
                 # Se apunta un poco adelante (lo que tarda en saltar y volver a sonar) y,
                 # mientras el principal sigue callado, se mide y se corrige hasta que los
-                # dos van en el mismo punto (si no, al cruzarlos se oiría como eco).
-                adelanto = RELEVO_ADELANTO_SEG
-                await self.saltar(seg + adelanto)
-                dif, intentos = None, 0
-                for _ in range(5):
+                # dos van en el mismo punto (si no, al cruzarlos se oiría como un salto).
+                # Volver a saltar no sirve para afinar (en el TV cada salto cae donde puede):
+                # la diferencia se cierra cambiando un rato la velocidad del principal, que
+                # está callado, así que no se nota.
+                await self.saltar(seg + RELEVO_ADELANTO_SEG)
+                await asyncio.sleep(RELEVO_ESPERA_SEG)
+                for k in range(5):
                     intentos += 1
-                    await asyncio.sleep(RELEVO_ESPERA_SEG)
                     if self.pos_principal is None:
                         break
-                    # El TV avisa la posición a saltos: se toma justo cuando cambia (así es
-                    # la de ese instante) y se lleva a "ahora" con el reloj, para los dos videos.
-                    pp, tp = await _posicion_fresca(self.pos_principal)
-                    pz, tz = await _posicion_fresca(self.pos_mezcla)
-                    ahora = asyncio.get_event_loop().time()
-                    dif = (pp + (ahora - tp)) - (pz + (ahora - tz))
-                    if abs(dif) <= RELEVO_TOLERANCIA_SEG:
+                    dif = await self._diferencia()
+                    if abs(dif) <= RELEVO_TOLERANCIA_SEG or k == 4:
                         break
-                    adelanto = max(0.0, adelanto - dif)
-                    pz, tz = await _posicion_fresca(self.pos_mezcla)
-                    await self.saltar(pz + (asyncio.get_event_loop().time() - tz) + adelanto)
+                    if abs(dif) > RELEVO_MAX_VELOCIDAD_SEG:  # muy lejos: otro salto y se mide de nuevo
+                        pz, tz = await _posicion_fresca(self.pos_mezcla)
+                        await self.saltar(pz + (asyncio.get_event_loop().time() - tz) + RELEVO_ADELANTO_SEG)
+                        await asyncio.sleep(RELEVO_ESPERA_SEG)
+                        continue
+                    # adelantado: más lento; atrasado: más rápido (se cierra RELEVO_AJUSTE s por segundo)
+                    self._velocidad(1 - RELEVO_AJUSTE if dif > 0 else 1 + RELEVO_AJUSTE)
+                    await asyncio.sleep(abs(dif) / RELEVO_AJUSTE)
+                    self._velocidad(1.0)
+                    await asyncio.sleep(0.3)
             else:
                 await asyncio.sleep(RELEVO_ESPERA_SEG)
             self.ganancia = self.ganancia_mezcla
@@ -215,7 +220,26 @@ class Fundido:
         except Exception as ex:
             print(f"⚠️ Mezcla: relevo ({ex})")
             self._poner(100)
+        finally:
+            self._velocidad(1.0)  # (también si la cambiaron a mitad del relevo)
         await self.parar_mezcla()
+
+    async def _diferencia(self):
+        """Cuánto va adelantado el principal respecto al escondido (segundos; negativo: atrasado).
+        El TV avisa la posición a saltos: se toma justo cuando cambia (así es la de ese
+        instante) y se lleva a "ahora" con el reloj, para los dos videos."""
+        pp, tp = await _posicion_fresca(self.pos_principal)
+        pz, tz = await _posicion_fresca(self.pos_mezcla)
+        ahora = asyncio.get_event_loop().time()
+        return (pp + (ahora - tp)) - (pz + (ahora - tz))
+
+    def _velocidad(self, v):
+        try:
+            if getattr(self.video, "playback_rate", 1.0) != v:
+                self.video.playback_rate = v
+                self.video.update()
+        except Exception:
+            pass
 
     async def parar_mezcla(self):
         self.mezclando = None

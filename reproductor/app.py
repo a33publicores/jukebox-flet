@@ -134,6 +134,9 @@ class Pantalla:
             # Es una rockola: minimizada o detrás de otra ventana debe seguir sonando.
             pause_upon_entering_background_mode=False,
             resume_upon_entering_foreground_mode=False,
+            # saltos exactos (no al cuadro clave más cercano): la mezcla los usa para que
+            # las dos canciones queden en el mismo punto (ver fundido.py)
+            configuration=ftv.VideoConfiguration(mpv_properties={"hr-seek": "yes"}),
             on_complete=self._on_complete,
             on_track_change=self._on_pista,
             on_error=self._on_error,
