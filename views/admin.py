@@ -379,32 +379,40 @@ def admin_view(page, codigo, nombre, logo):
     pintar_nota()
 
     def texto_volumen(v):
-        return f"🔊 VOLUMEN DEL BAR: {int(v)}%" + (" · normal" if int(v) == 100 else "")
+        return f"{v}%" + (" · normal" if v == 100 else "")
 
     try:
         from services import db as _db_vol
-        volumen_inicial = int((_db_vol.control(codigo) or {}).get("volumen") or 100)
+        volumen = {"v": int((_db_vol.control(codigo) or {}).get("volumen") or 100)}
     except Exception:
-        volumen_inicial = 100
-    nota_volumen = ft.Text(texto_volumen(volumen_inicial), color="#94A3B8", size=13,
-                           weight=ft.FontWeight.BOLD)
+        volumen = {"v": 100}
+    nota_volumen = ft.Text(texto_volumen(volumen["v"]), color="white", size=20, width=130,
+                           weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
 
-    def mover_volumen(e):
-        nota_volumen.value = texto_volumen(e.control.value)
-        nota_volumen.update()
+    def cambiar_volumen(paso):
+        # Botones y no una barra: arrastrarla por la conexión con el servidor se queda pegada.
+        def al_tocar(e):
+            volumen["v"] = max(0, min(200, volumen["v"] + paso))
+            nota_volumen.value = texto_volumen(volumen["v"])
+            nota_volumen.update()
+            valor = volumen["v"]
 
-    def guardar_volumen(e):
-        def tarea():
-            try:
-                from services import db as _db
-                _db.poner_volumen(codigo, round(e.control.value))
-            except Exception as ex:
-                print(f"⚠️ No se pudo guardar el volumen: {ex}")
-        threading.Thread(target=tarea, daemon=True).start()
+            def tarea():
+                try:
+                    from services import db as _db
+                    _db.poner_volumen(codigo, valor)
+                except Exception as ex:
+                    print(f"⚠️ No se pudo guardar el volumen: {ex}")
+            threading.Thread(target=tarea, daemon=True).start()
+        return al_tocar
 
-    control_volumen = ft.Slider(min=0, max=200, divisions=40, value=volumen_inicial, width=300,
-                                active_color="#00D4FF", on_change=mover_volumen,
-                                on_change_end=guardar_volumen)
+    control_volumen = ft.Row([
+        ft.IconButton(icon=ft.Icons.REMOVE_CIRCLE, icon_color="#00D4FF", icon_size=40,
+                      tooltip="Bajar", on_click=cambiar_volumen(-10)),
+        nota_volumen,
+        ft.IconButton(icon=ft.Icons.ADD_CIRCLE, icon_color="#00D4FF", icon_size=40,
+                      tooltip="Subir", on_click=cambiar_volumen(10)),
+    ], alignment=ft.MainAxisAlignment.CENTER)
 
     def contar_generos():
         """Cuántas canciones del historial hay de cada género y de cada artista."""
@@ -469,7 +477,7 @@ def admin_view(page, codigo, nombre, logo):
                         boton(ft.Icons.SKIP_NEXT, "Siguiente", "siguiente")],
                        alignment=ft.MainAxisAlignment.CENTER),
                 aviso,
-                nota_volumen,
+                ft.Text("🔊 VOLUMEN DEL BAR", color="#94A3B8", size=13, weight=ft.FontWeight.BOLD),
                 control_volumen,
                 ft.Text("PLAYLIST · ⏫ de primera · ⬆⬇ mover · 🗑 quitar", color="#94A3B8",
                         size=13, weight=ft.FontWeight.BOLD),
