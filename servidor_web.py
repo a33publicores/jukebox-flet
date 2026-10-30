@@ -121,11 +121,6 @@ def _pesos(n):
     return "$" + f"{int(n):,}".replace(",", ".")
 
 
-def _promo(p):
-    return bool(int(p.get("promo_precio") or 0) and int(p.get("promo_pagos") or 0)
-                and int(p["promo_precio"]) < int(p["precio"]))
-
-
 def _meses(p):
     n = int(p.get("promo_pagos") or 0)
     return "el primer mes" if n == 1 else f"los primeros {n} meses"
@@ -144,15 +139,18 @@ def _tarjetas_planes():
                 '<p class="plan-dias">Escríbenos y te contamos el precio para tu bar.</p></div>')
     tarjetas = []
     for i, p in enumerate(planes):
+        promo = sus.promo_vigente(p)
+        texto = html.escape((p.get("promo_texto") or "").strip())
         dias = int(p.get("dias") or 30)
         periodo = "al mes" if dias in (30, 31) else ("al año" if dias in (365, 366) else f"por {dias} días")
         clase = "plan destacado" if i == len(planes) - 1 and len(planes) > 1 else "plan"
         tarjetas.append(
             f'<div class="{clase}"><p class="plan-nombre">{html.escape(p["nombre"])}</p>'
-            f'<p class="plan-precio">{_pesos(p["promo_precio"] if _promo(p) else p["precio"])}</p>'
+            f'<p class="plan-precio">{_pesos(p["promo_precio"] if promo else p["precio"])}</p>'
             f'<p class="plan-dias">{periodo}, por bar · música sin límite</p>'
-            + (f'<p class="plan-promo">🔥 Promoción: {_meses(p)} a {_pesos(p["promo_precio"])}, '
-               f'luego {_pesos(p["precio"])} {periodo}</p>' if _promo(p) else "")
+            + (f'<p class="plan-promo">🔥 {texto + "<br>" if texto else ""}'
+               f'Promoción: {_meses(p)} a {_pesos(p["promo_precio"])}, '
+               f'luego {_pesos(p["precio"])} {periodo}</p>' if promo else "")
             + f'<a class="boton boton-cian" href="/comprar?plan={int(p["id"])}">Comprar</a></div>')
     return "\n".join(tarjetas)
 
@@ -163,6 +161,12 @@ def _paso_downloader():
         return (f'escribe el código <span class="codigo">{codigo}</span> '
                 f'(o la dirección <span class="codigo">play.alnovix.com/tv</span>)')
     return 'escribe la dirección <span class="codigo">play.alnovix.com/tv</span>'
+
+
+def limpiar_cache_portada():
+    """Para que un cambio del super (ej. una promoción) se vea de una en la página."""
+    with _lock:
+        _cache.update(html=None, hasta=0.0)
 
 
 def html_portada():

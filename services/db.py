@@ -161,6 +161,11 @@ ESQUEMA = [
     # (0 = sin promoción). Ej.: 2 meses a $19.900 y luego el precio normal.
     "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_precio INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_pagos INTEGER NOT NULL DEFAULT 0",
+    # Promociones del super (🔥 Promociones): se prende o apaga, con su texto y fecha final
+    # opcional (AAAA-MM-DD). Nace apagada, así que la promoción que hubiera queda retirada.
+    "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_activa BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_texto TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_hasta TEXT NOT NULL DEFAULT ''",
     # Los demás televisores del bar ("espejos"): siguen la canción del principal.
     """CREATE TABLE IF NOT EXISTS reproductores (
         codigo    TEXT NOT NULL,

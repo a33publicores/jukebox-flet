@@ -14,6 +14,7 @@ Desde aquí se hace todo lo que antes se hacía a mano en Google Sheets:
 import asyncio
 import os
 import re
+import time
 
 import flet as ft
 
@@ -198,6 +199,7 @@ def super_inicio(page):
             _boton("🧪 Prueba 2 días", lambda e: _form_prueba(page)),
             _boton("👥 Super admins", lambda e: admins_view(page, None), apagado=True),
             _boton("💳 Planes", lambda e: planes_view(page), apagado=True),
+            _boton("🔥 Promociones", lambda e: promociones_view(page), apagado=True),
             _boton("🎨 Temas", lambda e: temas_view(page), apagado=True),
             _boton("🎵 Canciones", lambda e: canciones_view(page), apagado=True),
             _boton("🎁 Bonos", lambda e: bonos_view(page), apagado=True),
@@ -726,10 +728,6 @@ def planes_view(page):
         dias_ = _campo("Días que dura", p["dias"] if p else 30, numeros=True)
         solo = _campo("Solo para estos códigos (vacío = todos)", p["solo_para"] if p else "")
         orden = _campo("Orden en la lista", p["orden"] if p else 1, numeros=True)
-        promo_precio = _campo("Promoción: precio especial (0 = sin promoción)",
-                              (p.get("promo_precio") or 0) if p else 0, numeros=True)
-        promo_pagos = _campo("Promoción: cuántos pagos a ese precio (ej. 2)",
-                             (p.get("promo_pagos") or 0) if p else 0, numeros=True)
         activo = ft.Switch(label="Activo (se puede comprar)", value=bool(p["activo"]) if p else True,
                            active_color=CYAN)
         error = ft.Text("", color="#f87171")
@@ -738,16 +736,10 @@ def planes_view(page):
             try:
                 if int(precio.value or 0) < 1500:
                     raise ValueError("Wompi no acepta pagos menores a $1.500")
-                pp, pn = int(promo_precio.value or 0), int(promo_pagos.value or 0)
-                if pp and pp < 1500:
-                    raise ValueError("Promoción: Wompi no acepta pagos menores a $1.500")
-                if pp and pp >= int(precio.value):
-                    raise ValueError("La promoción debe ser más barata que el precio normal")
-                if bool(pp) != bool(pn):
-                    raise ValueError("Promoción: pon el precio especial Y cuántos pagos (o 0 en los dos)")
                 sus.guardar_plan(p["id"] if p else None, nombre.value, int(precio.value),
                                  int(dias_.value or 30), activo.value, solo.value,
-                                 int(orden.value or 0), pp, pn)
+                                 int(orden.value or 0))
+                _portada_al_dia()
             except Exception as ex:
                 error.value = str(ex)
                 page.update()
@@ -756,11 +748,7 @@ def planes_view(page):
             planes_view(page)
 
         _dialogo(page, "Editar plan" if p else "Nuevo plan",
-                 [nombre, precio, dias_, solo, orden, promo_precio, promo_pagos,
-                  ft.Text("Ej.: precio 49900, promoción 19900 por 2 pagos → cada bar paga "
-                          "$19.900 sus 2 primeros meses y después $49.900.",
-                          color="#64748b", size=12),
-                  activo, error],
+                 [nombre, precio, dias_, solo, orden, activo, error],
                  [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
                   ft.FilledButton("Guardar", on_click=guardar)])
 
@@ -774,7 +762,7 @@ def planes_view(page):
                         (f"solo para {p['solo_para']}" if p["solo_para"] else "para todos"),
                         color="#94A3B8", size=13),
                 *([ft.Text(f"🔥 Promoción: {p['promo_pagos']} pago(s) a {_pesos(p['promo_precio'])}",
-                           color="#facc15", size=13)] if p.get("promo_precio") else []),
+                           color="#facc15", size=13)] if sus.promo_vigente(p) else []),
             ], expand=True, spacing=2),
             ft.OutlinedButton("Editar", icon=ft.Icons.EDIT, on_click=lambda ev, p=p: editar(p)),
         ]),
@@ -783,6 +771,98 @@ def planes_view(page):
         _encabezado(page, "💳 Planes", volver=super_inicio),
         _boton("➕ Nuevo plan", lambda ev: editar(None)),
         *tarjetas,
+    ], spacing=14)))
+    page.update()
+
+
+def _portada_al_dia():
+    try:
+        import servidor_web
+        servidor_web.limpiar_cache_portada()
+    except Exception as ex:
+        print("⚠️ portada: no se pudo refrescar:", ex)  # igual se refresca sola en 1 minuto
+
+
+def promociones_view(page):
+    """🔥 Promociones: lo que se guarda aquí sale de una en la página y al comprar."""
+    if not _es_super(page):
+        return super_login_view(page)
+    _preparar(page)
+
+    def editar(p):
+        activa = ft.Switch(active_color=CYAN, value=bool(p.get("promo_activa")))
+        texto = _campo("De qué se trata (ej. Promo de diciembre)", p.get("promo_texto") or "")
+        valor = _campo("Valor de la promoción en pesos (ej. 29900)", p.get("promo_precio") or "",
+                       numeros=True)
+        meses = _campo("Cuántos meses a ese valor (ej. 3)", p.get("promo_pagos") or "", numeros=True)
+        hasta = _campo("Válida hasta, opcional (ej. 2026-12-31)", p.get("promo_hasta") or "")
+        error = ft.Text("", color="#f87171")
+
+        def guardar(ev):
+            try:
+                v, m = int(valor.value or 0), int(meses.value or 0)
+                fin = (hasta.value or "").strip()
+                if fin:
+                    time.strptime(fin, "%Y-%m-%d")
+                if len(texto.value or "") > 200:
+                    raise ValueError("El texto es muy largo (máximo 200 letras)")
+                if activa.value:
+                    if v < 1500:
+                        raise ValueError("Wompi no acepta pagos menores a $1.500")
+                    if v >= int(p["precio"]):
+                        raise ValueError(f"Debe ser más barata que el precio normal ({_pesos(p['precio'])})")
+                    if m < 1:
+                        raise ValueError("Pon cuántos meses dura la promoción")
+                sus.guardar_promo(p["id"], activa.value, texto.value, v, m, fin)
+                _portada_al_dia()
+            except ValueError as ex:
+                error.value = ("La fecha va así: 2026-12-31" if "does not match" in str(ex) or
+                               "out of range" in str(ex) else str(ex))
+                page.update()
+                return
+            _cerrar_dialogo(page)
+            _aviso(page, "Promoción guardada: ya está en la página." if activa.value
+                   else "Promoción apagada: ya no sale en la página.")
+            promociones_view(page)
+
+        _dialogo(page, f"🔥 Promoción · {p['nombre']}",
+                 [ft.Row([activa, ft.Text("Promoción activa (se ve en la página)", color="white", size=14)]),
+                  texto, valor, meses, hasta,
+                  ft.Text(f"Después de esos meses, el bar paga el precio normal "
+                          f"({_pesos(p['precio'])}). Es para los primeros pagos de cada bar: quien "
+                          "ya hizo esa cantidad de pagos de este plan no la recibe.",
+                          color="#64748b", size=12),
+                  error],
+                 [ft.TextButton("Cancelar", on_click=lambda ev: _cerrar_dialogo(page)),
+                  ft.FilledButton("Guardar", on_click=guardar)])
+
+    def tarjeta(p):
+        if sus.promo_vigente(p):
+            estado, color = (f"🔥 Activa: {p['promo_pagos']} mes(es) a {_pesos(p['promo_precio'])}" +
+                             (f" · hasta {p['promo_hasta']}" if p.get("promo_hasta") else ""), "#facc15")
+        elif p.get("promo_activa"):
+            estado, color = "Vencida o incompleta: no sale en la página", "#f87171"
+        else:
+            estado, color = "Sin promoción", "#94A3B8"
+        return ft.Container(
+            width=520, padding=14, border_radius=16, bgcolor=PANEL, border=ft.Border.all(1, "#1e293b"),
+            content=ft.Row([
+                ft.Column([
+                    ft.Text(f"{p['nombre']} · {_pesos(p['precio'])}", color="white", size=16,
+                            weight=ft.FontWeight.BOLD),
+                    ft.Text(estado, color=color, size=13),
+                    *([ft.Text(p["promo_texto"], color="#cbd5e1", size=13)]
+                      if p.get("promo_activa") and p.get("promo_texto") else []),
+                ], expand=True, spacing=2),
+                ft.OutlinedButton("Editar", icon=ft.Icons.EDIT, on_click=lambda ev, p=p: editar(p)),
+            ]),
+        )
+
+    page.add(ft.Container(width=560, padding=16, content=ft.Column([
+        _encabezado(page, "🔥 Promociones", volver=super_inicio),
+        ft.Text("Escoge el plan y pon el texto, el valor y los meses. Sale de una en la página y al "
+                "comprar. Para retirarla, apaga «Promoción activa».", color="#94A3B8", size=13),
+        *[tarjeta(p) for p in sus.planes(todos=True)],
     ], spacing=14)))
     page.update()
 

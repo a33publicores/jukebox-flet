@@ -152,25 +152,37 @@ def plan(id_plan):
     return db.uno("SELECT * FROM planes WHERE id = %s", (int(id_plan),))
 
 
-def guardar_plan(id_plan, nombre, precio, dias, activo=True, solo_para="", orden=0,
-                 promo_precio=0, promo_pagos=0):
-    promo_precio, promo_pagos = max(0, int(promo_precio or 0)), max(0, int(promo_pagos or 0))
-    if not (promo_precio and promo_pagos):
-        promo_precio = promo_pagos = 0
+def guardar_plan(id_plan, nombre, precio, dias, activo=True, solo_para="", orden=0):
     if id_plan:
         return db.uno(
             """UPDATE planes SET nombre = %s, precio = %s, dias = %s, activo = %s,
-               solo_para = %s, orden = %s, promo_precio = %s, promo_pagos = %s
-               WHERE id = %s RETURNING *""",
+               solo_para = %s, orden = %s WHERE id = %s RETURNING *""",
             (str(nombre).strip(), int(precio), int(dias), bool(activo),
-             str(solo_para or "").replace(" ", ""), int(orden), promo_precio, promo_pagos,
-             int(id_plan)))
+             str(solo_para or "").replace(" ", ""), int(orden), int(id_plan)))
     return db.uno(
-        """INSERT INTO planes (nombre, precio, dias, activo, solo_para, orden, promo_precio,
-                              promo_pagos)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *""",
+        """INSERT INTO planes (nombre, precio, dias, activo, solo_para, orden)
+           VALUES (%s, %s, %s, %s, %s, %s) RETURNING *""",
         (str(nombre).strip(), int(precio), int(dias), bool(activo),
-         str(solo_para or "").replace(" ", ""), int(orden), promo_precio, promo_pagos))
+         str(solo_para or "").replace(" ", ""), int(orden)))
+
+
+def guardar_promo(id_plan, activa, texto="", precio=0, pagos=0, hasta=""):
+    """La promoción de un plan (🔥 Promociones en /super)."""
+    return db.uno(
+        """UPDATE planes SET promo_activa = %s, promo_texto = %s, promo_precio = %s,
+           promo_pagos = %s, promo_hasta = %s WHERE id = %s RETURNING *""",
+        (bool(activa), str(texto or "").strip(), max(0, int(precio or 0)), max(0, int(pagos or 0)),
+         str(hasta or "").strip(), int(id_plan)))
+
+
+def promo_vigente(p):
+    """True si la promoción del plan está prendida, bien armada y no se ha vencido."""
+    promo, pagos = int(p.get("promo_precio") or 0), int(p.get("promo_pagos") or 0)
+    if not (p.get("promo_activa") and promo and pagos and promo < int(p["precio"])):
+        return False
+    hasta = (p.get("promo_hasta") or "").strip()
+    hoy = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 5 * 3600))  # hora de Colombia
+    return not hasta or hoy <= hasta
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +205,7 @@ def precio_de(p, codigo=None):
     normal = int(p["precio"])
     promo, n_promo = int(p.get("promo_precio") or 0), int(p.get("promo_pagos") or 0)
     q.update(precio_normal=normal, en_promo=False, promo_quedan=0, promo_txt="")
-    if promo and n_promo and promo < normal:
+    if promo_vigente(p):
         hechos = pagos_hechos(codigo, p["id"])
         if hechos < n_promo:
             quedan = n_promo - hechos
@@ -201,6 +213,8 @@ def precio_de(p, codigo=None):
             meses = "mes" if n_promo == 1 else f"{n_promo} meses"
             q["promo_txt"] = (f"Promoción: los primeros {meses} a {_pesos_txt(promo)}, "
                               f"luego {_pesos_txt(normal)}")
+            if (p.get("promo_texto") or "").strip():
+                q["promo_txt"] = f"{p['promo_texto'].strip()} · {q['promo_txt']}"
             if hechos:
                 q["promo_txt"] += f" (te queda{'n' if quedan > 1 else ''} {quedan} a precio de promoción)"
     return q
