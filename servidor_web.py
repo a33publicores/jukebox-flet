@@ -34,6 +34,10 @@ APK_TV_URL = os.getenv("TV_APK_URL",
                        "https://github.com/a33publicores/jukebox-flet/releases/download/tv-apk/PlayBarGO_TV.apk")
 RUTAS_APK = ("/tv", "/apk", "/tv/", "/apk/")
 RUTAS_PANTALLA = ("/pantalla", "/pantalla/")
+# La dirección vieja (la de los QR ya impresos) lleva a la nueva, con la misma ruta. Allá "/" es
+# la portada, así que la raíz va a /entrar, donde se pide el código del lugar como aquí.
+HOSTS_VIEJOS = ("jukebox-flet-production.up.railway.app",)
+URL_NUEVA = "https://play.alnovix.com"
 PANTALLA = CARPETA_PORTADA / "pantalla.html"
 # Navegadores de TV que no instalan apps de Android (Samsung Tizen, LG webOS...).
 TV_SIN_ANDROID = ("tizen", "web0s", "webos", "smart-tv", "smarttv", "netcast", "hbbtv")
@@ -206,6 +210,11 @@ def crear_app(flet_app):
             return
         if scope["type"] == "http" and scope.get("method") in ("GET", "HEAD"):
             ruta = scope.get("path") or "/"
+            if _host(scope) in HOSTS_VIEJOS:
+                consulta = (scope.get("query_string") or b"").decode("latin-1")
+                await _redirigir(send, URL_NUEVA + ("/entrar" if ruta == "/" else ruta)
+                                 + (f"?{consulta}" if consulta else ""))
+                return
             if ruta.startswith("/portada/"):
                 await estaticos(scope, receive, send)
                 return
