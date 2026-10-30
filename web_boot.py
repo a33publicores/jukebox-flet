@@ -92,22 +92,33 @@ _HEAD_EXTRA = f"""
       window.addEventListener('flutter-first-frame', function () {{
         setTimeout(hide, 45000);
       }}, {{ once: true }});
+      // Si la sesión se retoma (recargar la página), la vista splash de Python no vuelve a
+      // correr y no llega la señal: el logo no debe quedarse tapando la pantalla.
+      window.addEventListener('pbgo-conectado', function () {{
+        setTimeout(hide, 4000);
+      }}, {{ once: true }});
       setTimeout(hide, 60000);
     }})();
   </script>
   <script>
-    // Vigilante de la conexión. En el celular, al bloquear la pantalla o cambiar de app,
-    // la conexión con el servidor puede quedar "muerta" sin que el navegador se entere:
-    // la página se ve normal pero tocar la lupa no hace nada hasta recargar.
-    // Si un toque no recibe NINGUNA respuesta del servidor en 15 s, se cierra esa conexión
-    // (Flet se reconecta solo y la sesión del dispositivo se recupera); si aun así no
-    // responde, se recarga la página.
+    // Vigilante de la conexión. Si la conexión con el servidor se cae y Flet la retoma en esta
+    // misma página, el servidor sigue contestando pero la pantalla ya no aplica los cambios
+    // ("se queda pegada"): por eso una reconexión se resuelve recargando la página (la sesión
+    // se recupera sola). Además, en el celular, al bloquear la pantalla la conexión puede
+    // quedar muerta sin que el navegador se entere: si la pestaña estuvo oculta y un toque no
+    // recibe NINGUNA respuesta en 15 s, también se recarga. Sin haberse ocultado no se vigila:
+    // muchos toques no necesitan respuesta del servidor.
     (function () {{
       var W = window.WebSocket;
       if (!W) return;
-      var actual = null, tocado = 0, cerrado = 0;
+      var actual = null, tocado = 0, abierta = false, oculta = false;
       function avisar(texto) {{  // queda en los registros del servidor (diagnóstico)
         try {{ navigator.sendBeacon('/pbgo-diag', texto + ' · ' + location.pathname.slice(0, 40)); }} catch (e) {{}}
+      }}
+      function recargar(motivo) {{
+        console.log('PBGO: se recarga: ' + motivo);
+        avisar('recarga: ' + motivo);
+        location.reload();
       }}
       function esToque(d) {{
         // trama de Flet: [0x00][msgpack [accion, cuerpo]]; accion 3 = evento de un control
@@ -121,12 +132,17 @@ _HEAD_EXTRA = f"""
         var s = prot === undefined ? new W(url) : new W(url, prot);
         if (String(url).indexOf('/ws') < 0) return s;
         actual = s; tocado = 0;
+        s.addEventListener('open', function () {{
+          if (abierta) recargar('la conexión se retomó en la misma página');
+          abierta = true;
+        }});
         s.addEventListener('message', function () {{
-          if (s === actual) {{ tocado = 0; cerrado = 0; }}
+          if (s === actual) {{ tocado = 0; oculta = false; }}
+          window.dispatchEvent(new Event('pbgo-conectado'));
         }});
         var enviar = s.send;
         s.send = function (d) {{
-          if (s === actual && !tocado && esToque(d)) tocado = Date.now();
+          if (s === actual && !tocado && oculta && esToque(d)) tocado = Date.now();
           return enviar.apply(s, arguments);
         }};
         return s;
@@ -134,21 +150,13 @@ _HEAD_EXTRA = f"""
       Envuelto.prototype = W.prototype;
       ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(function (k) {{ Envuelto[k] = W[k]; }});
       window.WebSocket = Envuelto;
+      document.addEventListener('visibilitychange', function () {{
+        if (document.hidden) oculta = true;
+      }});
       setInterval(function () {{
-        var ahora = Date.now();
-        if (cerrado && ahora - cerrado > 10000) {{
-          console.log('PBGO: sin respuesta tras reconectar, se recarga');
-          avisar('recarga: sin respuesta tras reconectar');
-          cerrado = 0;
-          location.reload();
-          return;
-        }}
-        if (tocado && !cerrado && actual && ahora - tocado > 15000) {{
-          console.log('PBGO: conexión sin respuesta, se reconecta');
-          avisar('reconecta: un toque sin respuesta en 15 s');
+        if (tocado && Date.now() - tocado > 15000) {{
           tocado = 0;
-          cerrado = ahora;
-          try {{ actual.close(); }} catch (e) {{ location.reload(); }}
+          recargar('un toque sin respuesta en 15 s al volver a la pestaña');
         }}
       }}, 1000);
     }})();
