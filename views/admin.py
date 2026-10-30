@@ -378,6 +378,34 @@ def admin_view(page, codigo, nombre, logo):
         vacio_txt="Cargando los artistas que han sonado en el bar…")
     pintar_nota()
 
+    def texto_volumen(v):
+        return f"🔊 VOLUMEN DEL BAR: {int(v)}%" + (" · normal" if int(v) == 100 else "")
+
+    try:
+        from services import db as _db_vol
+        volumen_inicial = int((_db_vol.control(codigo) or {}).get("volumen") or 100)
+    except Exception:
+        volumen_inicial = 100
+    nota_volumen = ft.Text(texto_volumen(volumen_inicial), color="#94A3B8", size=13,
+                           weight=ft.FontWeight.BOLD)
+
+    def mover_volumen(e):
+        nota_volumen.value = texto_volumen(e.control.value)
+        nota_volumen.update()
+
+    def guardar_volumen(e):
+        def tarea():
+            try:
+                from services import db as _db
+                _db.poner_volumen(codigo, round(e.control.value))
+            except Exception as ex:
+                print(f"⚠️ No se pudo guardar el volumen: {ex}")
+        threading.Thread(target=tarea, daemon=True).start()
+
+    control_volumen = ft.Slider(min=0, max=200, divisions=40, value=volumen_inicial, width=300,
+                                active_color="#00D4FF", on_change=mover_volumen,
+                                on_change_end=guardar_volumen)
+
     def contar_generos():
         """Cuántas canciones del historial hay de cada género y de cada artista."""
         t_inicio = time.time()
@@ -441,6 +469,8 @@ def admin_view(page, codigo, nombre, logo):
                         boton(ft.Icons.SKIP_NEXT, "Siguiente", "siguiente")],
                        alignment=ft.MainAxisAlignment.CENTER),
                 aviso,
+                nota_volumen,
+                control_volumen,
                 ft.Text("PLAYLIST · ⏫ de primera · ⬆⬇ mover · 🗑 quitar", color="#94A3B8",
                         size=13, weight=ft.FontWeight.BOLD),
                 lista,

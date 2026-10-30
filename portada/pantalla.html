@@ -408,8 +408,16 @@
     modo: null,
     mezclar: false,    // la canción terminó por la mezcla: la que sale baja suave mientras entra la otra
     saliente: null,    // reproductor que se está apagando (mezcla en curso)
-    base: 1,           // volumen de la canción que suena (volumen parejo)
+    base: 1,           // volumen de la canción que suena (volumen parejo + nivel del admin)
+    parejo: 1,         // solo el volumen parejo de la canción
+    nivel: 100,        // volumen del bar que pone el admin (100 = normal)
     tMezcla: null,
+    // Igual que fundido.ganancia_con_nivel: de 100 para arriba, las canciones duras se bajan menos.
+    ponerParejo: function (v) {
+      var n = Math.max(0, Math.min(200, medios.nivel)) / 100;
+      medios.parejo = v;
+      medios.base = Math.min(1, v * Math.max(1, n)) * Math.min(1, n);
+    },
     detener: function () {
       if (!medios.mezclar) {
         try { video.pause(); } catch (e) {}
@@ -435,7 +443,7 @@
           pre = { id: null, el: null };
           var mezcla = medios.mezclar && !viejo.paused;
           medios.mezclar = false;
-          medios.base = d.volumen || 1;
+          medios.ponerParejo(d.volumen || 1);
           if (mezcla) medios.fundir(viejo, video, medios.base);
           else { soltar(viejo); video.volume = medios.base; }
           if (!mezcla && medios.entrarSuave) subirSuave(video, medios.base);
@@ -450,7 +458,7 @@
         if (pre.el === otroVideo() && pre.id) { soltar(pre.el); pre = { id: null, el: null }; }
         if (medios.mezclar) { medios.mezclar = false; medios.cortarMezcla(); }  // no estaba lista: sin mezcla
         video.muted = false;
-        medios.base = d.volumen || 1;
+        medios.ponerParejo(d.volumen || 1);
         video.volume = medios.base;
         if (medios.entrarSuave) subirSuave(video, medios.base);
         medios.entrarSuave = false;
@@ -622,6 +630,7 @@
       await candado(async function () {
         M.snap = snap;
         motor.revisarGeneros();
+        motor.revisarVolumen();
         if (await motor.comandos(snap)) {
           try { snap = await api.instantanea(); M.snap = snap; } catch (e) {}
         }
@@ -687,6 +696,14 @@
       M.plan = info;
       M.bloqueado = info.permitido === false;
       pintarPlan();
+    },
+
+    revisarVolumen: function () {
+      var n = M.snap && M.snap.control ? M.snap.control.volumen : null;
+      if (n === null || n === undefined || Number(n) === medios.nivel) return;
+      medios.nivel = Number(n);
+      medios.ponerParejo(medios.parejo);
+      if (!medios.tMezcla && medios.salida !== M.token) { try { video.volume = medios.base; } catch (e) {} }
     },
 
     revisarGeneros: function () {
@@ -951,7 +968,7 @@
       if (r.activo === false) { motor.quedarInactivo(r.equipo); return; }
       if (r.rol !== "espejo") { motor.dejarEspejo(); return; }
       var s = r.sigue || {};
-      try { M.snap = await api.instantanea(); } catch (e) {}
+      try { M.snap = await api.instantanea(); motor.revisarVolumen(); } catch (e) {}
       var vid = s.video || "";
       var quieto = s.estado === "pausado" || s.estado === "esperando" || !s.estado;
       if (!vid) {

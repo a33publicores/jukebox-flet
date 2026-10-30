@@ -374,6 +374,7 @@ class Motor:
         async with self._lock:
             self.snap = snap
             self._revisar_generos()
+            self._revisar_volumen()
             if await self._comandos(snap):
                 # el comando cambió el estado: la lectura quedó vieja, se relee
                 try:
@@ -498,6 +499,12 @@ class Motor:
     def _evitar(self):
         """Lo que no debe salir de nuevo: lo que sonó hace poco y lo que ya está en espera."""
         return list(self.recientes) + [i.video_id for i in self._rellenos]
+
+    def _revisar_volumen(self):
+        """El volumen del bar que pone el admin en su panel."""
+        nivel = ((self.snap.control if self.snap else {}) or {}).get("volumen")
+        if nivel is not None and hasattr(self.ui, "fundido"):
+            self.ui.fundido.poner_nivel(int(nivel))
 
     def _revisar_generos(self):
         """Si el admin cambió los géneros, las aleatorias ya escogidas se descartan."""
@@ -1014,6 +1021,8 @@ class Motor:
         if isinstance(r, dict) and r.get("activo") is False:
             await self._quedar_inactivo(r.get("equipo", ""))
             return
+        if isinstance(r, dict) and r.get("volumen") is not None and hasattr(self.ui, "fundido"):
+            self.ui.fundido.poner_nivel(int(r["volumen"]))
         if not isinstance(r, dict) or r.get("rol") != "espejo":
             await self._dejar_espejo()
             return

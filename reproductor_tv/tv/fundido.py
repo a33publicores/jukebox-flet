@@ -45,6 +45,14 @@ async def _posicion_fresca(leer, espera=1.2):
     return antes, reloj.time()
 
 
+def ganancia_con_nivel(ganancia, nivel):
+    """El volumen parejo con el volumen que puso el admin (`nivel`, 0-200; 100 = normal).
+    Hasta 100 baja todo. De 100 para arriba las canciones duras se bajan menos: el reproductor
+    no puede pasar de su máximo, pero el volumen parejo deja ese margen, y así no se distorsiona."""
+    nivel = max(0.0, min(200.0, float(nivel))) / 100
+    return min(1.0, ganancia * max(1.0, nivel)) * min(1.0, nivel)
+
+
 def _mismo(a, b):
     try:
         return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
@@ -69,6 +77,7 @@ class Fundido:
         self.volumen_de = volumen_de
         self.ganancia = 1.0
         self.ganancia_mezcla = 1.0
+        self.nivel = 100  # volumen del bar que pone el admin
         self.vol = 100
         self.vol_mezcla = 0
         self.saliendo = False
@@ -87,7 +96,7 @@ class Fundido:
 
     def _aplicar(self):
         try:
-            self.video.volume = _cubica(self.vol * self.ganancia)
+            self.video.volume = _cubica(self.vol * ganancia_con_nivel(self.ganancia, self.nivel))
             self.video.update()
         except Exception:
             pass  # el video todavía no está en pantalla
@@ -97,8 +106,11 @@ class Fundido:
         if v == self.vol_mezcla or self.mezcla is None:
             return
         self.vol_mezcla = v
+        self._aplicar_mezcla()
+
+    def _aplicar_mezcla(self):
         try:
-            self.mezcla.volume = _cubica(v * self.ganancia_mezcla)
+            self.mezcla.volume = _cubica(self.vol_mezcla * ganancia_con_nivel(self.ganancia_mezcla, self.nivel))
             self.mezcla.update()
         except Exception:
             pass
@@ -133,6 +145,14 @@ class Fundido:
         if abs(g - self.ganancia) > 0.01:
             self.ganancia = g
             self._aplicar()
+
+    def poner_nivel(self, nivel):
+        """El admin movió el volumen del bar: se aplica de una, también si está mezclando."""
+        if nivel != self.nivel:
+            self.nivel = nivel
+            self._aplicar()
+            if self.mezcla is not None and self.vol_mezcla > 0:
+                self._aplicar_mezcla()
 
     async def _empezar_mezcla(self, ruta, segundos):
         import flet_video as ftv

@@ -160,6 +160,8 @@ ESQUEMA = [
     # Promoción de un plan: los primeros `promo_pagos` pagos de cada bar cuestan `promo_precio`
     # (0 = sin promoción). Ej.: 2 meses a $19.900 y luego el precio normal.
     "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_precio INTEGER NOT NULL DEFAULT 0",
+    # Volumen del bar que pone el admin (100 = normal; ver fundido.ganancia_con_nivel).
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS volumen INTEGER NOT NULL DEFAULT 100",
     "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_pagos INTEGER NOT NULL DEFAULT 0",
     # Promociones del super (🔥 Promociones): se prende o apaga, con su texto y fecha final
     # opcional (AAAA-MM-DD). Nace apagada, así que la promoción que hubiera queda retirada.
@@ -887,6 +889,12 @@ def poner_generos(codigo, claves):
     _asegurar_control(codigo)
     texto = claves if isinstance(claves, str) else ",".join(sorted(set(claves)))
     ejecutar("UPDATE control SET generos = %s WHERE codigo = %s", (texto, str(codigo)))
+
+
+def poner_volumen(codigo, volumen):
+    _asegurar_control(codigo)
+    ejecutar("UPDATE control SET volumen = %s WHERE codigo = %s",
+             (max(0, min(200, int(volumen))), str(codigo)))
 
 
 def enviar_comando(codigo, comando, param=""):

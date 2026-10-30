@@ -153,6 +153,7 @@ def reclamar(request, cli, cuerpo):
                        bool(d.get("forzar")), info, espejo=bool(d.get("espejo")))
     if r["rol"] == "espejo":
         r["sigue"] = db.estado_principal(cli["codigo"])
+        r["volumen"] = (db.control(cli["codigo"]) or {}).get("volumen")
     return JSONResponse({"ok": True, **r})
 
 
