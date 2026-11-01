@@ -267,6 +267,8 @@ class Motor:
         # piden a la nube (las sube un equipo de otro bar) en vez de marcarlas con error.
         self._yt_bloqueado_hasta = 0.0
         self._esperando = {}      # video_id -> (desde, item): esperando que llegue a la nube
+        self._puente = False      # suena una aleatoria mientras baja la canción pedida
+        self._puente_vid = ""     # la última canción pedida que se esperó así
         self._t_esperando = 0.0
 
     # ------------------------------------------------------------------ bucle
@@ -409,11 +411,24 @@ class Motor:
             if marcada:
                 await self._tomar(marcada, ya_marcada=True)
             elif cola:
-                await self._tomar(cola[0])
+                # La pedida todavía no bajó: mientras tanto suena una que ya esté guardada
+                # (nunca silencio); apenas baje, entra la pedida.
+                # Solo una vez por canción: si tampoco bajó en ese tiempo, se intenta directo
+                # (y si falla se marca el error, en vez de quedar esperando para siempre).
+                vid = cola[0].video_id
+                if not self.desc.ruta(vid) and vid != self._puente_vid:
+                    if vid not in self._en_curso:
+                        self._lanzar_descarga(vid, cola[0])
+                    await self._poner_relleno(solo_listas=True)
+                    self._puente = self.actual is not None
+                    self._puente_vid = vid
+                if self.actual is None:
+                    await self._tomar(cola[0])
             else:
                 await self._poner_relleno()
         elif self.relleno:
-            if cola and INTERRUMPIR_RELLENO:
+            if cola and (INTERRUMPIR_RELLENO or (self._puente and self.desc.ruta(cola[0].video_id))):
+                self._puente = False
                 await self._tomar(cola[0])
         elif self.actual.fila is not None and self.actual.fila not in self._filas_pendientes():
             # Solo se corta si en la hoja ESA fila fue quitada a propósito (admin la
@@ -542,7 +557,8 @@ class Motor:
                 return item
         return None
 
-    async def _poner_relleno(self):
+    async def _poner_relleno(self, solo_listas=False):
+        """`solo_listas`: únicamente una que ya esté guardada en el equipo (sin descargar)."""
         self.ocupado = True
         try:
             # 1) las que ya quedaron listas mientras sonaba la anterior: entran al instante
@@ -555,6 +571,8 @@ class Motor:
             item = await self._relleno_guardado()
             if item is not None:
                 await self._reproducir(item, self.desc.ruta(item.video_id), relleno=True)
+                return
+            if solo_listas:
                 return
             for _ in range(3):
                 item = await self._elegir_relleno()
@@ -885,8 +903,9 @@ class Motor:
             if not self.desc.ruta(it.video_id) and it.video_id not in self._en_curso:
                 self._lanzar_descarga(it.video_id, it)
         # si no hay pedidos esperando, deja lista la próxima aleatoria
-        if (not pendientes and self.actual is not None and not self._preparando_relleno
-                and len(self._rellenos) < RELLENO_LISTOS):
+        # (con pedidos, al menos una: es la que suena si la pedida no alcanza a bajar)
+        if (self.actual is not None and not self._preparando_relleno
+                and len(self._rellenos) < (1 if pendientes else RELLENO_LISTOS)):
             self._preparando_relleno = True
 
             async def _prep():
