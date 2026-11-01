@@ -14,6 +14,7 @@ import asyncio
 import os
 from pathlib import Path
 
+MEZCLA_ACTIVA = False  # en pausa: las canciones cambian normal, sin subir ni bajar el volumen
 SALIDA_SEG = 8.0   # cuánto dura la mezcla (la que termina baja en estos últimos segundos)
 ENTRADA_SEG = 5.0  # sin mezcla: la que empieza sube en 5 s
 PASO_SEG = 0.25
@@ -284,6 +285,11 @@ class Fundido:
         """Empezó otra canción en el principal (`ruta`: su archivo)."""
         self.saliendo = False
         self._vuelta += 1
+        if not MEZCLA_ACTIVA:
+            self._cancelar()
+            self._parar_mezcla_luego()
+            self._poner(100)
+            return
         if self.mezclando and ruta and _mismo(ruta, self.mezclando):
             try:
                 self._cancelar()
@@ -300,7 +306,7 @@ class Fundido:
 
     def posicion(self, pos, dur, pausado=False):
         """Cada segundo: al acercarse el final, arranca la mezcla (o el fundido)."""
-        if pausado or dur < 40:
+        if pausado or dur < 40 or not MEZCLA_ACTIVA:
             return
         quedan = dur - pos
         if self.saliendo and quedan > SALIDA_SEG + 2:

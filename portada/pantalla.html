@@ -1175,7 +1175,9 @@
 
   // Mezcla: faltando MEZCLA_SEG segundos, si la siguiente ya está cargada, se pasa a ella
   // (la que termina sigue sonando y baja de volumen mientras la nueva sube).
+  var MEZCLA_ACTIVA = false;  // en pausa: las canciones cambian normal, sin subir ni bajar el volumen
   setInterval(function () {
+    if (!MEZCLA_ACTIVA) return;
     if (!M.actual || M.pausado || M.ocupado || M.espejo || M.inactivo || M.bloqueado) return;
     if (medios.modo !== "video" || medios.mezclar || medios.saliente) return;
     var d = medios.dur(), p = medios.pos();
