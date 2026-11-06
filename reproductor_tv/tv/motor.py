@@ -349,7 +349,7 @@ class Motor:
         gb = libre / 1024 ** 3
         if libre < LIBRE_CRITICO:
             await self._avisar_disco(f"quedan {gb:.1f} GB")
-        elif libre < LIBRE_AVISO:
+        elif libre < LIBRE_AVISO and getattr(self.desc, "nube", None) is None:
             texto = (f"💾 Queda poco espacio en la memoria del TV ({gb:.1f} GB). Desinstala apps que no "
                      "uses para que las canciones nuevas se puedan seguir descargando.")
             if self.alerta != texto:

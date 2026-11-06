@@ -116,10 +116,16 @@ class Nube:
         return False
 
 
+LIBRE_MINIMO = 1536 * 1024 ** 2  # con la nube, el equipo deja siempre ~1,5 GB libres
+GUARDADAS_MINIMO = 600 * 1024 ** 2  # ...pero guarda al menos unas canciones (las que suenan ya)
+
+
 def limpiar_por_tamano(carpeta, max_bytes, extensiones=(".mp4", ".webm", ".mkv", ".m4v"),
                        reciente_seg=30 * 60):
-    """Con la nube activa: si las canciones guardadas pasan de `max_bytes`, se borran las que
-    hace más tiempo no suenan (nunca lo de los últimos 30 min). Devuelve cuántas borró."""
+    """Con la nube activa las canciones del equipo son solo una copia de paso: si pasan de
+    `max_bytes`, o si el disco/memoria queda con menos de LIBRE_MINIMO libres, se borran las
+    que hace más tiempo no suenan (nunca lo de los últimos 30 min). Devuelve cuántas borró."""
+    import shutil
     ahora = time.time()
     archivos = []
     try:
@@ -130,6 +136,11 @@ def limpiar_por_tamano(carpeta, max_bytes, extensiones=(".mp4", ".webm", ".mkv",
     except OSError:
         return 0
     total = sum(a[1] for a in archivos)
+    try:  # el tope baja si el equipo tiene poco espacio libre (por otras apps o archivos)
+        libre = shutil.disk_usage(carpeta).free
+        max_bytes = min(max_bytes, max(GUARDADAS_MINIMO, total + libre - LIBRE_MINIMO))
+    except Exception:
+        pass
     if total <= max_bytes:
         return 0
     borradas = 0

@@ -334,11 +334,16 @@ class Motor:
             return
         self._t_disco = self.ahora()
         from reproductor.descargas import LIBRE_AVISO, LIBRE_CRITICO
+        if hasattr(self.desc, "limpiar"):  # con nube: deja espacio borrando la copia de paso
+            try:
+                await asyncio.to_thread(self.desc.limpiar)
+            except Exception as ex:
+                print(f"⚠️ No se pudo liberar espacio: {ex}")
         libre = await asyncio.to_thread(self.desc.espacio_libre)
         gb = libre / 1024 ** 3
         if libre < LIBRE_CRITICO:
             await self._avisar_disco(f"quedan {gb:.1f} GB")
-        elif libre < LIBRE_AVISO:
+        elif libre < LIBRE_AVISO and getattr(self.desc, "nube", None) is None:
             texto = (f"💾 Queda poco espacio en el disco C: ({gb:.1f} GB). Libera espacio pronto "
                      "para que las canciones nuevas se puedan seguir descargando.")
             if self.alerta != texto:
