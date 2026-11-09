@@ -10,3 +10,4 @@ openpyxl
 gspread
 google-auth
 imageio-ffmpeg
+yt-dlp

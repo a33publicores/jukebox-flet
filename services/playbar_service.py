@@ -211,6 +211,35 @@ def buscar_youtube(query, page_token=None):
     return {"items": [], "nextPageToken": None}
 
 
+def buscar_sin_llaves(query, cuantos=30):
+    """Respaldo cuando ninguna llave de YouTube responde (inválidas o sin cupo del día): la
+    misma búsqueda con yt-dlp, sin llave (como buscan los reproductores). Mismo formato."""
+    try:
+        import yt_dlp
+        opts = {"quiet": True, "extract_flat": True, "skip_download": True, "no_warnings": True,
+                "socket_timeout": 15}
+        with yt_dlp.YoutubeDL(opts) as y:
+            info = y.extract_info(f"ytsearch{cuantos}:{query}", download=False)
+    except Exception as ex:
+        print("❌ Búsqueda sin llave:", str(ex)[:120])
+        return {"items": [], "nextPageToken": None}
+    items = []
+    for e in info.get("entries") or []:
+        vid = e.get("id") or ""
+        if len(vid) != 11 or e.get("live_status") in ("is_live", "is_upcoming"):
+            continue
+        miniatura = f"https://i.ytimg.com/vi/{vid}"
+        items.append({"id": {"videoId": vid}, "snippet": {
+            "title": e.get("title") or "",
+            "channelTitle": e.get("channel") or e.get("uploader") or "",
+            "thumbnails": {"default": {"url": f"{miniatura}/default.jpg"},
+                           "medium": {"url": f"{miniatura}/mqdefault.jpg"},
+                           "high": {"url": f"{miniatura}/hqdefault.jpg"}},
+        }})
+    print(f"✅ YouTube búsqueda sin llave: {len(items)} resultados")
+    return {"items": items, "nextPageToken": None}
+
+
 def buscar(query, page_token=None):
     from services import db
     query = _normalizar_query(query)
@@ -233,6 +262,8 @@ def buscar(query, page_token=None):
         print("⚠️ Error leyendo caché de búsquedas:", ex)
 
     data = buscar_youtube(query, page_token)
+    if not data.get("items") and not page_token:
+        data = buscar_sin_llaves(query)  # ninguna llave respondió: igual hay resultados
     if data.get("items"):
         with _lock:
             _ram_cache[query] = (data, time.time())
