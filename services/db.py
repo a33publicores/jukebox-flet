@@ -231,6 +231,13 @@ ESQUEMA = [
         cuando       DOUBLE PRECISION NOT NULL,
         borrada_nube BOOLEAN NOT NULL DEFAULT FALSE
     )""",
+    # Canciones repetidas en la nube (otro video de la misma canción): ver services/duplicados.py
+    """CREATE TABLE IF NOT EXISTS duplicadas (
+        video_id  TEXT PRIMARY KEY,
+        principal TEXT NOT NULL,
+        titulo    TEXT NOT NULL DEFAULT '',
+        cuando    DOUBLE PRECISION NOT NULL
+    )""",
     # Lo que de verdad hay en la nube (Cloudflare R2): la API lo copia cada rato.
     """CREATE TABLE IF NOT EXISTS nube_archivos (
         archivo  TEXT PRIMARY KEY,
@@ -1156,6 +1163,32 @@ def terminar_encargo(video_id, ok, error=""):
     ejecutar("""UPDATE encargos SET error = %s,
                     estado = CASE WHEN intentos >= %s THEN 'fallo' ELSE 'pendiente' END
                 WHERE video_id = %s""", (str(error)[:300], ENCARGO_INTENTOS, video_id))
+
+
+def sembrar_biblioteca(canciones, lote=20):
+    """Sube a la nube, de a poco, la biblioteca de canciones (services/biblioteca_nube.json):
+    deja `lote` encargos pendientes a la vez, detrás de los que piden los clientes. Devuelve
+    cuántos agregó."""
+    # (las que nadie tomó en ENCARGO_VIGENCIA_SEG ya no se reparten: no cuentan)
+    f = uno("""SELECT COUNT(*) AS n FROM encargos
+               WHERE codigo = 'biblioteca' AND estado IN ('pendiente', 'tomado') AND creado > %s""",
+            (time.time() - ENCARGO_VIGENCIA_SEG,))
+    faltan = lote - int(f["n"] if f else 0)
+    if faltan <= 0:
+        return 0
+    ya = {r["video_id"] for r in consultar(
+        """SELECT video_id FROM nube_archivos UNION SELECT video_id FROM encargos
+           UNION SELECT video_id FROM eliminadas UNION SELECT video_id FROM duplicadas""")}
+    agregadas = 0
+    for c in canciones:
+        vid = str(c.get("video_id") or "")
+        if not vid or vid in ya:
+            continue
+        encargar(vid, c.get("titulo") or "", c.get("canal") or "", "biblioteca", pedido=False)
+        agregadas += 1
+        if agregadas >= faltan:
+            break
+    return agregadas
 
 
 def borrar_encargos_viejos():

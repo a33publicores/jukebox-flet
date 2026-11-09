@@ -18,7 +18,7 @@ import tempfile
 import threading
 import time
 
-from services import db
+from services import db, duplicados
 
 OBJETIVO_LUFS = -14.0  # nivel al que se llevan las canciones duras (el de YouTube)
 MINIMO = 0.35          # nunca se baja más de esto (por si una medición sale rara)
@@ -28,6 +28,27 @@ LISTA_CADA_SEG = 20 * 60  # cada cuánto se copia la lista de lo que hay en la n
 REINTENTAR_CATALOGO_SEG = 6 * 3600  # las del catálogo que nadie ha bajado: sin afán
 _iniciado = {"v": False}
 _lista = {"proxima": 0.0}
+_biblioteca = {"proxima": 0.0, "canciones": None}
+_repetidas = {"proxima": time.time() + 30 * 60}  # la primera, media hora después de arrancar
+BIBLIOTECA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "biblioteca_nube.json")
+
+
+def _sembrar_biblioteca():
+    """Cada 10 min: la biblioteca de canciones va subiendo a la nube de a poco (ver
+    db.sembrar_biblioteca), para que suenen al instante en todos los bares."""
+    if time.time() < _biblioteca["proxima"]:
+        return
+    _biblioteca["proxima"] = time.time() + 600
+    if _biblioteca["canciones"] is None:
+        import json
+        try:
+            with open(BIBLIOTECA, encoding="utf-8") as f:
+                _biblioteca["canciones"] = json.load(f)
+        except Exception:
+            _biblioteca["canciones"] = []
+    n = db.sembrar_biblioteca(_biblioteca["canciones"])
+    if n:
+        print(f"📚 Biblioteca: {n} canciones más encargadas para subir a la nube")
 
 
 def factor(lufs):
@@ -117,11 +138,19 @@ def _bucle():
                         db.ejecutar("UPDATE eliminadas SET borrada_nube = TRUE WHERE video_id = %s",
                                     (f["video_id"],))
                         print(f"🗑️ Nube: {f['video_id']} borrada (la eliminó el super)")
+                try:
+                    _sembrar_biblioteca()
+                except Exception as ex:
+                    print(f"⚠️ Biblioteca: {ex}")
                 if time.time() >= _lista["proxima"]:
                     _lista["proxima"] = time.time() + LISTA_CADA_SEG
                     archivos = nube.lista()
                     if archivos is not None:
                         db.guardar_lista_nube(archivos)
+                        if time.time() >= _repetidas["proxima"]:
+                            _repetidas["proxima"] = time.time() + duplicados.REVISAR_CADA_SEG
+                            n = duplicados.revisar(nube.borrar)
+                            print(f"♻️ Repetidas en la nube: {n} borradas (queda una de cada canción)")
                 vid = _pendiente()
                 if vid:
                     try:

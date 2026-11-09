@@ -162,7 +162,12 @@ def nube(request, cli, cuerpo):
     """Direcciones firmadas para bajar/subir una canción de la nube (R2).
     {"archivo": "<video_id>_<altura>.mp4"} -> {"activo", "get", "put"}."""
     from services import nube as N
-    return JSONResponse({"ok": True, **N.direcciones(str((cuerpo or {}).get("archivo") or ""))})
+    from services import duplicados
+    archivo = str((cuerpo or {}).get("archivo") or "")
+    vid, _, resto = archivo.partition("_")
+    if resto and duplicados.principal(vid) != vid:  # repetida: se entrega la que quedó
+        archivo = f"{duplicados.principal(vid)}_{resto}"
+    return JSONResponse({"ok": True, **N.direcciones(archivo)})
 
 
 @_protegido
@@ -172,7 +177,8 @@ def preparar(request, cli, cuerpo):
     {"video_id", "titulo", "canal"} -> {"activo", "listo", "get"} o {"activo", "listo": False, "estado"}"""
     from services import nube as N
     d = cuerpo or {}
-    vid = str(d.get("video_id") or "")
+    from services import duplicados
+    vid = duplicados.principal(str(d.get("video_id") or ""))  # repetida: la que quedó en la nube
     if not N.activa():
         return JSONResponse({"ok": True, "activo": False})
     if not N.archivo_valido(f"{vid}.mp4"):
@@ -213,7 +219,10 @@ def encargo(request, cli, cuerpo):
         e = db.tomar_encargo(f"{cli['codigo']}:{request.query_params.get('equipo', '')}")
         if not e:
             break
-        if N.buscar(e["video_id"]):  # otro ya la subió mientras tanto
+        from services import duplicados
+        if N.buscar(e["video_id"]) or (duplicados.principal(e["video_id"]) != e["video_id"]
+                                       and N.buscar(duplicados.principal(e["video_id"]))):
+            # otro ya la subió mientras tanto (o es otro video de una que ya está)
             db.terminar_encargo(e["video_id"], True)
             continue
         print(f"📦 Encargo {e['video_id']} («{e['titulo'][:50]}») para el bar {cli['codigo']}")
@@ -233,8 +242,11 @@ def tema(request, cli, cuerpo):
 def volumen_(request, cli, cuerpo):
     """Volumen parejo: {video_id: factor} de las canciones ya medidas (?ids=a,b,c)."""
     from services import volumen
+    from services import duplicados
     ids = [i for i in (request.query_params.get("ids") or "").split(",") if i]
-    return JSONResponse({"ok": True, "volumen": volumen.factores(ids)})
+    reales = {i: duplicados.principal(i) for i in ids}  # repetida: el volumen de la que quedó
+    f = volumen.factores(set(reales.values()))
+    return JSONResponse({"ok": True, "volumen": {i: f[p] for i, p in reales.items() if p in f}})
 
 
 @_protegido
