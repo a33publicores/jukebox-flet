@@ -173,6 +173,10 @@ def _compactar_busqueda(data):
     return {"items": items, "nextPageToken": data.get("nextPageToken")}
 
 
+_llaves_malas = {}  # índice -> hasta cuándo no se usa (llave inválida, suspendida o sin cupo)
+LLAVE_MALA_SEG = 6 * 3600
+
+
 def buscar_youtube(query, page_token=None):
     global _api_index
     keys = _get_api_keys()
@@ -180,6 +184,9 @@ def buscar_youtube(query, page_token=None):
         return {"items": [], "nextPageToken": None}
 
     for _ in range(len(keys)):
+        if _llaves_malas.get(_api_index, 0) > time.time() and                 len(_llaves_malas) < len(keys):  # (si todas están malas, se intenta igual)
+            _api_index = (_api_index + 1) % len(keys)
+            continue
         key = keys[_api_index]
         params = {"part": "snippet", "q": query, "type": "video", "maxResults": 50, "key": key}
         if page_token:
@@ -192,7 +199,11 @@ def buscar_youtube(query, page_token=None):
                 print(f"✅ YouTube búsqueda OK (API #{_api_index + 1}): "
                       f"{len(data.get('items', []))} resultados")
                 return _compactar_busqueda(data)
-            print("❌ YouTube API:", data["error"].get("message", "error"))
+            print(f"❌ YouTube API #{_api_index + 1}:", data["error"].get("message", "error"))
+            if response.status_code in (400, 403):
+                # inválida, proyecto suspendido o cupo del día agotado: no se vuelve a probar en
+                # un rato (cada intento fallido hacía más lenta la búsqueda del cliente)
+                _llaves_malas[_api_index] = time.time() + LLAVE_MALA_SEG
         except Exception as ex:
             print("❌ Error buscando YouTube:", ex)
         _api_index = (_api_index + 1) % len(keys)
