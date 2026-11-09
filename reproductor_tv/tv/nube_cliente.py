@@ -44,6 +44,19 @@ class Nube:
             return None
         return d
 
+    def enlace(self, archivo):
+        """Dirección firmada para que el TV toque la canción DIRECTO de la nube (sin bajarla a
+        la memoria), o None si todavía no está en la nube."""
+        d = self._direcciones(archivo)
+        if not d:
+            return None
+        try:
+            r = requests.head(d["get"], timeout=8)
+            return d["get"] if r.status_code == 200 else None
+        except Exception as ex:
+            print(f"ℹ️ Nube: no se pudo revisar {archivo} ({type(ex).__name__})")
+            return None
+
     def bajar(self, archivo, destino):
         """Baja `archivo` de la nube a `destino`. True si quedó completa."""
         d = self._direcciones(archivo)

@@ -58,6 +58,18 @@ T_MENU = {"arrow up", "arrow down", "context menu", "info", "guide", "settings",
           "escape", "go back", "browser back", "game button y"}
 
 
+def _es_enlace(ruta):
+    return str(ruta or "").startswith(("http://", "https://"))
+
+
+def _id_de(ruta):
+    """video_id de un archivo (ID.mp4) o de una dirección de la nube (.../v/ID_720.mp4?...)."""
+    import re
+    from urllib.parse import urlparse
+    nombre = os.path.basename(urlparse(str(ruta)).path if _es_enlace(ruta) else str(ruta))
+    return re.sub(r"_\d{3,4}$", "", os.path.splitext(nombre)[0])
+
+
 def _misma(a, b):
     if not a or not b:
         return False
@@ -116,7 +128,10 @@ class Pantalla:
             resume_upon_entering_foreground_mode=False,
             # saltos exactos (no al cuadro clave más cercano): la mezcla los usa para que
             # las dos canciones queden en el mismo punto (ver fundido.py)
-            configuration=ftv.VideoConfiguration(mpv_properties={"hr-seek": "yes"}),
+            # demuxer-*: lo que se guarda en memoria al sonar directo de la nube (poquito: el
+            # TV no se llena; alcanza para seguir sonando si el internet se corta un momento)
+            configuration=ftv.VideoConfiguration(mpv_properties={
+                "hr-seek": "yes", "demuxer-max-bytes": "48MiB", "demuxer-max-back-bytes": "8MiB"}),
             on_complete=self._on_complete,
             on_track_change=self._on_pista,
             on_error=self._on_error,
@@ -130,6 +145,7 @@ class Pantalla:
         self.anticipada = [False] * PUESTOS
         self.cur = 0
         self._lista_armada = False
+        self._modo_nube = False  # suena una canción directo de la nube (sin puestos)
         self._salto = None
         self._entro_sola = None
         self._lock_puestos = asyncio.Lock()
@@ -223,8 +239,10 @@ class Pantalla:
 
     # ------------------------------------------------------------ eventos
     async def _on_complete(self, e):
-        # Igual que en el PC: el fin llega como cambio de puesto (_on_pista).
-        pass
+        # Con puestos el fin llega como cambio de puesto (_on_pista); sonando directo de la
+        # nube hay un solo video y el fin llega aquí.
+        if self._modo_nube:
+            await self._terminar_una_vez()
 
     async def _on_pista(self, e):
         try:
@@ -356,7 +374,7 @@ class Pantalla:
     async def _volumen_luego(self, ruta):
         """Pregunta de antemano el volumen parejo de la siguiente (así ya viene ajustada)."""
         try:
-            await self._volumen_de(os.path.splitext(os.path.basename(str(ruta)))[0])
+            await self._volumen_de(_id_de(ruta))
         except Exception:
             pass
 
@@ -465,6 +483,17 @@ class Pantalla:
         self._entro_sola = None
         if entro and entro[0] == self.cur and _misma(entro[1], ruta):
             pass
+        elif _es_enlace(ruta):
+            # Directo de la nube: un solo video que se reemplaza en cada canción (no se usan los
+            # puestos, que son archivos del TV).
+            self._lista_armada = False
+            self._modo_nube = True
+            self.anticipada = [False] * PUESTOS
+            self.fuente = [None] * PUESTOS
+            self._reiniciar_tiempo(ruta)
+            self.video.playlist_mode = ftv.PlaylistMode.NONE
+            self.video.playlist = [ftv.VideoMedia(resource=ruta)]
+            self.video.update()
         elif not self._lista_armada:
             await self._armar_lista(ruta)
         else:
@@ -496,7 +525,7 @@ class Pantalla:
 
     async def preparar_siguiente(self, ruta):
         self.page.run_task(self._volumen_luego, ruta)
-        if not self._lista_armada:
+        if not self._lista_armada or _es_enlace(ruta):
             return
         async with self._lock_puestos:
             sig = (self.cur + 1) % PUESTOS
@@ -518,6 +547,8 @@ class Pantalla:
         self.anticipada = [False] * PUESTOS
         self.cur = 0
         self._reiniciar_tiempo(ruta)
+        self._modo_nube = False
+        self.video.playlist_mode = ftv.PlaylistMode.LOOP
         self.video.playlist = [ftv.VideoMedia(resource=str(p)) for p in self.puestos]
         self.video.update()
         self._lista_armada = True

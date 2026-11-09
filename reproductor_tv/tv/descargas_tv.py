@@ -99,6 +99,13 @@ def _bono_duracion(dur, ref):
     return 0.0
 
 
+# Las canciones que ya están en la nube suenan directo desde allá (como un video de YouTube):
+# empiezan en un par de segundos y no ocupan la memoria del TV. Solo las que todavía no están
+# en la nube se bajan (y se suben para todos).
+SONAR_DESDE_NUBE = True
+ENLACE_VALE_SEG = 4 * 3600  # la API firma las direcciones por 6 h
+
+
 class Descargador:
     def __init__(self, carpeta, cookies=None, altura_max=720):
         self.carpeta = Path(carpeta)
@@ -108,6 +115,7 @@ class Descargador:
         self.livianos = set()  # videos que el TV no pudo reproducir: se vuelven a bajar en 480p
         self.nube = None       # nube_cliente.Nube (la pone la app si hay llave); None = sin nube
         self.max_nube_bytes = 3 * 1024 ** 3  # con nube: el TV guarda solo ~3 GB de canciones
+        self._enlaces = {}  # video_id -> (dirección de la nube, hasta cuándo sirve)
         self._archivo_alt = self.carpeta / "alternativas.json"
         try:
             self._alt = json.loads(self._archivo_alt.read_text("utf-8"))
@@ -130,6 +138,7 @@ class Descargador:
             return False
         self.livianos.add(video_id)
         for vid in {video_id, self._alt.get(video_id, video_id)}:
+            self._enlaces.pop(vid, None)  # si sonaba directo de la nube, ahora se baja liviana
             for p in list(self.carpeta.glob(f"{vid}.*")) + list(self.carpeta.glob(f"{vid}_*")):
                 try:
                     p.unlink()
@@ -140,10 +149,27 @@ class Descargador:
 
     # -- caché ---------------------------------------------------------
     def ruta(self, video_id):
-        directa = self._ruta_directa(video_id)
+        """Archivo guardado en el TV o, si ya se sabe que está en la nube, su dirección."""
+        directa = self._ruta_directa(video_id) or self._enlace_guardado(video_id)
         if directa is None and video_id in self._alt and self._alias_vigente(video_id):
-            return self._ruta_directa(self._alt[video_id])
+            alt = self._alt[video_id]
+            return self._ruta_directa(alt) or self._enlace_guardado(alt)
         return directa
+
+    # -- sonar directo de la nube (sin bajar la canción a la memoria del TV) ----------
+    def _enlace_guardado(self, video_id):
+        e = self._enlaces.get(video_id)
+        return e[0] if e and e[1] > time.time() else None
+
+    def enlace_nube(self, video_id):
+        if not SONAR_DESDE_NUBE or self.nube is None or video_id in self.livianos:
+            return None
+        url = self._enlace_guardado(video_id) or self.nube.enlace(self._archivo_nube(video_id))
+        if url:
+            if len(self._enlaces) > 2000:
+                self._enlaces.clear()
+            self._enlaces[video_id] = (url, time.time() + ENLACE_VALE_SEG)
+        return url
 
     def _alias_vigente(self, video_id):
         return time.time() - float(self._alt_fecha.get(video_id) or 0) < ALT_VENCE_SEG
@@ -291,6 +317,9 @@ class Descargador:
             except OSError:
                 pass
             return ya
+        en_nube = self.enlace_nube(video_id)
+        if en_nube:  # suena directo de la nube: al instante y sin ocupar memoria
+            return en_nube
         self.asegurar_espacio()
         de_nube = self._de_nube(video_id)
         if de_nube:
@@ -312,7 +341,8 @@ class Descargador:
             candidatos.append(previo)  # el de antes, solo si no hay uno mejor
         for alt in candidatos[:4]:
             try:
-                ruta = self._ruta_directa(alt) or self._de_nube(alt) or self._a_nube(alt, self._bajar(alt))
+                ruta = (self._ruta_directa(alt) or self.enlace_nube(alt) or self._de_nube(alt)
+                        or self._a_nube(alt, self._bajar(alt)))
             except Exception as ex:
                 if es_disco_lleno(ex):
                     raise DiscoLleno(str(ex)) from ex
