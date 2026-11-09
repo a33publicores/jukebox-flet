@@ -80,6 +80,19 @@ def aplicar():
         envio_seguro._playbar_seguro = True
         setattr(_app.FletApp, nombre_envio, envio_seguro)
 
+    # Si la persona cierra la página mientras la app todavía está arrancando, Flet ya soltó la
+    # sesión y anota "'NoneType' object has no attribute 'after_event'" con todo el detalle del
+    # error. No es una falla (la persona ya se fue): ese aviso no se anota.
+    import logging
+
+    class _SinSesionCerrada(logging.Filter):
+        def filter(self, registro):
+            ex = registro.exc_info[1] if registro.exc_info else None
+            return not (isinstance(ex, AttributeError) and "after_event" in str(ex)
+                        and "Unhandled error processing page session" in registro.getMessage())
+
+    logging.getLogger("flet_web.fastapi").addFilter(_SinSesionCerrada())
+
     # Entre el corte y el aviso de "desconectada", un page.update() no debe fallar.
     original_enviar = _app.FletApp.send_message
     if not getattr(original_enviar, "_playbar_seguro", False):

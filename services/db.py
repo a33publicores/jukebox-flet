@@ -275,7 +275,17 @@ def _pool_obj():
                 timeout=15,
                 open=True,
             )
+            import atexit  # al apagarse se cierra ordenado (si no: "couldn't stop thread")
+            atexit.register(_cerrar_pool)
         return _pool
+
+
+def _cerrar_pool():
+    try:
+        if _pool is not None:
+            _pool.close(timeout=3)
+    except Exception:
+        pass
 
 
 def diagnostico():
