@@ -1,0 +1,28 @@
+# Lo que NO se manda al construir los respaldos de Fly.io (Dockerfile.respaldo):
+# secretos locales y compilados pesados, igual que en .gitignore.
+.git
+**/__pycache__
+**/*.pyc
+.venv/
+venv/
+.venv_player/
+.venv_build/
+build/
+dist/
+instalador/Output/
+**/build/
+**/dist/
+**/.venv*/
+backend.zip
+.env
+**/.env
+credenciales.json
+**/credenciales.json
+backend/client_secrets.json
+backend/token*.json
+cookies.txt
+llaves_bares.txt
+data/session.json
+nube_cloudflare/.dev.vars
+nube_cloudflare/.wrangler/
+nube_cloudflare/node_modules/

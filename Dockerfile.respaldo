@@ -4,7 +4,7 @@ FROM python:3.13-slim
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY requirements.txt ./
-# flet-web 1.0.x usa un parámetro que FastAPI quitó en versiones nuevas.
-RUN pip install -r requirements.txt "fastapi<0.116" && python -c "import flet_web.fastapi as f; f.FastAPI()"
+# Mismas versiones que Railway (requirements.txt); se comprueba que flet-web arranque.
+RUN pip install -r requirements.txt && python -c "import flet_web.fastapi as f; f.FastAPI()"
 COPY . .
 EXPOSE 8080
