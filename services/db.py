@@ -338,6 +338,10 @@ def asegurar():
             motor["ejecutar"](sql, ())
         _listo = True
         print("✅ Base de datos lista")
+    if os.getenv("ROL_PLAYBAR", "").strip().lower() == "respaldo":
+        # El respaldo recibe todo copiado del principal: si sembrara algo aquí, lo tomaría
+        # como "cambios propios" y dejaría de copiar (ver services/respaldo.py).
+        return
     try:  # planes de suscripción y bar de ejemplo (solo si faltan)
         from services import suscripcion
         suscripcion.sembrar()
