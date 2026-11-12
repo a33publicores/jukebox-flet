@@ -38,6 +38,9 @@ RUTAS_PANTALLA = ("/pantalla", "/pantalla/")
 # la portada, así que la raíz va a /entrar, donde se pide el código del lugar como aquí.
 HOSTS_VIEJOS = ("jukebox-flet-production.up.railway.app",)
 URL_NUEVA = "https://play.alnovix.com"
+# El QR impreso en las mesas abre la raíz de la dirección vieja: lleva directo a este bar.
+# QR_VIEJO_CODIGO (variable de Railway, opcional) cambia el bar; vacío = "Ingresa el código".
+QR_VIEJO_CODIGO = os.getenv("QR_VIEJO_CODIGO", "8523").strip()
 PANTALLA = CARPETA_PORTADA / "pantalla.html"
 # Navegadores de TV que no instalan apps de Android (Samsung Tizen, LG webOS...).
 TV_SIN_ANDROID = ("tizen", "web0s", "webos", "smart-tv", "smarttv", "netcast", "hbbtv")
@@ -48,6 +51,11 @@ def _agente(scope):
         if nombre == b"user-agent":
             return valor.decode("latin-1").lower()
     return ""
+
+
+def _es_app_play(scope):
+    """La app de Play Store abre la dirección vieja dentro de un WebView ("; wv)")."""
+    return "; wv)" in _agente(scope)
 
 
 def _es_tv_sin_android(scope):
@@ -212,8 +220,11 @@ def crear_app(flet_app):
             ruta = scope.get("path") or "/"
             if _host(scope) in HOSTS_VIEJOS:
                 consulta = (scope.get("query_string") or b"").decode("latin-1")
-                await _redirigir(send, URL_NUEVA + ("/entrar" if ruta == "/" else ruta)
-                                 + (f"?{consulta}" if consulta else ""))
+                if ruta == "/" and QR_VIEJO_CODIGO and not _es_app_play(scope):
+                    destino = f"/bar/{QR_VIEJO_CODIGO}"  # el QR de las mesas: directo al bar
+                else:
+                    destino = "/entrar" if ruta == "/" else ruta
+                await _redirigir(send, URL_NUEVA + destino + (f"?{consulta}" if consulta else ""))
                 return
             if ruta.startswith("/portada/"):
                 await estaticos(scope, receive, send)
