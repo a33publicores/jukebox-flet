@@ -1241,7 +1241,9 @@ def _reiniciar(page):
 
 
 _aviso = {"abierta": None, "pospuesta": {}}  # versión en pantalla / versión -> hora de "Más tarde"
-VOLVER_A_AVISAR_SEG = 6 * 3600
+VOLVER_A_AVISAR_SEG = 2 * 3600   # tocaron "Más tarde"
+SIN_RESPUESTA_SEG = 120          # nadie tocó el aviso: se esconde solo (la música sigue)...
+REAVISAR_SIN_RESPUESTA_SEG = 30 * 60  # ...y vuelve a salir a la media hora
 ESPERA_OBLIGATORIA_SEG = 60
 
 
@@ -1407,7 +1409,7 @@ def _ventana_actualizacion(page, info):
     notas = str(info.get("notas", "") or "").strip()
     dlg = ft.AlertDialog(
         modal=True, bgcolor="#111827",
-        title=ft.Text("🔄 Hay una actualización", color="#22d3ee"),
+        title=ft.Text("Hay una nueva actualización", color="#22d3ee", weight=ft.FontWeight.BOLD),
         content=ft.Column([
             ft.Text(f"Versión nueva {version} (esta es la {VERSION}).", color="white"),
             ft.Text(notas, color="#cbd5e1", size=13, visible=bool(notas)),
@@ -1415,11 +1417,22 @@ def _ventana_actualizacion(page, info):
         ], tight=True, width=420, spacing=10),
         actions=acciones,
     )
+    async def esconder_si_nadie_toca():
+        await asyncio.sleep(SIN_RESPUESTA_SEG)
+        if dlg.open and not estado_ui["trabajando"]:
+            # vuelve a salir en REAVISAR_SIN_RESPUESTA_SEG (la revisión es cada 15 min)
+            _aviso["pospuesta"][version] = time.time() - VOLVER_A_AVISAR_SEG + REAVISAR_SIN_RESPUESTA_SEG
+            _aviso["abierta"] = None
+            dlg.open = False
+            page.update()
+
     page.overlay.append(dlg)
     dlg.open = True
     page.update()
     if obligatoria:
         page.run_task(cuenta_regresiva)
+    else:
+        page.run_task(esconder_si_nadie_toca)
 
 
 def _cerrar_ventanas_viejas():

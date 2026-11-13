@@ -39,6 +39,14 @@
   .capa { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(2,6,23,.94); display: flex; flex-direction: column;
           align-items: center; justify-content: center; text-align: center; padding: 32px; gap: 14px; z-index: 5; }
   .capa h2 { margin: 0; font-size: 30px; }
+  /* aviso de actualización: tarjeta abajo a la derecha (no tapa el video ni para la música) */
+  #capa-act { position: fixed; right: 24px; bottom: 24px; z-index: 30; width: 440px; max-width: calc(100vw - 48px);
+              background: #111827; border: 2px solid var(--cian); border-radius: 18px; padding: 20px 22px;
+              box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+  #capa-act h3 { margin: 0 0 6px; font-size: 22px; color: var(--cian); }
+  #capa-act p { margin: 0 0 14px; font-size: 15px; color: #cbd5e1; line-height: 1.4; }
+  #capa-act .botones { display: flex; gap: 10px; justify-content: flex-end; }
+  #capa-act button:focus { outline: 3px solid #facc15; outline-offset: 2px; }
   .capa p { margin: 0; font-size: 18px; color: #cbd5e1; max-width: 720px; line-height: 1.45; }
   #lado { flex: 3; display: flex; flex-direction: column; gap: 8px; background: var(--fondo);
           border-left: 1px solid var(--borde); min-width: 0; }
@@ -137,6 +145,15 @@
     <div style="margin-top:18px"><button id="btn-cambiar" class="secundario">Cambiar código o llave</button></div>
   </div>
   <div id="msg"></div>
+</div>
+
+<div id="capa-act" class="oculto" role="dialog" aria-live="polite">
+  <h3>Hay una nueva actualización</h3>
+  <p id="t-act">Al tocar Actualizar la pantalla se recarga en unos segundos. La música sigue mientras tanto.</p>
+  <div class="botones">
+    <button id="btn-act-luego" class="secundario">Más tarde</button>
+    <button id="btn-act">Actualizar</button>
+  </div>
 </div>
 
 <div id="app">
@@ -1280,6 +1297,10 @@
   document.addEventListener("keydown", function (e) {
     if (!$("inicio").classList.contains("oculto")) return;  // en la configuración escribe normal
     var k = e.keyCode;
+    if (!$("capa-act").classList.contains("oculto")) {  // aviso de actualización: ◀ ▶ entre botones
+      if (k === 37 || k === 39) { ($(document.activeElement && document.activeElement.id === "btn-act" ? "btn-act-luego" : "btn-act")).focus(); e.preventDefault(); }
+      return;  // OK toca el botón que tiene el foco
+    }
     var enCapa = !$("capa-otro").classList.contains("oculto") || !$("capa-sonido").classList.contains("oculto");
     if (enCapa) return;  // OK toca el botón de la capa
     if (e.target && e.target.tagName === "BUTTON" && (k === 13 || k === 32)) return;  // lo hace el botón
@@ -1321,6 +1342,41 @@
     medios.reanudar();
     M.pausado = false; ver("pausa", false);
   });
+
+  // ------------------------------------------------------------------ actualizaciones
+  // Cada 15 min se pregunta si hay una versión nueva de esta pantalla. Si la hay, sale el aviso
+  // "Hay una nueva actualización": solo se recarga si alguien toca "Actualizar" (nunca sola
+  // mientras suena una canción). Si nadie lo toca se esconde a los 2 min y vuelve a la media hora.
+  var VERSION_PANTALLA = "__PBGO_VERSION_PANTALLA__";
+  var act = { pospuesta: 0, tm: null };
+  function revisarVersion() {
+    if (VERSION_PANTALLA.indexOf("__") === 0) return;  // sin versión (p. ej. archivo abierto local)
+    if (ahora() < act.pospuesta || !$("capa-act").classList.contains("oculto")) return;
+    if (!$("inicio").classList.contains("oculto")) return;  // en la configuración no se molesta
+    conTiempo(fetch("/pantalla/version", { cache: "no-store" }), 15000).then(function (r) {
+      return r.ok ? r.json() : null;
+    }).then(function (d) {
+      if (d && d.v && d.v !== VERSION_PANTALLA) mostrarActualizacion();
+    }).catch(function () {});
+  }
+  function cerrarActualizacion(espera) {
+    ver("capa-act", false);
+    act.pospuesta = ahora() + espera;
+    clearTimeout(act.tm);
+  }
+  function mostrarActualizacion() {
+    ver("capa-act", true);
+    try { $("btn-act").focus(); } catch (e) {}
+    clearTimeout(act.tm);
+    act.tm = setTimeout(function () { cerrarActualizacion(30 * 60000); }, 120000);
+  }
+  $("btn-act").addEventListener("click", function () {
+    $("t-act").textContent = "Actualizando…";
+    location.reload();
+  });
+  $("btn-act-luego").addEventListener("click", function () { cerrarActualizacion(2 * 3600000); });
+  setTimeout(revisarVersion, 60000);
+  setInterval(revisarVersion, 15 * 60000);
 
   // ------------------------------------------------------------------ arranque
   function pedirConfig(mensaje) {

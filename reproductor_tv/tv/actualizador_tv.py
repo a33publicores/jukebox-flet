@@ -128,8 +128,16 @@ def confirmar_que_funciona():
         arr.registrar_ok(VERSION)
 
 
-async def vigilar(motor, avisar, aplicar):
-    """Tarea de fondo. avisar(texto) muestra un aviso en pantalla; aplicar() recarga la app."""
+REAVISAR_SIN_RESPUESTA_SEG = 30 * 60  # nadie tocó el aviso: vuelve a salir a la media hora
+REAVISAR_MAS_TARDE_SEG = 2 * 3600     # tocaron "Más tarde"
+
+
+async def vigilar(motor, avisar, aplicar, preguntar=None):
+    """Tarea de fondo. avisar(texto) muestra un aviso en pantalla; aplicar() recarga la app.
+    preguntar(version, notas) muestra "Hay una nueva actualización" con el botón "Actualizar"
+    y devuelve "actualizar", "luego" o None (nadie lo tocó). El TV no se reinicia solo: solo
+    cuando alguien toca "Actualizar" (o si la versión viene marcada [ahora], al terminar la
+    canción)."""
     await asyncio.sleep(60)  # primero que arranque la música
     while True:
         try:
@@ -138,6 +146,16 @@ async def vigilar(motor, avisar, aplicar):
                 print(f"🔄 Hay código nuevo para el TV: {info['version']} (tengo {VERSION})")
                 await asyncio.to_thread(descargar, info)
                 print(f"⬇️ Código {info['version']} descargado y revisado")
+                if preguntar is not None and not info["ahora"]:
+                    while True:
+                        respuesta = await preguntar(info["version"], info.get("notas", ""))
+                        if respuesta == "actualizar":
+                            avisar(f"⬆️ Instalando la actualización {info['version']}…")
+                            await asyncio.sleep(1)
+                            aplicar()
+                            return
+                        await asyncio.sleep(REAVISAR_MAS_TARDE_SEG if respuesta == "luego"
+                                            else REAVISAR_SIN_RESPUESTA_SEG)
                 if not info["ahora"]:
                     avisar(f"⬆️ Actualización {info['version']} lista: se instala al "
                            "terminar esta canción.")

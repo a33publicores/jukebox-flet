@@ -202,6 +202,25 @@ async def _enviar_html(send, cuerpo, estado=200):
     await send({"type": "http.response.body", "body": datos})
 
 
+def _version_pantalla():
+    """Huella del archivo de la pantalla: cambia cuando se publica una versión nueva."""
+    import hashlib
+    return hashlib.sha1(PANTALLA.read_bytes()).hexdigest()[:12]
+
+
+def _pantalla_html():
+    return PANTALLA.read_text("utf-8").replace("__PBGO_VERSION_PANTALLA__", _version_pantalla())
+
+
+async def _enviar_json(send, datos):
+    import json
+    cuerpo = json.dumps(datos).encode("utf-8")
+    await send({"type": "http.response.start", "status": 200, "headers": [
+        (b"content-type", b"application/json"), (b"cache-control", b"no-store"),
+        (b"content-length", str(len(cuerpo)).encode())]})
+    await send({"type": "http.response.body", "body": cuerpo})
+
+
 def crear_app(flet_app):
     """Envuelve la app ASGI de Flet: la portada y sus archivos van aparte, todo lo demás
     (la app, sus rutas /admin, /comprar, /bar/..., /super y el websocket) sigue en Flet."""
@@ -237,7 +256,10 @@ def crear_app(flet_app):
                 await _logo_tema(send, ruta[len("/tema-logo/"):])
                 return
             if ruta in RUTAS_PANTALLA:
-                await _enviar_html(send, await run_in_threadpool(PANTALLA.read_text, "utf-8"))
+                await _enviar_html(send, await run_in_threadpool(_pantalla_html))
+                return
+            if ruta == "/pantalla/version":  # la pantalla pregunta si hay versión nueva
+                await _enviar_json(send, {"v": await run_in_threadpool(_version_pantalla)})
                 return
             if ruta == "/inicio" or (ruta == "/" and _es_dominio_portada(scope)):
                 await _enviar_html(send, await run_in_threadpool(html_portada))

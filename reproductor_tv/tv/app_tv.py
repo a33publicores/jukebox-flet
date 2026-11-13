@@ -420,6 +420,51 @@ class Pantalla:
         if self.motor:
             await self.motor.al_error(token, str(e.data))
 
+    async def preguntar_actualizacion(self, version, notas="", esperar_seg=120):
+        """Aviso "Hay una nueva actualización" con "Actualizar" / "Más tarde". Si nadie lo
+        toca en esperar_seg se esconde solo (la música nunca se detiene)."""
+        elegido = {"valor": None}
+        listo = asyncio.Event()
+
+        def elegir(valor):
+            def _h(e=None):
+                elegido["valor"] = valor
+                listo.set()
+            return _h
+
+        dlg = ft.AlertDialog(
+            modal=True, bgcolor="#111827",
+            title=ft.Text("Hay una nueva actualización", color=CYAN, size=26,
+                          weight=ft.FontWeight.BOLD),
+            content=ft.Column([
+                ft.Text(f"Versión {version} (esta es la {VERSION}).", color="white", size=18),
+                ft.Text(str(notas or "").strip()[:200], color="#cbd5e1", size=15,
+                        visible=bool(str(notas or "").strip())),
+                ft.Text("Al tocar Actualizar el reproductor se reinicia en unos segundos.",
+                        color="#94A3B8", size=15),
+            ], tight=True, width=560, spacing=10),
+            actions=[ft.TextButton("Más tarde", on_click=elegir("luego")),
+                     ft.FilledButton("Actualizar", icon=ft.Icons.SYSTEM_UPDATE_ALT,
+                                     autofocus=True, on_click=elegir("actualizar"))],
+        )
+        try:
+            self.page.overlay.append(dlg)
+            dlg.open = True
+            self.page.update()
+            try:
+                await asyncio.wait_for(listo.wait(), esperar_seg)
+            except asyncio.TimeoutError:
+                pass
+        finally:
+            dlg.open = False
+            try:
+                self.page.update()
+                self.page.overlay.remove(dlg)
+                self.page.update()
+            except Exception:
+                pass
+        return elegido["valor"]
+
     def aviso_actualizacion(self, texto):
         self.t_aviso_act.value = texto
         self.aviso_act.visible = bool(texto)
@@ -1204,7 +1249,8 @@ async def _una_sesion(page: ft.Page):
               asyncio.ensure_future(confirmar()),
               asyncio.ensure_future(pantalla.tema.vigilar(api, page)),
               asyncio.ensure_future(actualizador_tv.vigilar(
-                  motor, pantalla.aviso_actualizacion, aplicar_actualizacion))]
+                  motor, pantalla.aviso_actualizacion, aplicar_actualizacion,
+                  pantalla.preguntar_actualizacion))]
     try:
         await reiniciar.wait()
         return resultado["valor"]
