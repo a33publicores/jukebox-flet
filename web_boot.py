@@ -66,6 +66,21 @@ _HEAD_EXTRA = f"""
     }}
   </style>
   <script>
+    // Recarga automática por reconexión: se hace en silencio (sin el logo grande ni la rueda),
+    // para que no parezca que la página "se refresca sola". Solo vale si la marca es reciente.
+    (function () {{
+      try {{
+        var t = parseInt(sessionStorage.getItem('pbgo-recarga') || '0', 10);
+        sessionStorage.removeItem('pbgo-recarga');
+        if (t && Date.now() - t < 30000) {{
+          var st = document.createElement('style');
+          st.textContent = '#pbgo-splash {{ display: none !important; }}';
+          document.head.appendChild(st);
+        }}
+      }} catch (e) {{}}
+    }})();
+  </script>
+  <script>
     (function () {{
       var done = false;
       function hide() {{
@@ -118,6 +133,8 @@ _HEAD_EXTRA = f"""
       function recargar(motivo) {{
         console.log('PBGO: se recarga: ' + motivo);
         avisar('recarga: ' + motivo);
+        // Si la pestaña está visible, se recarga en silencio; si está oculta nadie lo ve.
+        try {{ sessionStorage.setItem('pbgo-recarga', String(Date.now())); }} catch (e) {{}}
         location.reload();
       }}
       function esToque(d) {{
