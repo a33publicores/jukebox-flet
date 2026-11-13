@@ -635,11 +635,12 @@ def agregar_pedido(codigo, usuario, titulo, canal, video_id, estado2="Siguiente"
     if ya:
         if ya["estado2"] == "En reproduccion" and ya["suena"] != str(video_id):
             # Quedó marcada "sonando" pero el reproductor está con otra (se saltó o se cruzaron
-            # las marcas): no es repetida, vuelve a la cola.
-            ejecutar("UPDATE pedidos SET estado2 = 'Siguiente' WHERE id = %s", (ya["id"],))
-            print(f"♻️ Pedido {ya['id']} estaba atascado como sonando: vuelve a la cola")
-            return {"ok": True, "id": ya["id"]}
-        return {"ok": True, "duplicado": True}
+            # las marcas): no es repetida. La vieja se cierra y entra como pedido nuevo (el
+            # reproductor no repite un pedido que ya dio por sonado).
+            ejecutar("UPDATE pedidos SET estado2 = 'Reproducido' WHERE id = %s", (ya["id"],))
+            print(f"♻️ Pedido {ya['id']} estaba atascado como sonando: entra de nuevo a la cola")
+        else:
+            return {"ok": True, "duplicado": True}
     fila = uno(
         """INSERT INTO pedidos (codigo, ts, usuario, titulo, canal, video_id, estado, estado2)
            VALUES (%s, %s, %s, %s, %s, %s, 'Agregado', %s) RETURNING id""",
