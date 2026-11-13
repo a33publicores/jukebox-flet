@@ -39,6 +39,8 @@ COMANDO_MAX_EDAD = 120  # ignorar comandos más viejos (p. ej. de antes de reini
 # True: la canción pedida entra apenas se descarga (corta el aleatorio).
 INTERRUMPIR_RELLENO = os.getenv("INTERRUMPIR_RELLENO", "0").strip().lower() in ("1", "true", "si", "sí")
 RULETA_DESDE = int(os.environ.get("PLAYBAR_RULETA_DESDE", "7"))  # ruleta con 7+ en cola
+RULETA_ANTES_SEG = 25  # la ruleta sale faltando esto para que termine la canción
+RULETA_MIN_SEG = 9     # ...y nunca tan al final que no alcance a verse
 
 
 class BackendApi:
@@ -232,7 +234,7 @@ class Motor:
         self._lock = asyncio.Lock()  # una sola operación de estado a la vez
         self._fallos = {}        # video_id -> descargas fallidas
         self._pend = []          # marcas que no se pudieron escribir [(fila, estado2, estado)]
-        self._ruleta = None      # cola "a la suerte": títulos para la ruleta en pantalla
+        self._ruleta_token = -1  # canción (token) para la que ya salió la ruleta
         self._hechas = set()     # filas que ya sonaron en esta sesión (aunque la hoja no lo sepa)
         self._rellenos = []  # próximas aleatorias, elegidas y descargadas por adelantado (en orden)
         self._marcas = set()      # escrituras a la API en segundo plano
@@ -292,6 +294,7 @@ class Motor:
                     await self._tick_espejo()
                 else:
                     await self.tick()
+                    await self._revisar_ruleta()
                 if desde is not None:
                     print(f"✅ Conexión recuperada ({int(self.ahora() - desde)} s sin servidor)")
                 desde = None
@@ -417,11 +420,6 @@ class Motor:
         cola = [i for i in snap.cola if i.fila not in omitir
                 and not (self.actual is not None and i.fila == self.actual.fila)
                 and i.video_id not in self._esperando]  # las que vienen de la nube esperan
-        # 7 o más esperando: la cola va "a la suerte" (el servidor la revuelve) y la que entre se
-        # anuncia con una ruleta en pantalla.
-        ruleta_on = str((snap.control or {}).get("ruleta", True)).lower() not in ("false", "0", "no")
-        self._ruleta = ([i.titulo for i in cola] if ruleta_on and len(cola) >= RULETA_DESDE
-                        else None)
         if marcada is not None and marcada.video_id in self._esperando:
             marcada = None
 
@@ -498,14 +496,40 @@ class Motor:
             if self.actual is not None and self.relleno:
                 self.previo = self.actual
             await self._reproducir(item, ruta, relleno=False)  # primero suena…
-            ruleta, self._ruleta = self._ruleta, None
-            if ruleta and not self.espejo and hasattr(self.ui, "mostrar_ruleta"):
-                asyncio.ensure_future(self._mostrar_ruleta(ruleta, item.titulo))
             if not ya_marcada:  # …y la marca viaja a la API en segundo plano
                 self._marcar_luego(item.fila, e2=C.E_PLAY,
                                    estado=None if item.estado == "Agregado" else "Agregado")
         finally:
             self.ocupado = False
+
+    async def _revisar_ruleta(self):
+        """Cola "a la suerte" (7 o más esperando, el servidor la revuelve): faltando
+        RULETA_ANTES_SEG para que termine la canción, la ruleta anuncia la que sigue. Es la
+        primera de la cola (al revolver, el servidor no la mueve), así que es la que suena."""
+        try:
+            if (self.actual is None or self.pausado or self.snap is None or self.bloqueado
+                    or self._ruleta_token == self.token or not hasattr(self.ui, "mostrar_ruleta")):
+                return
+            dur = float(getattr(self.ui, "dur", 0) or 0)
+            pos = float(getattr(self.ui, "pos", 0) or 0)
+            if dur <= 0 or not (RULETA_MIN_SEG <= dur - pos <= RULETA_ANTES_SEG):
+                return
+            snap = self.snap
+            if str((snap.control or {}).get("ruleta", True)).lower() in ("false", "0", "no"):
+                return
+            omitir = self._filas_pendientes() | self._hechas
+            cola = [i for i in snap.cola if i.fila not in omitir
+                    and not (self.actual.fila is not None and i.fila == self.actual.fila)
+                    and i.video_id not in self._esperando]
+            if len(cola) < RULETA_DESDE:
+                return
+            self._ruleta_token = self.token  # una sola vez por canción
+            if not self.desc.ruta(cola[0].video_id):
+                return  # la siguiente todavía no está lista: no se anuncia algo que no es seguro
+            print(f"🎰 Ruleta: sigue «{cola[0].titulo[:50]}»")
+            asyncio.ensure_future(self._mostrar_ruleta([i.titulo for i in cola], cola[0].titulo))
+        except Exception as ex:
+            print(f"ℹ️ Ruleta: {ex}")
 
     async def _mostrar_ruleta(self, titulos, elegido):
         try:

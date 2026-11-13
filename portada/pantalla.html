@@ -772,10 +772,6 @@
       var cola = colaDe(snap).filter(function (i) {
         return !omitir[i.fila] && !(M.actual && i.fila === M.actual.fila);
       });
-      // 7 o más esperando: la cola va "a la suerte" (el servidor la revuelve) y la que entre se
-      // anuncia con la ruleta (se apaga por bar en el panel).
-      var ruletaOn = String(((snap && snap.control) || {}).ruleta).toLowerCase() !== "false";
-      M.ruleta = (ruletaOn && cola.length >= RULETA_DESDE) ? cola.map(function (i) { return i.titulo; }) : null;
       if (!M.actual) {
         var candidatas = (marcada ? [marcada] : []).concat(cola);
         for (var i = 0; i < candidatas.length; i++) {
@@ -814,8 +810,6 @@
           return false;
         }
         if (!yaMarcada) motor.marcarLuego(item.fila, E_PLAY, item.estado === "Agregado" ? null : "Agregado");
-        var ruleta = M.ruleta; M.ruleta = null;
-        if (ruleta && !yaMarcada) mostrarRuleta(ruleta, item.titulo);
         return true;
       } finally {
         M.ocupado = false;
@@ -1367,6 +1361,27 @@
 
   // ------------------------------------------------------------------ ruleta a la suerte
   var RULETA_DESDE = 7;
+  var RULETA_ANTES_SEG = 25, RULETA_MIN_SEG = 9;
+  // Cola "a la suerte" (7 o más esperando, el servidor la revuelve): faltando unos 25 s para
+  // que termine la canción, la ruleta anuncia la que sigue. Es la primera de la cola (al
+  // revolver, el servidor no la mueve), así que es la que suena después. Una vez por canción.
+  var ruletaToken = -1;
+  function revisarRuleta() {
+    try {
+      if (!M.actual || M.pausado || !M.snap || M.bloqueado || ruletaToken === M.token) return;
+      var dur = medios.dur(), falta = dur - medios.pos();
+      if (!(dur > 0) || falta > RULETA_ANTES_SEG || falta < RULETA_MIN_SEG) return;
+      if (String((M.snap.control || {}).ruleta).toLowerCase() === "false") return;
+      var omitir = omitidas();
+      var cola = colaDe(M.snap).filter(function (i) {
+        return !omitir[i.fila] && !(M.actual && i.fila === M.actual.fila) && !enEspera(i.video_id);
+      });
+      if (cola.length < RULETA_DESDE) return;
+      ruletaToken = M.token;
+      mostrarRuleta(cola.map(function (i) { return i.titulo; }), cola[0].titulo);
+    } catch (e) {}
+  }
+  setInterval(revisarRuleta, 2000);
   var ruletaVa = 0;
   function mostrarRuleta(titulos, elegido) {
     var nombres = titulos.filter(Boolean);
