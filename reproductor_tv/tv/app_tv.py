@@ -147,6 +147,7 @@ class Pantalla:
         self._lista_armada = False
         self._modo_nube = False  # suena una canción directo de la nube (sin puestos)
         self._salto = None
+        self._salto_t = 0.0
         self._entro_sola = None
         self._lock_puestos = asyncio.Lock()
         # Mezcla: un segundo video escondido detrás del principal hace sonar la siguiente
@@ -253,6 +254,13 @@ class Pantalla:
             self._salto = None
             self.cur = idx
             return
+        if self._salto is not None and time.time() - self._salto_t < 6:
+            # Aviso tardío del cambio de puesto ANTERIOR (cuando terminó la otra canción) que
+            # llega después de saltar a la pedida: no es que la pedida terminó. Antes la
+            # saltaba en el mismo segundo y quedaba marcada "sonando" sin sonar.
+            print(f"ℹ️ cambio de puesto tardío ignorado ({idx}): se está saltando al {self._salto}")
+            return
+        self._salto = None
         if idx == self.cur or not self._lista_armada:
             return
         self.cur = idx
@@ -510,6 +518,7 @@ class Pantalla:
                     raise RuntimeError("No hay puesto libre para la canción")
                 self.anticipada[destino] = False
                 self._salto = destino
+                self._salto_t = time.time()
                 self._reiniciar_tiempo(ruta)
                 try:
                     await self.video.jump_to(destino)

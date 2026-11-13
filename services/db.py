@@ -625,12 +625,20 @@ def agregar_pedido(codigo, usuario, titulo, canal, video_id, estado2="Siguiente"
     ahora = time.time() if ts is None else ts
     limite = ahora - VENTANA_DUPLICADO_HORAS * 3600
     ya = uno(
-        """SELECT id FROM pedidos WHERE codigo = %s AND video_id = %s AND ts >= %s
-           AND estado <> 'Error' AND estado2 IN ('En cola', 'En reproduccion', 'Siguiente')
-           LIMIT 1""",
+        """SELECT p.id, p.estado2, COALESCE(c.actual_video, '') AS suena
+           FROM pedidos p LEFT JOIN control c ON c.codigo = p.codigo
+           WHERE p.codigo = %s AND p.video_id = %s AND p.ts >= %s
+           AND p.estado <> 'Error' AND p.estado2 IN ('En cola', 'En reproduccion', 'Siguiente')
+           ORDER BY p.id DESC LIMIT 1""",
         (str(codigo), str(video_id), limite),
     )
     if ya:
+        if ya["estado2"] == "En reproduccion" and ya["suena"] != str(video_id):
+            # Quedó marcada "sonando" pero el reproductor está con otra (se saltó o se cruzaron
+            # las marcas): no es repetida, vuelve a la cola.
+            ejecutar("UPDATE pedidos SET estado2 = 'Siguiente' WHERE id = %s", (ya["id"],))
+            print(f"♻️ Pedido {ya['id']} estaba atascado como sonando: vuelve a la cola")
+            return {"ok": True, "id": ya["id"]}
         return {"ok": True, "duplicado": True}
     fila = uno(
         """INSERT INTO pedidos (codigo, ts, usuario, titulo, canal, video_id, estado, estado2)
@@ -831,8 +839,16 @@ def _aleatorio_bar(codigo, antes_de, limite=3000):
 
 def marcar(codigo, id_pedido, estado2=None, estado=None):
     if estado2 is not None:
-        ejecutar("UPDATE pedidos SET estado2 = %s WHERE id = %s AND codigo = %s",
-                 (estado2, int(id_pedido), str(codigo)))
+        if estado2 == "En reproduccion":
+            # El reproductor manda "sonando" y "reproducido" casi juntos y pueden llegar al revés:
+            # una que ya terminó (o falló) no vuelve a quedar "sonando" (se atascaba y no dejaba
+            # volver a pedirla).
+            ejecutar("""UPDATE pedidos SET estado2 = %s WHERE id = %s AND codigo = %s
+                        AND estado2 NOT IN ('Reproducido', 'Error')""",
+                     (estado2, int(id_pedido), str(codigo)))
+        else:
+            ejecutar("UPDATE pedidos SET estado2 = %s WHERE id = %s AND codigo = %s",
+                     (estado2, int(id_pedido), str(codigo)))
     if estado is not None:
         ejecutar("UPDATE pedidos SET estado = %s WHERE id = %s AND codigo = %s",
                  (estado, int(id_pedido), str(codigo)))
