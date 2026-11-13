@@ -116,17 +116,15 @@ _HEAD_EXTRA = f"""
     }})();
   </script>
   <script>
-    // Vigilante de la conexión. Si la conexión con el servidor se cae y Flet la retoma en esta
-    // misma página, el servidor sigue contestando pero la pantalla ya no aplica los cambios
-    // ("se queda pegada"): por eso una reconexión se resuelve recargando la página (la sesión
-    // se recupera sola). Además, en el celular, al bloquear la pantalla la conexión puede
-    // quedar muerta sin que el navegador se entere: si la pestaña estuvo oculta y un toque no
-    // recibe NINGUNA respuesta en 15 s, también se recarga. Sin haberse ocultado no se vigila:
-    // muchos toques no necesitan respuesta del servidor.
+    // Conexión que se retoma sola (ver services/flet_reanudar.py). Flet recibe una conexión
+    // que nunca se cae: por debajo, si la de verdad se corta (datos móviles, pantalla
+    // bloqueada), se abre otra enganchada a la MISMA sesión del servidor y cada lado repite
+    // los mensajes que el otro no alcanzó a recibir. La página no se recarga ni se pierde lo
+    // que hay en pantalla. Solo si el servidor ya no tiene la sesión (se reinició, o pasó
+    // más de una hora) responde 4000 y la página se recarga una vez.
     (function () {{
       var W = window.WebSocket;
-      if (!W) return;
-      var actual = null, tocado = 0, abierta = false, oculta = false;
+      if (!W || typeof EventTarget !== 'function') return;
       function avisar(texto) {{  // queda en los registros del servidor (diagnóstico)
         try {{ navigator.sendBeacon('/pbgo-diag', texto + ' · ' + location.pathname.slice(0, 40)); }} catch (e) {{}}
       }}
@@ -145,37 +143,122 @@ _HEAD_EXTRA = f"""
           return !!b && b.length > 2 && b[0] === 0 && b[1] === 0x92 && b[2] === 3;
         }} catch (e) {{ return false; }}
       }}
-      function Envuelto(url, prot) {{
-        var s = prot === undefined ? new W(url) : new W(url, prot);
-        if (String(url).indexOf('/ws') < 0) return s;
-        actual = s; tocado = 0;
-        s.addEventListener('open', function () {{
-          if (abierta) recargar('la conexión se retomó en la misma página');
-          abierta = true;
-        }});
-        s.addEventListener('message', function () {{
-          if (s === actual) {{ tocado = 0; oculta = false; }}
-          window.dispatchEvent(new Event('pbgo-conectado'));
-        }});
-        var enviar = s.send;
-        s.send = function (d) {{
-          if (s === actual && !tocado && oculta && esToque(d)) tocado = Date.now();
-          return enviar.apply(s, arguments);
-        }};
-        return s;
+      function copia(d) {{
+        try {{
+          if (d instanceof ArrayBuffer) return d.slice(0);
+          if (ArrayBuffer.isView(d)) return d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength);
+        }} catch (e) {{}}
+        return d;
       }}
-      Envuelto.prototype = W.prototype;
-      ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(function (k) {{ Envuelto[k] = W[k]; }});
-      window.WebSocket = Envuelto;
-      document.addEventListener('visibilitychange', function () {{
-        if (document.hidden) oculta = true;
-      }});
-      setInterval(function () {{
-        if (tocado && Date.now() - tocado > 15000) {{
-          tocado = 0;
-          recargar('un toque sin respuesta en 15 s al volver a la pestaña');
+      function Conexion(url, prot) {{
+        var dir = String(url);
+        if (dir.indexOf('/ws') < 0) return prot === undefined ? new W(url) : new W(url, prot);
+        var f = new EventTarget();
+        var token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        var base = dir + (dir.indexOf('?') > -1 ? '&' : '?') + 'pbgo_t=' + token;
+        var tipo = 'blob', real = null, estado = 0, cerrando = false, poniendoAlDia = false;
+        var recibidos = 0, enviados = 0, guardados = [], intentos = 0, espera = null;
+        var estuvoOculta = false, tocado = 0;
+        function emitir(ev) {{
+          var h = f['on' + ev.type];
+          if (typeof h === 'function') {{ try {{ h.call(f, ev); }} catch (e) {{ setTimeout(function () {{ throw e; }}); }} }}
+          f.dispatchEvent(ev);
         }}
-      }}, 1000);
+        function terminar(code, reason) {{
+          if (estado === 3) return;
+          estado = 3;
+          emitir(new CloseEvent('close', {{ code: code || 1000, reason: reason || '', wasClean: true }}));
+        }}
+        function abrir(retomar) {{
+          espera = null;
+          var u = retomar ? base + '&pbgo_r=1&pbgo_n=' + recibidos : base;
+          var s = prot === undefined ? new W(u) : new W(u, prot);
+          s.binaryType = tipo;
+          real = s; poniendoAlDia = !!retomar;
+          s.addEventListener('open', function () {{
+            if (s !== real) return;
+            intentos = 0;
+            if (!retomar) {{ estado = 1; emitir(new Event('open')); }}
+          }});
+          s.addEventListener('message', function (e) {{
+            if (s !== real) return;
+            if (typeof e.data === 'string') {{
+              if (e.data.indexOf('pbgo:') === 0) {{  // el servidor dice cuántos le llegaron
+                var n = parseInt(e.data.slice(5), 10) || 0;
+                if (guardados.length && n < guardados[0][0] - 1) {{ recargar('se perdieron datos al retomar'); return; }}
+                guardados = guardados.filter(function (g) {{ return g[0] > n; }});
+                poniendoAlDia = false;
+                for (var i = 0; i < guardados.length; i++) {{ try {{ s.send(guardados[i][1]); }} catch (x) {{}} }}
+                avisar('conexión retomada sin recargar');
+              }}
+              return;
+            }}
+            recibidos++; tocado = 0; estuvoOculta = false;
+            window.dispatchEvent(new Event('pbgo-conectado'));
+            emitir(new MessageEvent('message', {{ data: e.data }}));
+          }});
+          s.addEventListener('close', function (e) {{
+            if (s !== real) return;
+            real = null;
+            if (cerrando) {{ terminar(e.code, e.reason); return; }}
+            if (e.code === 4000) {{ recargar('la sesión ya no existía en el servidor'); return; }}
+            if (estado === 0) {{ emitir(new Event('error')); terminar(e.code, e.reason); return; }}
+            reintentar(false);
+          }});
+        }}
+        function reintentar(ya) {{
+          if (cerrando || real || espera || estado === 0 || estado === 3) return;
+          var ms = ya || intentos === 0 ? 0 : Math.min(10000, 500 * Math.pow(2, intentos));
+          intentos++;
+          espera = setTimeout(function () {{ abrir(true); }}, ms);
+        }}
+        function cambiar(motivo) {{  // la conexión está muerta aunque el navegador no lo sepa
+          if (!real || cerrando) return;
+          avisar(motivo);
+          var s = real; real = null;
+          try {{ s.close(4100); }} catch (e) {{}}
+          reintentar(true);
+        }}
+        Object.defineProperty(f, 'readyState', {{ get: function () {{ return estado; }} }});
+        Object.defineProperty(f, 'binaryType', {{
+          get: function () {{ return tipo; }},
+          set: function (v) {{ tipo = v; if (real) real.binaryType = v; }}
+        }});
+        Object.defineProperty(f, 'bufferedAmount', {{ get: function () {{ return real ? real.bufferedAmount : 0; }} }});
+        Object.defineProperty(f, 'protocol', {{ get: function () {{ return real ? real.protocol : ''; }} }});
+        f.url = dir; f.extensions = '';
+        f.CONNECTING = 0; f.OPEN = 1; f.CLOSING = 2; f.CLOSED = 3;
+        f.send = function (d) {{
+          enviados++;
+          guardados.push([enviados, copia(d)]);
+          if (guardados.length > 600) guardados.shift();
+          if (estuvoOculta && !tocado && esToque(d)) tocado = Date.now();
+          if (real && real.readyState === 1 && !poniendoAlDia) {{ try {{ real.send(d); }} catch (e) {{}} }}
+        }};
+        f.close = function (code, reason) {{
+          cerrando = true;
+          if (estado < 2) estado = 2;
+          if (espera) {{ clearTimeout(espera); espera = null; }}
+          if (real) {{ try {{ real.close(code, reason); }} catch (e) {{ real.close(); }} }}
+          else terminar(code, reason);
+        }};
+        document.addEventListener('visibilitychange', function () {{
+          if (document.hidden) estuvoOculta = true;
+          else reintentar(true);  // si se había caído, se retoma ya, sin esperar
+        }});
+        window.addEventListener('online', function () {{ reintentar(true); }});
+        setInterval(function () {{
+          if (tocado && Date.now() - tocado > 10000) {{
+            tocado = 0;
+            cambiar('un toque sin respuesta en 10 s al volver: se retoma la conexión');
+          }}
+        }}, 1000);
+        abrir(false);
+        return f;
+      }}
+      Conexion.prototype = W.prototype;
+      ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(function (k) {{ Conexion[k] = W[k]; }});
+      window.WebSocket = Conexion;
     }})();
   </script>
 """

@@ -11,6 +11,7 @@ Aquí:
   - cualquier otro error al procesar UN mensaje se anota en el registro y la pestaña
     sigue funcionando.
 """
+from services import flet_reanudar as _reanudar
 
 
 def aplicar():
@@ -52,34 +53,6 @@ def aplicar():
     mensaje_seguro._playbar_seguro = True
     setattr(_app.FletApp, nombre, mensaje_seguro)
 
-    # Si el celular corta la conexión justo mientras se le envían datos (p. ej. los
-    # resultados de una búsqueda), Flet sale con error sin marcar la sesión como
-    # desconectada: queda "conectada" a una conexión muerta, no vence nunca y al volver
-    # el celular no la puede retomar. Aquí se cierra esa conexión y se sigue como una
-    # desconexión normal.
-    nombre_envio = "_FletApp__send_loop"
-    original_envio = getattr(_app.FletApp, nombre_envio, None)
-    if original_envio is not None and not getattr(original_envio, "_playbar_seguro", False):
-        async def envio_seguro(self):
-            try:
-                return await original_envio(self)
-            except Exception as ex:
-                print(f"ℹ️ Conexión cortada mientras se enviaban datos ({type(ex).__name__})")
-            ws = getattr(self, "_FletApp__websocket", None)
-            try:
-                if ws is not None:
-                    await ws.close()
-            except Exception:
-                pass
-            cola = getattr(self, "_FletApp__send_queue", None)
-            while cola is not None and await cola.get() is not None:
-                pass  # lo pendiente ya no tiene a quién llegar
-            self._FletApp__websocket = None
-            self._FletApp__send_queue = None
-
-        envio_seguro._playbar_seguro = True
-        setattr(_app.FletApp, nombre_envio, envio_seguro)
-
     # Si la persona cierra la página mientras la app todavía está arrancando, Flet ya soltó la
     # sesión y anota "'NoneType' object has no attribute 'after_event'" con todo el detalle del
     # error. No es una falla (la persona ya se fue): ese aviso no se anota.
@@ -103,4 +76,5 @@ def aplicar():
 
         enviar_seguro._playbar_seguro = True
         _app.FletApp.send_message = enviar_seguro
+    _reanudar.instalar(_app)
     print("🛡️ Conexión web de Flet blindada")
