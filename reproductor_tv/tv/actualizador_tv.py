@@ -30,7 +30,7 @@ REPO = "a33publicores/jukebox-flet"   # si algún día se separa el TV, solo se 
 API = f"https://api.github.com/repos/{REPO}/releases?per_page=30"
 PREFIJO = "tv-v"
 ACTIVO = "tv_codigo.zip"
-REVISAR_HORAS = 3
+REVISAR_HORAS = 0.25  # cada 15 min: la actualización llega sin reiniciar el TV
 ESPERA_MAX_SEG = 15 * 60
 ARCHIVOS_NECESARIOS = ("tv/__init__.py", "tv/app_tv.py", "tv/motor.py", "tv/version.py",
                        "tv/descargas_tv.py", "tv/actualizador_tv.py")

@@ -6,7 +6,7 @@ que cambia este número, crea el instalador y abre GitHub para subirlo.
 """
 import os
 
-VERSION = "1.1.35"
+VERSION = "1.1.36"
 
 # Repositorio público donde se publican las versiones (pestaña "Releases").
 REPO = os.environ.get("PLAYBAR_REPO", "a33publicores/jukebox-flet")
@@ -20,7 +20,7 @@ UPDATE_URL = os.environ.get(
 )
 
 # Cada cuánto vuelve a revisar mientras está abierto (los bares lo dejan prendido toda la noche).
-REVISAR_CADA_HORAS = float(os.environ.get("PLAYBAR_REVISAR_HORAS", "3"))
+REVISAR_CADA_HORAS = float(os.environ.get("PLAYBAR_REVISAR_HORAS", "0.25"))  # cada 15 min
 
 # Dirección de la API de PlayBar GO (dominio propio; hoy apunta a Railway, servicio playbar-api). Se puede cambiar
 # en la pantalla de configuración del reproductor o con la variable PLAYBAR_API.

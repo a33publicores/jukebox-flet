@@ -580,6 +580,62 @@ class Pantalla:
         self.chip.value = item.titulo
         self.page.update()
 
+    async def mostrar_ruleta(self, titulos, elegido):
+        """Cola "a la suerte" (7 o más esperando): una ruleta en pantalla gira entre las
+        canciones de la cola, se va frenando y cae en la que va a sonar. La música no se para."""
+        import random
+        nombres = [str(t) for t in titulos if t] or [str(elegido)]
+        texto = ft.Text("", size=34, weight=ft.FontWeight.BOLD, color="white",
+                        text_align=ft.TextAlign.CENTER, max_lines=2,
+                        overflow=ft.TextOverflow.ELLIPSIS)
+        pie = ft.Text("Girando la ruleta…", size=22, color="#94A3B8", text_align=ft.TextAlign.CENTER)
+        dado = ft.Icon(ft.Icons.CASINO, size=72, color=CYAN)
+        tarjeta = ft.Container(
+            content=ft.Column([
+                dado,
+                ft.Text("¡A LA SUERTE!", size=44, weight=ft.FontWeight.BOLD, color=CYAN),
+                ft.Text("La siguiente canción es…", size=22, color="white"),
+                ft.Container(texto, height=100, alignment=ft.Alignment.CENTER),
+                pie,
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=14, tight=True),
+            bgcolor="#F2020617", border_radius=28, padding=40, width=880,
+            border=ft.Border.all(3, CYAN),
+        )
+        capa = ft.Container(content=tarjeta, alignment=ft.Alignment.CENTER, bgcolor="#8C000000",
+                            left=0, right=0, top=0, bottom=0, opacity=1, animate_opacity=350)
+        try:
+            self.page.overlay.append(capa)
+            self.page.update()
+            # gira rápido y se va frenando (unos 5 s)
+            pasos, espera = 26, 0.06
+            orden = nombres[:]
+            random.shuffle(orden)
+            for i in range(pasos):
+                texto.value = orden[i % len(orden)]
+                texto.color = "white"
+                dado.rotate = (i * 0.6) % 6.283
+                self.page.update()
+                await asyncio.sleep(espera)
+                espera = min(0.45, espera * 1.12)
+            texto.value = str(elegido)
+            texto.color = CYAN
+            dado.icon, dado.color, dado.rotate = ft.Icons.STARS, "#facc15", 0
+            pie.value = "¡Tuviste suerte! Ya está sonando"
+            pie.color = "#facc15"
+            self.page.update()
+            await asyncio.sleep(4)
+            capa.opacity = 0
+            self.page.update()
+            await asyncio.sleep(0.4)
+        except Exception as ex:
+            print(f"ℹ️ Ruleta: {ex}")
+        finally:
+            try:
+                self.page.overlay.remove(capa)
+                self.page.update()
+            except Exception:
+                pass
+
     async def preparar_siguiente(self, ruta):
         """Deja en el puesto siguiente la próxima canción (el motor la conoce de antemano)."""
         self.page.run_task(self._volumen_luego, ruta)
