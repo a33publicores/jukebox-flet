@@ -148,6 +148,7 @@ class Pantalla:
         self._modo_nube = False  # suena una canción directo de la nube (sin puestos)
         self._salto = None
         self._salto_t = 0.0
+        self._girando = False               # la ruleta está moviendo la lista
         self._entro_sola = None
         self._lock_puestos = asyncio.Lock()
         # Mezcla: un segundo video escondido detrás del principal hace sonar la siguiente
@@ -577,7 +578,56 @@ class Pantalla:
         self.t_pausa.visible = False
         self.page.update()
 
-    async def mostrar_ruleta(self, titulos, elegido):
+    async def girar_lista(self, cola, ganador):
+        """Ruleta de la suerte en la playlist: las canciones desde el 2.º puesto giran (bajan
+        una a una, como una ruleta), se van frenando y la ganadora queda justo debajo de la
+        siguiente, resaltada. La siguiente no se mueve. La música no se toca."""
+        if len(cola) < 3 or self._girando:
+            return
+        self._girando = True
+        fija, resto = cola[0], [i for i in cola[1:30]]
+        filas = {it.fila: self._fila_ruleta(it, "") for it in [fija] + resto}
+        cartel = ft.Text("¡RULETA DE LA SUERTE! Girando…", size=15, color="#facc15",
+                         weight=ft.FontWeight.BOLD)
+        antes = list(self.encabezado.controls)
+        banner = asyncio.ensure_future(self.mostrar_ruleta(
+            [i.titulo for i in resto], ganador.titulo,
+            arriba_fin=f"Después de «{fija.titulo[:34]}» suena:", abajo_fin="¡Tuvo suerte!"))
+        try:
+            self.encabezado.controls = (antes[:-1] if antes else []) + [cartel]
+            orden = resto[:]
+            espera = 0.06
+            for _ in range(24):  # baja una a una, rápido y se va frenando (unos 4 s)
+                orden = orden[-1:] + orden[:-1]
+                self.lista.controls = [filas[fija.fila]] + [filas[i.fila] for i in orden]
+                self.page.update()
+                await asyncio.sleep(espera)
+                espera = min(0.42, espera * 1.12)
+            final = [ganador] + [i for i in resto if i.fila != ganador.fila]
+            filas[ganador.fila] = self._fila_ruleta(ganador, "¡GANÓ LA RULETA! · suena después", resaltar=True)
+            self.lista.controls = [filas[fija.fila]] + [filas[i.fila] for i in final]
+            cartel.value = f"¡Ganó «{ganador.titulo[:40]}»! ¡Tuvo suerte!"
+            self.page.update()
+            await asyncio.sleep(6)
+        except Exception as ex:
+            print(f"ℹ️ Ruleta (lista): {ex}")
+        finally:
+            self._girando = False
+            self._firma = None  # la próxima lectura vuelve a pintar la lista normal
+            try:
+                await banner
+            except Exception:
+                pass
+
+    def _fila_ruleta(self, it, etiqueta, resaltar=False):
+        t = self._tarjeta(it, etiqueta)
+        if resaltar:
+            t.border = ft.Border.all(2, "#facc15")
+            t.bgcolor = "#2a2410"
+        return t
+
+    async def mostrar_ruleta(self, titulos, elegido, arriba_fin="Siguiente canción:",
+                             abajo_fin="¡Tuvo suerte!"):
         """Cola "a la suerte" (7 o más esperando): una ruleta corta (unos 6 s) abajo en la
         pantalla gira entre las canciones de la cola y termina en "Siguiente canción: X,
         ¡tuvo suerte!". No oscurece el video ni para la música. Se apaga por bar en el panel."""
@@ -612,10 +662,10 @@ class Pantalla:
                 self.page.update()
                 await asyncio.sleep(espera)
                 espera = min(0.35, espera * 1.13)
-            arriba.value = "Siguiente canción:"
+            arriba.value = arriba_fin
             texto.value = str(elegido)
             texto.color = CYAN
-            abajo.value = "¡Tuvo suerte!"
+            abajo.value = abajo_fin
             abajo.color = "#facc15"
             abajo.weight = ft.FontWeight.BOLD
             dado.icon, dado.color, dado.rotate = ft.Icons.STARS, "#facc15", 0
@@ -713,6 +763,9 @@ class Pantalla:
             self.page.update()
 
     async def mostrar(self, actual, cola, relleno, pausado, error):
+        if self._girando:
+            self._firma = None
+            return
         firma = (
             actual.video_id if actual else None, relleno, pausado, error,
             tuple((i.fila, i.video_id) for i in cola),

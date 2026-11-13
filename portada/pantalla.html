@@ -75,6 +75,9 @@
   .tarjeta .info { min-width: 0; }
   .etiqueta { font-size: 11px; font-weight: bold; color: var(--violeta); }
   .tarjeta.resaltada .etiqueta { color: var(--cian); }
+  .tarjeta.ganadora { background: #2a2410; border: 2px solid #facc15; }
+  .tarjeta.ganadora .etiqueta { color: #facc15; }
+  .subtitulo.ruleta { color: #facc15; font-weight: bold; }
   .titulo { font-size: 14px; font-weight: bold; overflow: hidden; display: -webkit-box;
             -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .canal { font-size: 11px; color: var(--gris); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -279,6 +282,7 @@
         canal: it.canal || "", pedido: !!pedido });
     },
     tema: function () { return pedir("GET", "/api/v1/tema"); },
+    reordenar: function (filas) { return pedir("POST", "/api/v1/reordenar", { filas: filas }); },
     reporte: function (texto) { return pedir("POST", "/api/v1/reporte", { texto: texto }).catch(function () {}); },
     estado: function (estado, actual, siguiente, ack, video) {
       return pedir("POST", "/api/v1/estado", { estado: estado, actual: actual, siguiente: siguiente, ack: ack,
@@ -860,6 +864,7 @@
       ver("pausa", false);
       console.log("▶️ " + (relleno ? "(relleno) " : "") + item.titulo);
       pintar();
+      lanzarRuleta();
       return true;
     },
 
@@ -1156,6 +1161,7 @@
   }
 
   function pintar(forzar) {
+    if (girando) return;
     var cola = [];
     if (M.snap) {
       var omitir = omitidas();
@@ -1361,29 +1367,60 @@
 
   // ------------------------------------------------------------------ ruleta a la suerte
   var RULETA_DESDE = 7;
-  var RULETA_ANTES_SEG = 25, RULETA_MIN_SEG = 9;
-  // Cola "a la suerte" (7 o más esperando, el servidor la revuelve): faltando unos 25 s para
-  // que termine la canción, la ruleta anuncia la que sigue. Es la primera de la cola (al
-  // revolver, el servidor no la mueve), así que es la que suena después. Una vez por canción.
-  var ruletaToken = -1;
-  function revisarRuleta() {
+  // Ruleta de la suerte (7 o más en cola): al empezar una canción, la ruleta elige al azar una
+  // de la cola desde el 2.º puesto y la deja justo debajo de la siguiente (la siguiente no se
+  // mueve). Primero se guarda el orden; luego la lista gira en pantalla y cae en la ganadora.
+  var girando = false;
+  function lanzarRuleta() {
     try {
-      if (!M.actual || M.pausado || !M.snap || M.bloqueado || ruletaToken === M.token) return;
-      var dur = medios.dur(), falta = dur - medios.pos();
-      if (!(dur > 0) || falta > RULETA_ANTES_SEG || falta < RULETA_MIN_SEG) return;
+      if (M.espejo || !M.snap || girando) return;
       if (String((M.snap.control || {}).ruleta).toLowerCase() === "false") return;
       var omitir = omitidas();
-      var cola = colaDe(M.snap).filter(function (i) {
-        return !omitir[i.fila] && !(M.actual && i.fila === M.actual.fila) && !enEspera(i.video_id);
-      });
+      if (M.actual && M.actual.fila !== null) omitir[M.actual.fila] = 1;
+      var cola = colaDe(M.snap).filter(function (i) { return !omitir[i.fila]; });
       if (cola.length < RULETA_DESDE) return;
-      ruletaToken = M.token;
-      mostrarRuleta(cola.map(function (i) { return i.titulo; }), cola[0].titulo);
+      var resto = cola.slice(1);
+      var ganador = resto[Math.floor(Math.random() * resto.length)];
+      var nuevo = [cola[0], ganador].concat(resto.filter(function (i) { return i.fila !== ganador.fila; }));
+      api.reordenar(nuevo.map(function (i) { return i.fila; })).then(function () {
+        console.log("🎰 Ruleta: ganó " + ganador.titulo);
+        girarLista(cola[0], resto, ganador);
+        api.instantanea().then(function (sn) { M.snap = sn; }).catch(function () {});
+      }).catch(function (e) { console.log("Ruleta: no se pudo guardar el orden", e); });
     } catch (e) {}
   }
-  setInterval(revisarRuleta, 2000);
+  function girarLista(fija, resto, ganador) {
+    girando = true;
+    var lista = $("lista"), sub = document.querySelector("#encabezado .subtitulo:last-child");
+    if (sub) { sub.classList.add("ruleta"); sub.textContent = "¡RULETA DE LA SUERTE! Girando…"; }
+    mostrarRuleta(resto.map(function (i) { return i.titulo; }), ganador.titulo,
+      "Después de «" + (fija.titulo || "").slice(0, 34) + "» suena:");
+    var orden = resto.slice(0, 14), paso = 0, espera = 60;
+    function dibujar(items, ganadora) {
+      lista.innerHTML = "";
+      lista.appendChild(tarjeta(fija, "", false));
+      items.forEach(function (it) {
+        var t = tarjeta(it, it === ganadora ? "¡GANÓ LA RULETA! · suena después" : "", false);
+        if (it === ganadora) t.classList.add("ganadora");
+        lista.appendChild(t);
+      });
+    }
+    function girar() {
+      if (paso < 24) {  // baja una a una, rápido y se va frenando (unos 4 s)
+        orden = orden.slice(-1).concat(orden.slice(0, -1));
+        dibujar(orden, null);
+        paso++; espera = Math.min(420, espera * 1.12);
+        setTimeout(girar, espera);
+        return;
+      }
+      dibujar([ganador].concat(resto.filter(function (i) { return i.fila !== ganador.fila; })).slice(0, 14), ganador);
+      if (sub) sub.textContent = "¡Ganó «" + (ganador.titulo || "").slice(0, 40) + "»! ¡Tuvo suerte!";
+      setTimeout(function () { girando = false; pintar(true); }, 6000);
+    }
+    girar();
+  }
   var ruletaVa = 0;
-  function mostrarRuleta(titulos, elegido) {
+  function mostrarRuleta(titulos, elegido, arribaFin) {
     var nombres = titulos.filter(Boolean);
     if (!nombres.length) nombres = [elegido];
     nombres = nombres.slice().sort(function () { return Math.random() - 0.5; });
@@ -1405,7 +1442,7 @@
         return;
       }
       caja.classList.add("fin");
-      $("ru-arriba").textContent = "Siguiente canción:";
+      $("ru-arriba").textContent = arribaFin || "Siguiente canción:";
       $("ru-nombre").textContent = elegido;
       $("ru-abajo").textContent = "¡Tuvo suerte!";
       $("ru-dado").textContent = "⭐";

@@ -288,7 +288,7 @@ def _candado_de(codigo):
 # Cola "a la suerte": con más de MEZCLAR_DESDE - 1 canciones esperando, cada pedido nuevo
 # revuelve la cola, para que el que pidió de último no espere hasta el final. La primera (la
 # que suena enseguida, el reproductor ya la está preparando) no se mueve.
-MEZCLAR_DESDE = int(os.getenv("COLA_MEZCLAR_DESDE", "7"))
+MEZCLAR_DESDE = int(os.getenv("COLA_MEZCLAR_DESDE", "0"))  # 0 = apagado: ahora decide la ruleta del reproductor
 
 
 def mezclar_cola(cliente):
