@@ -581,52 +581,52 @@ class Pantalla:
         self.page.update()
 
     async def mostrar_ruleta(self, titulos, elegido):
-        """Cola "a la suerte" (7 o más esperando): una ruleta en pantalla gira entre las
-        canciones de la cola, se va frenando y cae en la que va a sonar. La música no se para."""
+        """Cola "a la suerte" (7 o más esperando): una ruleta corta (unos 6 s) abajo en la
+        pantalla gira entre las canciones de la cola y termina en "Siguiente canción: X,
+        ¡tuvo suerte!". No oscurece el video ni para la música. Se apaga por bar en el panel."""
         import random
         nombres = [str(t) for t in titulos if t] or [str(elegido)]
-        texto = ft.Text("", size=34, weight=ft.FontWeight.BOLD, color="white",
-                        text_align=ft.TextAlign.CENTER, max_lines=2,
+        arriba = ft.Text("¡A LA SUERTE!", size=22, weight=ft.FontWeight.BOLD, color=CYAN)
+        texto = ft.Text("", size=28, weight=ft.FontWeight.BOLD, color="white",
+                        text_align=ft.TextAlign.CENTER, max_lines=1,
                         overflow=ft.TextOverflow.ELLIPSIS)
-        pie = ft.Text("Girando la ruleta…", size=22, color="#94A3B8", text_align=ft.TextAlign.CENTER)
-        dado = ft.Icon(ft.Icons.CASINO, size=72, color=CYAN)
+        abajo = ft.Text("Girando…", size=18, color="#94A3B8")
+        dado = ft.Icon(ft.Icons.CASINO, size=46, color=CYAN)
         tarjeta = ft.Container(
-            content=ft.Column([
+            content=ft.Row([
                 dado,
-                ft.Text("¡A LA SUERTE!", size=44, weight=ft.FontWeight.BOLD, color=CYAN),
-                ft.Text("La siguiente canción es…", size=22, color="white"),
-                ft.Container(texto, height=100, alignment=ft.Alignment.CENTER),
-                pie,
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=14, tight=True),
-            bgcolor="#F2020617", border_radius=28, padding=40, width=880,
-            border=ft.Border.all(3, CYAN),
+                ft.Column([arriba, texto, abajo], spacing=2, tight=True, expand=True,
+                          horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            ], spacing=18, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            bgcolor="#E6020617", border_radius=22, padding=ft.Padding.symmetric(vertical=18, horizontal=26),
+            width=820, border=ft.Border.all(2, CYAN),
         )
-        capa = ft.Container(content=tarjeta, alignment=ft.Alignment.CENTER, bgcolor="#8C000000",
-                            left=0, right=0, top=0, bottom=0, opacity=1, animate_opacity=350)
+        capa = ft.Container(content=tarjeta, alignment=ft.Alignment.BOTTOM_CENTER,
+                            left=0, right=0, bottom=40, opacity=1, animate_opacity=300)
         try:
             self.page.overlay.append(capa)
             self.page.update()
-            # gira rápido y se va frenando (unos 5 s)
-            pasos, espera = 26, 0.06
             orden = nombres[:]
             random.shuffle(orden)
-            for i in range(pasos):
+            espera = 0.05
+            for i in range(20):  # gira rápido y se va frenando (unos 3 s)
                 texto.value = orden[i % len(orden)]
-                texto.color = "white"
-                dado.rotate = (i * 0.6) % 6.283
+                dado.rotate = (i * 0.7) % 6.283
                 self.page.update()
                 await asyncio.sleep(espera)
-                espera = min(0.45, espera * 1.12)
+                espera = min(0.35, espera * 1.13)
+            arriba.value = "Siguiente canción:"
             texto.value = str(elegido)
             texto.color = CYAN
+            abajo.value = "¡Tuvo suerte!"
+            abajo.color = "#facc15"
+            abajo.weight = ft.FontWeight.BOLD
             dado.icon, dado.color, dado.rotate = ft.Icons.STARS, "#facc15", 0
-            pie.value = "¡Tuviste suerte! Ya está sonando"
-            pie.color = "#facc15"
             self.page.update()
-            await asyncio.sleep(4)
+            await asyncio.sleep(3)
             capa.opacity = 0
             self.page.update()
-            await asyncio.sleep(0.4)
+            await asyncio.sleep(0.35)
         except Exception as ex:
             print(f"ℹ️ Ruleta: {ex}")
         finally:

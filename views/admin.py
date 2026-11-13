@@ -414,6 +414,27 @@ def admin_view(page, codigo, nombre, logo):
                       tooltip="Subir", on_click=cambiar_volumen(10)),
     ], alignment=ft.MainAxisAlignment.CENTER)
 
+    try:
+        ruleta_activa = (_db_vol.control(codigo) or {}).get("ruleta", True) is not False
+    except Exception:
+        ruleta_activa = True
+
+    def cambiar_ruleta(e):
+        valor = bool(e.control.value)
+
+        def tarea():
+            try:
+                from services import db as _db
+                _db.poner_ruleta(codigo, valor)
+            except Exception as ex:
+                print(f"⚠️ No se pudo guardar la ruleta: {ex}")
+        threading.Thread(target=tarea, daemon=True).start()
+
+    control_ruleta = ft.Switch(
+        label="Ruleta de la suerte en la pantalla (con 7 o más canciones en cola)",
+        value=ruleta_activa, active_color="#00D4FF", on_change=cambiar_ruleta,
+        label_text_style=ft.TextStyle(color="white", size=14))
+
     def contar_generos():
         """Cuántas canciones del historial hay de cada género y de cada artista."""
         t_inicio = time.time()
@@ -479,6 +500,7 @@ def admin_view(page, codigo, nombre, logo):
                 aviso,
                 ft.Text("🔊 VOLUMEN DEL BAR", color="#94A3B8", size=13, weight=ft.FontWeight.BOLD),
                 control_volumen,
+                control_ruleta,
                 ft.Text("PLAYLIST · ⏫ de primera · ⬆⬇ mover · 🗑 quitar", color="#94A3B8",
                         size=13, weight=ft.FontWeight.BOLD),
                 lista,

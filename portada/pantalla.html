@@ -39,6 +39,19 @@
   .capa { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(2,6,23,.94); display: flex; flex-direction: column;
           align-items: center; justify-content: center; text-align: center; padding: 32px; gap: 14px; z-index: 5; }
   .capa h2 { margin: 0; font-size: 30px; }
+  /* ruleta "a la suerte": banda corta abajo, sobre el video, sin oscurecerlo */
+  #ruleta { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); z-index: 6;
+            width: 760px; max-width: calc(100% - 40px); display: flex; align-items: center; gap: 18px;
+            background: rgba(2,6,23,.9); border: 2px solid var(--cian); border-radius: 20px; padding: 14px 24px;
+            transition: opacity .3s; }
+  #ruleta.oculto { display: none; }
+  #ruleta .dado { font-size: 40px; transition: transform .1s; }
+  #ruleta .textos { flex: 1; text-align: center; min-width: 0; }
+  #ruleta .arriba { color: var(--cian); font-weight: bold; font-size: 20px; }
+  #ruleta .nombre { color: #fff; font-weight: bold; font-size: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #ruleta .abajo { color: #94a3b8; font-size: 17px; }
+  #ruleta.fin .nombre { color: var(--cian); }
+  #ruleta.fin .abajo { color: #facc15; font-weight: bold; }
   /* aviso de actualización: tarjeta abajo a la derecha (no tapa el video ni para la música) */
   #capa-act { position: fixed; right: 24px; bottom: 24px; z-index: 30; width: 440px; max-width: calc(100vw - 48px);
               background: #111827; border: 2px solid var(--cian); border-radius: 18px; padding: 20px 22px;
@@ -163,6 +176,9 @@
     <div id="yt"><div id="yt-lugar"></div></div>
     <div id="tiempo"><span id="t-pos">0:00</span><div id="barra"><div></div></div><span id="t-dur">0:00</span></div>
     <div id="pausa" class="oculto">⏸</div>
+    <div id="ruleta" class="oculto"><div class="dado" id="ru-dado">🎲</div>
+      <div class="textos"><div class="arriba" id="ru-arriba">¡A LA SUERTE!</div>
+      <div class="nombre" id="ru-nombre"></div><div class="abajo" id="ru-abajo">Girando…</div></div></div>
     <div id="capa-sonido" class="capa oculto">
       <h2>🔈 Presiona OK para activar el sonido</h2>
       <p>El navegador del TV pide un toque antes de dejar sonar la música.</p>
@@ -756,6 +772,10 @@
       var cola = colaDe(snap).filter(function (i) {
         return !omitir[i.fila] && !(M.actual && i.fila === M.actual.fila);
       });
+      // 7 o más esperando: la cola va "a la suerte" (el servidor la revuelve) y la que entre se
+      // anuncia con la ruleta (se apaga por bar en el panel).
+      var ruletaOn = String(((snap && snap.control) || {}).ruleta).toLowerCase() !== "false";
+      M.ruleta = (ruletaOn && cola.length >= RULETA_DESDE) ? cola.map(function (i) { return i.titulo; }) : null;
       if (!M.actual) {
         var candidatas = (marcada ? [marcada] : []).concat(cola);
         for (var i = 0; i < candidatas.length; i++) {
@@ -794,6 +814,8 @@
           return false;
         }
         if (!yaMarcada) motor.marcarLuego(item.fila, E_PLAY, item.estado === "Agregado" ? null : "Agregado");
+        var ruleta = M.ruleta; M.ruleta = null;
+        if (ruleta && !yaMarcada) mostrarRuleta(ruleta, item.titulo);
         return true;
       } finally {
         M.ocupado = false;
@@ -1342,6 +1364,45 @@
     medios.reanudar();
     M.pausado = false; ver("pausa", false);
   });
+
+  // ------------------------------------------------------------------ ruleta a la suerte
+  var RULETA_DESDE = 7;
+  var ruletaVa = 0;
+  function mostrarRuleta(titulos, elegido) {
+    var nombres = titulos.filter(Boolean);
+    if (!nombres.length) nombres = [elegido];
+    nombres = nombres.slice().sort(function () { return Math.random() - 0.5; });
+    var yo = ++ruletaVa, i = 0, espera = 50;
+    var caja = $("ruleta");
+    caja.classList.remove("fin");
+    caja.style.opacity = "1";
+    $("ru-arriba").textContent = "¡A LA SUERTE!";
+    $("ru-abajo").textContent = "Girando…";
+    $("ru-dado").textContent = "🎲";
+    ver(caja, true);
+    function paso() {
+      if (yo !== ruletaVa) return;
+      if (i < 20) {  // gira rápido y se va frenando (unos 3 s)
+        $("ru-nombre").textContent = nombres[i % nombres.length];
+        $("ru-dado").style.transform = "rotate(" + (i * 40) + "deg)";
+        i++; espera = Math.min(350, espera * 1.13);
+        setTimeout(paso, espera);
+        return;
+      }
+      caja.classList.add("fin");
+      $("ru-arriba").textContent = "Siguiente canción:";
+      $("ru-nombre").textContent = elegido;
+      $("ru-abajo").textContent = "¡Tuvo suerte!";
+      $("ru-dado").textContent = "⭐";
+      $("ru-dado").style.transform = "none";
+      setTimeout(function () {
+        if (yo !== ruletaVa) return;
+        caja.style.opacity = "0";
+        setTimeout(function () { if (yo === ruletaVa) ver(caja, false); }, 350);
+      }, 3000);
+    }
+    paso();
+  }
 
   // ------------------------------------------------------------------ actualizaciones
   // Cada 15 min se pregunta si hay una versión nueva de esta pantalla. Si la hay, sale el aviso

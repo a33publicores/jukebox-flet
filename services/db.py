@@ -162,6 +162,8 @@ ESQUEMA = [
     "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_precio INTEGER NOT NULL DEFAULT 0",
     # Volumen del bar que pone el admin (100 = normal; ver fundido.ganancia_con_nivel).
     "ALTER TABLE control ADD COLUMN IF NOT EXISTS volumen INTEGER NOT NULL DEFAULT 100",
+    # ruleta "a la suerte" en la pantalla del bar (se apaga por bar desde el panel)
+    "ALTER TABLE control ADD COLUMN IF NOT EXISTS ruleta BOOLEAN NOT NULL DEFAULT TRUE",
     "ALTER TABLE planes ADD COLUMN IF NOT EXISTS promo_pagos INTEGER NOT NULL DEFAULT 0",
     # Promociones del super (🔥 Promociones): se prende o apaga, con su texto y fecha final
     # opcional (AAAA-MM-DD). Nace apagada, así que la promoción que hubiera queda retirada.
@@ -933,6 +935,11 @@ def poner_volumen(codigo, volumen):
     _asegurar_control(codigo)
     ejecutar("UPDATE control SET volumen = %s WHERE codigo = %s",
              (max(0, min(200, int(volumen))), str(codigo)))
+
+
+def poner_ruleta(codigo, activa):
+    _asegurar_control(codigo)
+    ejecutar("UPDATE control SET ruleta = %s WHERE codigo = %s", (bool(activa), str(codigo)))
 
 
 def enviar_comando(codigo, comando, param=""):

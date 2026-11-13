@@ -419,7 +419,9 @@ class Motor:
                 and i.video_id not in self._esperando]  # las que vienen de la nube esperan
         # 7 o más esperando: la cola va "a la suerte" (el servidor la revuelve) y la que entre se
         # anuncia con una ruleta en pantalla.
-        self._ruleta = [i.titulo for i in cola] if len(cola) >= RULETA_DESDE else None
+        ruleta_on = str((snap.control or {}).get("ruleta", True)).lower() not in ("false", "0", "no")
+        self._ruleta = ([i.titulo for i in cola] if ruleta_on and len(cola) >= RULETA_DESDE
+                        else None)
         if marcada is not None and marcada.video_id in self._esperando:
             marcada = None
 
