@@ -285,6 +285,33 @@ def _candado_de(codigo):
         return _candados.setdefault(codigo, threading.Lock())
 
 
+# Cola "a la suerte": con más de MEZCLAR_DESDE - 1 canciones esperando, cada pedido nuevo
+# revuelve la cola, para que el que pidió de último no espere hasta el final. La primera (la
+# que suena enseguida, el reproductor ya la está preparando) no se mueve.
+MEZCLAR_DESDE = int(os.getenv("COLA_MEZCLAR_DESDE", "7"))
+
+
+def mezclar_cola(cliente):
+    import random
+    from services import db
+    try:
+        filas = db.consultar(
+            """SELECT id FROM pedidos WHERE codigo = %s AND ts >= %s AND estado <> 'Error'
+               AND estado2 IN ('En cola', 'Siguiente') ORDER BY COALESCE(orden, id)""",
+            (str(cliente), inicio_jornada()))
+        ids = [f["id"] for f in filas]
+        if MEZCLAR_DESDE <= 0 or len(ids) < MEZCLAR_DESDE:
+            return False
+        resto = ids[1:]
+        random.shuffle(resto)
+        db.reordenar(str(cliente), [ids[0]] + resto)
+        print(f"🎲 Cola de {cliente} revuelta ({len(ids)} canciones)")
+        return True
+    except Exception as ex:
+        print("⚠️ No se pudo revolver la cola:", ex)
+        return False
+
+
 def agregar_cancion(cliente, telefono, titulo, canal, video_id):
     from services import db
     if not _cliente(cliente):
@@ -300,6 +327,8 @@ def agregar_cancion(cliente, telefono, titulo, canal, video_id):
         with _candado_de(str(cliente)):
             r = db.agregar_pedido(str(cliente), str(telefono), html.unescape(str(titulo)),
                                   html.unescape(str(canal)), str(video_id))
+            if not r.get("duplicado"):
+                mezclar_cola(cliente)
         if r.get("duplicado"):
             print(f"⚠️ Canción ya activa para {cliente}: {video_id}")
         else:
