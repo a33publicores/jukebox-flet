@@ -12,6 +12,7 @@ la misma canción.
 """
 import json
 import os
+import queue
 import re
 import shutil
 import sys
@@ -129,7 +130,13 @@ class Descargador:
         except Exception:
             self._alt_fecha = {}
         self._lock = threading.Lock()
+        # Las que están en la nube se guardan en el TV por adelantado (de a una, en segundo
+        # plano): así entran al instante y sin pausa, en vez de esperar a que cargue de internet.
+        self._por_guardar = queue.Queue()
+        self._guardando = set()
+        self._sonando = ""  # la que suena directo de la nube (no se baja a la vez: no se corta)
         threading.Thread(target=self.revisar_cache, daemon=True).start()
+        threading.Thread(target=self._guardar_en_orden, daemon=True).start()
 
     def reintentar_liviano(self, video_id):
         """El TV no pudo reproducir este video: se borra y la próxima vez se baja en 480p
@@ -170,6 +177,44 @@ class Descargador:
                 self._enlaces.clear()
             self._enlaces[video_id] = (url, time.time() + ENLACE_VALE_SEG)
         return url
+
+    def rapido(self, video_id):
+        """Lo que suena YA, sin bajar de YouTube: la canción guardada en el TV o su dirección
+        en la nube (y entonces se deja guardando en el TV para la próxima). None si no está."""
+        ya = self.ruta(video_id)
+        if ya and not str(ya).startswith("http"):
+            return ya
+        url = ya or self.enlace_nube(video_id)
+        if url:
+            self.guardar_luego(video_id)
+        return url
+
+    def guardar_luego(self, video_id):
+        if (self.nube is None or video_id in self.livianos or video_id in self._guardando
+                or self._ruta_directa(video_id)):
+            return
+        self._guardando.add(video_id)
+        self._por_guardar.put(video_id)
+
+    def marcar_uso(self, ruta):
+        """La que empieza a sonar (la llama la pantalla)."""
+        r = str(ruta or "")
+        self._sonando = r if r.startswith("http") else ""
+
+    def _guardar_en_orden(self):
+        while True:
+            vid = self._por_guardar.get()
+            try:
+                if self._ruta_directa(vid) or f"/v/{self._archivo_nube(vid)}" in self._sonando:
+                    continue  # ya está, o está sonando de internet (bajarla a la vez la cortaría)
+                self.liberar_espacio()
+                if self.espacio_libre() < LIBRE_AVISO:
+                    continue
+                self._de_nube(vid)
+            except Exception as ex:
+                print(f"ℹ️ No se pudo guardar {vid} en el TV: {str(ex)[:80]}")
+            finally:
+                self._guardando.discard(vid)
 
     def _alias_vigente(self, video_id):
         return time.time() - float(self._alt_fecha.get(video_id) or 0) < ALT_VENCE_SEG
@@ -318,7 +363,8 @@ class Descargador:
                 pass
             return ya
         en_nube = self.enlace_nube(video_id)
-        if en_nube:  # suena directo de la nube: al instante y sin ocupar memoria
+        if en_nube:  # suena directo de la nube al instante; mientras, se guarda en el TV
+            self.guardar_luego(video_id)
             return en_nube
         self.asegurar_espacio()
         de_nube = self._de_nube(video_id)

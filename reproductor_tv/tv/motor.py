@@ -428,6 +428,11 @@ class Motor:
                 # Solo una vez por canción: si tampoco bajó en ese tiempo, se intenta directo
                 # (y si falla se marca el error, en vez de quedar esperando para siempre).
                 vid = cola[0].video_id
+                if not self.desc.ruta(vid) and vid != self._puente_vid and hasattr(self.desc, "rapido"):
+                    try:  # ¿está en la nube? entonces suena ya (unos segundos como mucho)
+                        await asyncio.wait_for(asyncio.to_thread(self.desc.rapido, vid), 6)
+                    except Exception:
+                        pass
                 if not self.desc.ruta(vid) and vid != self._puente_vid:
                     if vid not in self._en_curso:
                         self._lanzar_descarga(vid, cola[0])
@@ -580,8 +585,8 @@ class Motor:
     async def _preparar_relleno(self):
         """Mientras suena una canción, deja elegidas y descargadas las próximas aleatorias
         (RELLENO_LISTOS): así se puede cambiar varias veces seguidas sin esperar descargas."""
-        intentos = 0
-        while len(self._rellenos) < RELLENO_LISTOS and intentos < RELLENO_LISTOS * 2:
+        intentos, lenta = 0, None
+        while len(self._rellenos) < RELLENO_LISTOS and intentos < RELLENO_LISTOS * 4:
             intentos += 1
             try:
                 item = await self._elegir_relleno()
@@ -589,10 +594,27 @@ class Motor:
                     return
                 if item.video_id in self._evitar():
                     continue  # el historial es corto: no hay más canciones distintas
-                await self._descargar(item.video_id, item)
-                self._rellenos.append(item)
+                if await self._rapida(item):
+                    self._rellenos.append(item)
+                elif lenta is None:
+                    lenta = item  # hay que bajarla de YouTube (lento): solo si no hay otra
             except Exception as ex:
                 print(f"⚠️ No se pudo preparar un aleatorio: {ex}")
+        if not self._rellenos and lenta is not None:
+            try:
+                await self._descargar(lenta.video_id, lenta)
+                self._rellenos.append(lenta)
+            except Exception as ex:
+                print(f"⚠️ No se pudo preparar un aleatorio: {ex}")
+
+    async def _rapida(self, item):
+        """Ruta si la canción está guardada en el TV o en la nube (suena ya); si no, None."""
+        if not hasattr(self.desc, "rapido"):
+            return self.desc.ruta(item.video_id)
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(self.desc.rapido, item.video_id), 10)
+        except Exception:
+            return None
 
     async def _relleno_guardado(self, intentos=15):
         """Una aleatoria que YA está guardada en el equipo (para cuando cambian muy rápido)."""
@@ -621,6 +643,18 @@ class Motor:
                 return
             if solo_listas:
                 return
+            # 3) una que esté en la nube (entra en un par de segundos)
+            for _ in range(6):
+                item = await self._elegir_relleno()
+                if item is None:
+                    break
+                if item.video_id in self.recientes:
+                    continue
+                ruta = await self._rapida(item)
+                if ruta:
+                    await self._reproducir(item, ruta, relleno=True)
+                    return
+            # 4) ninguna en la nube: se baja de YouTube
             for _ in range(3):
                 item = await self._elegir_relleno()
                 if item is None:
@@ -928,6 +962,10 @@ class Motor:
         canal = getattr(item, "canal", None)
 
         async def _hacer():
+            if hasattr(self.desc, "rapido"):
+                ya = await asyncio.to_thread(self.desc.rapido, video_id)
+                if ya:  # guardada o en la nube: sin esperar a que terminen otras descargas
+                    return ya
             async with self._sem:
                 if titulo:  # con el nombre puede buscar otro video si este no sirve
                     return await asyncio.to_thread(self.desc.obtener, video_id, titulo, canal)
