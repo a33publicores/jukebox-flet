@@ -1161,6 +1161,7 @@
   }
 
   function pintar(forzar) {
+    avisarApp();
     if (girando) return;
     var cola = [];
     if (M.snap) {
@@ -1359,6 +1360,40 @@
   botonControl("btn-anterior", "anterior");
   botonControl("btn-siguiente", "siguiente");
   botonControl("btn-pausa", function () { return M.pausado ? "reanudar" : "pausar"; });
+
+  // Lo que suena, para la app del celular (aviso con pausar / anterior / siguiente, como
+  // YouTube Music) y para los navegadores que muestran controles de música.
+  var avisoApp = "";
+  function avisarApp() {
+    try {
+      var it = M.actual;
+      var nuevo = JSON.stringify([it && it.video_id, it && it.titulo, M.pausado]);
+      if (nuevo === avisoApp) return;
+      avisoApp = nuevo;
+      var titulo = it ? (it.titulo || "") : "", canal = it ? (it.canal || "") : "";
+      if (window.PlayBarApp && window.PlayBarApp.sonando) {
+        window.PlayBarApp.sonando(titulo, canal, it ? (it.video_id || "") : "", !!M.pausado);
+      }
+      if ("mediaSession" in navigator && window.MediaMetadata) {
+        navigator.mediaSession.metadata = it ? new MediaMetadata({ title: titulo, artist: canal, album: "PlayBar GO",
+          artwork: [{ src: "https://i.ytimg.com/vi/" + encodeURIComponent(it.video_id) + "/hqdefault.jpg", sizes: "480x360", type: "image/jpeg" }] }) : null;
+        navigator.mediaSession.playbackState = !it ? "none" : (M.pausado ? "paused" : "playing");
+      }
+    } catch (e) {}
+  }
+  setInterval(avisarApp, 1500);
+  // La app y los controles de música del sistema mandan: pausar, reanudar, anterior, siguiente.
+  window.pbgoControl = function (cmd) {
+    if (cmd === "alternar") cmd = M.pausado ? "reanudar" : "pausar";
+    motor.ejecutar(cmd);
+  };
+  try {
+    if ("mediaSession" in navigator) {
+      [["play", "reanudar"], ["pause", "pausar"], ["previoustrack", "anterior"], ["nexttrack", "siguiente"]].forEach(function (p) {
+        try { navigator.mediaSession.setActionHandler(p[0], function () { window.pbgoControl(p[1]); }); } catch (e) {}
+      });
+    }
+  } catch (e) {}
   $("btn-sonido").addEventListener("click", function () {
     ver("capa-sonido", false);
     medios.reanudar();
