@@ -147,15 +147,15 @@ async def vigilar(motor, avisar, aplicar, preguntar=None):
                 await asyncio.to_thread(descargar, info)
                 print(f"⬇️ Código {info['version']} descargado y revisado")
                 if preguntar is not None and not info["ahora"]:
-                    while True:
-                        respuesta = await preguntar(info["version"], info.get("notas", ""))
-                        if respuesta == "actualizar":
-                            avisar(f"⬆️ Instalando la actualización {info['version']}…")
-                            await asyncio.sleep(1)
-                            aplicar()
-                            return
-                        await asyncio.sleep(REAVISAR_MAS_TARDE_SEG if respuesta == "luego"
-                                            else REAVISAR_SIN_RESPUESTA_SEG)
+                    respuesta = await preguntar(info["version"], info.get("notas", ""))
+                    if respuesta == "actualizar":
+                        await asyncio.sleep(1.5)  # que alcance a verse "Actualizando…"
+                        aplicar()
+                        return
+                    # más tarde se vuelve a revisar (por si mientras tanto salió otra más nueva)
+                    await asyncio.sleep(REAVISAR_MAS_TARDE_SEG if respuesta == "luego"
+                                        else REAVISAR_SIN_RESPUESTA_SEG)
+                    continue
                 if not info["ahora"]:
                     avisar(f"⬆️ Actualización {info['version']} lista: se instala al "
                            "terminar esta canción.")

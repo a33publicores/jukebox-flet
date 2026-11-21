@@ -148,6 +148,7 @@ class Pantalla:
         self._modo_nube = False  # suena una canción directo de la nube (sin puestos)
         self._salto = None
         self._salto_t = 0.0
+        self.tecla_dialogo = None  # aviso de actualización abierto: recibe el control
         self._girando = False               # la ruleta está moviendo la lista
         self._entro_sola = None
         self._lock_puestos = asyncio.Lock()
@@ -423,31 +424,74 @@ class Pantalla:
 
     async def preguntar_actualizacion(self, version, notas="", esperar_seg=120):
         """Aviso "Hay una nueva actualización" con "Actualizar" / "Más tarde". Si nadie lo
-        toca en esperar_seg se esconde solo (la música nunca se detiene)."""
+        toca en esperar_seg se esconde solo (la música nunca se detiene).
+        Con el control: ◀ ▶ escogen el botón y OK lo confirma (mientras el aviso está abierto
+        el control no pausa ni cambia la canción). Al escoger "Actualizar" el aviso cambia a
+        "Actualizando…" y se queda así hasta que el reproductor se reinicia."""
         elegido = {"valor": None}
         listo = asyncio.Event()
+        sel = {"i": 1}  # 0 = Más tarde, 1 = Actualizar (el escogido de entrada)
+
+        b_luego = ft.Container(
+            content=ft.Text("Más tarde", size=18, weight=ft.FontWeight.BOLD),
+            padding=ft.Padding.symmetric(horizontal=26, vertical=14), border_radius=30)
+        b_act = ft.Container(
+            content=ft.Row([ft.Icon(ft.Icons.SYSTEM_UPDATE_ALT, size=22),
+                            ft.Text("Actualizar", size=18, weight=ft.FontWeight.BOLD)],
+                           tight=True, spacing=8),
+            padding=ft.Padding.symmetric(horizontal=26, vertical=14), border_radius=30)
+        botones = [b_luego, b_act]
+
+        def pintar():
+            for n, b in enumerate(botones):
+                activo = n == sel["i"]
+                b.bgcolor = CYAN if activo else "#1f2937"
+                b.border = ft.Border.all(3, "white" if activo else "#374151")
+                color = "#0f172a" if activo else "white"
+                for c in ([b.content] if isinstance(b.content, ft.Text) else b.content.controls):
+                    c.color = color
 
         def elegir(valor):
-            def _h(e=None):
+            if elegido["valor"] is None:
                 elegido["valor"] = valor
                 listo.set()
-            return _h
 
-        dlg = ft.AlertDialog(
-            modal=True, bgcolor="#111827",
-            title=ft.Text("Hay una nueva actualización", color=CYAN, size=26,
-                          weight=ft.FontWeight.BOLD),
-            content=ft.Column([
-                ft.Text(f"Versión {version} (esta es la {VERSION}).", color="white", size=18),
-                ft.Text(str(notas or "").strip()[:200], color="#cbd5e1", size=15,
-                        visible=bool(str(notas or "").strip())),
-                ft.Text("Al tocar Actualizar el reproductor se reinicia en unos segundos.",
-                        color="#94A3B8", size=15),
-            ], tight=True, width=560, spacing=10),
-            actions=[ft.TextButton("Más tarde", on_click=elegir("luego")),
-                     ft.FilledButton("Actualizar", icon=ft.Icons.SYSTEM_UPDATE_ALT,
-                                     autofocus=True, on_click=elegir("actualizar"))],
-        )
+        b_luego.on_click = lambda e: elegir("luego")
+        b_act.on_click = lambda e: elegir("actualizar")
+        pintar()
+
+        cuerpo = ft.Column([
+            ft.Text(f"Versión {version} (esta es la {VERSION}).", color="white", size=18),
+            ft.Text(str(notas or "").strip()[:200], color="#cbd5e1", size=15,
+                    visible=bool(str(notas or "").strip())),
+            ft.Text("◀ ▶ para escoger y OK para confirmar. Al actualizar, el reproductor se "
+                    "reinicia en unos segundos.", color="#94A3B8", size=15),
+        ], tight=True, width=560, spacing=10)
+        titulo = ft.Text("Hay una nueva actualización", color=CYAN, size=26,
+                         weight=ft.FontWeight.BOLD)
+        fila = ft.Row(botones, alignment=ft.MainAxisAlignment.END, spacing=16, width=560)
+        dlg = ft.AlertDialog(modal=True, bgcolor="#111827", title=titulo,
+                             content=ft.Column([cuerpo, fila], tight=True, spacing=22))
+
+        def tecla(k):
+            if k in T_IZQ or k in T_ANTERIOR:
+                sel["i"] = 0
+            elif k in T_DER or k in T_SIGUIENTE:
+                sel["i"] = 1
+            elif k in T_OK or k in T_PAUSA:
+                elegir("actualizar" if sel["i"] == 1 else "luego")
+                return
+            elif k in ("escape", "go back", "browser back"):
+                elegir("luego")
+                return
+            pintar()
+            try:
+                self.page.update()
+            except Exception:
+                pass
+
+        self.tecla_dialogo = tecla
+        cerrar = True
         try:
             self.page.overlay.append(dlg)
             dlg.open = True
@@ -456,14 +500,28 @@ class Pantalla:
                 await asyncio.wait_for(listo.wait(), esperar_seg)
             except asyncio.TimeoutError:
                 pass
+            if elegido["valor"] == "actualizar":
+                # se queda abierto diciendo "Actualizando…" hasta que el reproductor se reinicia
+                cerrar = False
+                titulo.value = "Actualizando…"
+                dlg.content = ft.Column([
+                    ft.Row([ft.ProgressRing(width=34, height=34, stroke_width=4, color=CYAN),
+                            ft.Text(f"Instalando la versión {version}", color="white", size=20,
+                                    weight=ft.FontWeight.BOLD)], spacing=18),
+                    ft.Text("El reproductor se reinicia en unos segundos y la música vuelve "
+                            "sola. No apagues el TV.", color="#cbd5e1", size=16),
+                ], tight=True, width=560, spacing=16)
+                self.page.update()
         finally:
-            dlg.open = False
-            try:
-                self.page.update()
-                self.page.overlay.remove(dlg)
-                self.page.update()
-            except Exception:
-                pass
+            self.tecla_dialogo = None
+            if cerrar:
+                dlg.open = False
+                try:
+                    self.page.update()
+                    self.page.overlay.remove(dlg)
+                    self.page.update()
+                except Exception:
+                    pass
         return elegido["valor"]
 
     def aviso_actualizacion(self, texto):
@@ -1267,6 +1325,9 @@ async def _una_sesion(page: ft.Page):
 
     async def teclas(e: ft.KeyboardEvent):
         k = (e.key or "").lower()
+        if pantalla.tecla_dialogo is not None:
+            pantalla.tecla_dialogo(k)  # aviso de actualización: ◀ ▶ y OK son para él
+            return
         if pantalla.menu_abierto:
             return  # con el menú abierto las flechas y OK mueven el menú
         if motor.inactivo:  # suena en otro equipo: OK = "Usar aquí"
