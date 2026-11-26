@@ -53,6 +53,35 @@ class BackendApi:
         self._t_pool = 0.0
         self._playlist = None          # canciones de la playlist del negocio
         self._t_playlist = 0.0
+        self._ronda = None             # relleno: las que ya sonaron en esta vuelta (ver ya_sono)
+
+    # -- relleno sin repetir: como barajar un mazo. Cada canción del repertorio suena UNA vez
+    # antes de que se repita cualquiera; cuando ya sonaron todas, empieza otra vuelta. Se
+    # guarda en el equipo, así que tampoco se repiten al reiniciar el reproductor.
+    def _archivo_ronda(self):
+        return CARPETA_DATOS / f"relleno_ronda_{self.cliente or 'bar'}.json"
+
+    def _cargar_ronda(self):
+        if self._ronda is None:
+            try:
+                self._ronda = set(json.loads(self._archivo_ronda().read_text(encoding="utf-8")))
+            except Exception:
+                self._ronda = set()
+        return self._ronda
+
+    def _guardar_ronda(self):
+        try:
+            CARPETA_DATOS.mkdir(parents=True, exist_ok=True)
+            self._archivo_ronda().write_text(json.dumps(sorted(self._ronda)), encoding="utf-8")
+        except Exception:
+            pass
+
+    def ya_sono(self, video_id):
+        """La canción sonó (pedida o de relleno): no vuelve de relleno en esta vuelta."""
+        ronda = self._cargar_ronda()
+        if video_id and video_id not in ronda:
+            ronda.add(video_id)
+            self._guardar_ronda()
 
     def instantanea(self):
         snap = self.api.instantanea()
@@ -174,7 +203,14 @@ class BackendApi:
                 pool = del_genero
             else:
                 print(f"ℹ️ No hay canciones de {', '.join(sorted(set(generos or ()) | set(artistas or ())))}: uso todas")
-        candidatas = [i for i in pool if i.video_id not in excluir] or pool
+        ronda = self._cargar_ronda()
+        candidatas = [i for i in pool if i.video_id not in excluir and i.video_id not in ronda]
+        if not candidatas and pool:
+            # ya sonó todo el repertorio: empieza otra vuelta (sin las que sonaron hace poco)
+            print(f"🔁 Relleno: sonaron las {len(pool)} canciones; empieza otra vuelta")
+            ronda.clear()
+            self._guardar_ronda()
+            candidatas = [i for i in pool if i.video_id not in excluir] or pool
         if not candidatas:
             return None
         it = random.choice(candidatas)
@@ -642,6 +678,8 @@ class Motor:
         self.pausado = False
         self.token += 1
         self.recientes.append(item.video_id)
+        if hasattr(self.backend, "ya_sono"):
+            self.backend.ya_sono(item.video_id)
         try:
             os.utime(ruta, None)  # "sonó hoy": al limpiar espacio, se borran las que hace más tiempo no suenan
         except (OSError, TypeError):

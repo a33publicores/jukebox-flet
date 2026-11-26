@@ -337,6 +337,17 @@
     return r;
   }
 
+  // Relleno: las que ya sonaron en esta vuelta (se guarda en el equipo por cada bar)
+  function claveRonda() { return "pbgo_ronda_" + (guardado("pbgo_codigo") || "bar"); }
+  function rondaDe() {
+    try { return JSON.parse(guardado(claveRonda()) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function guardarRonda(r) { guardar(claveRonda(), JSON.stringify(r)); }
+  function yaSono(id) {
+    if (!id) return;
+    var r = rondaDe();
+    if (!r[id]) { r[id] = 1; guardarRonda(r); }
+  }
   function recordar(id) {
     M.recientes.push(id);
     while (M.recientes.length > RECIENTES) M.recientes.shift();
@@ -825,9 +836,16 @@
         try { M.pool = (await api.aleatorio()).items || []; M.tPool = ahora(); } catch (e) {}
       }
       if (!M.pool.length) return null;
+      // Sin repetir: cada canción del repertorio suena una vez antes de que se repita alguna
+      // (como barajar un mazo); cuando ya sonaron todas, empieza otra vuelta.
+      var ronda = rondaDe();
       var libres = M.pool.filter(function (i) {
-        return M.recientes.indexOf(i.video_id) < 0 && !enEspera(i.video_id);
+        return M.recientes.indexOf(i.video_id) < 0 && !ronda[i.video_id] && !enEspera(i.video_id);
       });
+      if (!libres.length) {
+        guardarRonda({});
+        libres = M.pool.filter(function (i) { return M.recientes.indexOf(i.video_id) < 0 && !enEspera(i.video_id); });
+      }
       // primero las que ya están en la nube: entran al instante
       var enNube = libres.filter(function (i) { return listos[i.video_id]; });
       var de = enNube.length && Math.random() < 0.85 ? enNube : (libres.length ? libres : M.pool);
@@ -864,6 +882,7 @@
       ver("pausa", false);
       console.log("▶️ " + (relleno ? "(relleno) " : "") + item.titulo);
       pintar();
+      yaSono(item.video_id);
       lanzarRuleta();
       return true;
     },
